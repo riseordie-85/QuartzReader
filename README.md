@@ -1,7 +1,7 @@
 # Quartz Reader
 
-One Android app for ebooks, comics, manga, and manhwa. This repo is at Phase 0: a bare test app that
-proves the riskiest parts on real devices before the real app is built on them.
+One Android app for ebooks, comics, manga, and manhwa. Phase 1 is the real library: one library folder,
+import, series, shelves, and themes. The readers are still bare until Phases 2 and 3.
 
 ## Build
 
@@ -10,7 +10,9 @@ slower in debug. Install on each test device.
 
 Book files never go in this repo.
 
-## Phase 0 tests
+## Test tools
+
+The Phase 0 tests are under **Settings > Test tools**.
 
 1. **Open a test file:** pick a CBZ, CBR, CB7, ZIP, PDF, EPUB, or MOBI. In the image reader, try every
    mode, then tap **Speed test**.

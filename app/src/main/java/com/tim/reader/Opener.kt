@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import com.tim.reader.data.Book
 import com.tim.reader.engine.ArchivePageSource
 import com.tim.reader.engine.FolderPageSource
 import com.tim.reader.engine.Kind
@@ -11,7 +12,11 @@ import com.tim.reader.engine.PageSource
 import com.tim.reader.engine.PdfPageSource
 import com.tim.reader.engine.describeMobi
 import com.tim.reader.engine.sniff
+import com.tim.reader.library.Importer
+import com.tim.reader.library.LibraryFolder
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.asset.AssetRetriever
@@ -26,9 +31,27 @@ sealed interface Opened {
     class Message(val text: String) : Opened
 }
 
-/** Holds the open EPUB for EpubActivity. Phase 1 replaces this with the library. */
+/** Hands the open EPUB to EpubActivity. */
 object OpenEpub {
     var publication: Publication? = null
+    var bookId: String? = null
+    var locator: String? = null
+}
+
+/** For work that should finish even after the screen that started it is gone. */
+val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+/** Opens a library book in the fixed-page reader. */
+fun openBookSource(context: Context, book: Book): PageSource {
+    val uri = Uri.parse(book.documentUri)
+    return when (book.format) {
+        Importer.FOLDER_FORMAT -> {
+            val tree = LibraryFolder.get(context).treeUri ?: error("No library folder has been chosen")
+            FolderPageSource(context, tree, book.title, DocumentsContract.getDocumentId(uri))
+        }
+        Kind.PDF.name -> PdfPageSource(context, uri, book.title)
+        else -> ArchivePageSource(context, uri, book.title, Kind.valueOf(book.format))
+    }
 }
 
 private fun displayName(context: Context, uri: Uri): String {
@@ -106,7 +129,7 @@ suspend fun openFolder(context: Context, tree: Uri): Opened = withContext(Dispat
     }
 }
 
-private suspend fun openEpub(context: Context, uri: Uri): Publication {
+suspend fun openEpub(context: Context, uri: Uri): Publication {
     val client = DefaultHttpClient()
     val retriever = AssetRetriever(context.contentResolver, client)
     val parser = DefaultPublicationParser(context, client, retriever, null)

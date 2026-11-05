@@ -1,0 +1,37 @@
+package com.tim.reader.library
+
+import android.util.Xml
+import org.xmlpull.v1.XmlPullParser
+import java.io.ByteArrayInputStream
+
+data class ComicInfo(
+    val title: String?,
+    val series: String?,
+    val number: Double?,
+    val writer: String?,
+    val rightToLeft: Boolean,
+)
+
+/** Reads the ComicInfo.xml that comic tools embed in archives. Returns null if it can't be read. */
+fun parseComicInfo(bytes: ByteArray): ComicInfo? = try {
+    val parser = Xml.newPullParser()
+    parser.setInput(ByteArrayInputStream(bytes), null)
+    val fields = HashMap<String, String>()
+    var event = parser.eventType
+    while (event != XmlPullParser.END_DOCUMENT) {
+        if (event == XmlPullParser.START_TAG && parser.depth == 2) {
+            val name = parser.name
+            if (parser.next() == XmlPullParser.TEXT) fields[name] = parser.text.trim()
+        }
+        event = parser.next()
+    }
+    ComicInfo(
+        title = fields["Title"]?.takeIf { it.isNotBlank() },
+        series = fields["Series"]?.takeIf { it.isNotBlank() },
+        number = (fields["Number"] ?: fields["Volume"])?.toDoubleOrNull(),
+        writer = fields["Writer"]?.takeIf { it.isNotBlank() },
+        rightToLeft = fields["Manga"].equals("YesAndRightToLeft", ignoreCase = true),
+    )
+} catch (_: Exception) {
+    null
+}

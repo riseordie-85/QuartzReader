@@ -11,8 +11,8 @@ android {
         applicationId = "com.tim.reader"
         minSdk = 33
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.1-phase0"
+        versionCode = 2
+        versionName = "0.1.0-phase1"
     }
 
     buildTypes {
@@ -54,7 +54,8 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Same versions as Readium 3.4.0's version catalog.
-    implementation("androidx.core:core:1.19.0")
+    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
     implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.fragment:fragment-ktx:1.9.0")

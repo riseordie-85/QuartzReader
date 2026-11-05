@@ -3,6 +3,7 @@ package com.tim.reader.ui
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,9 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.tim.reader.ResultsLog
+import com.tim.reader.data.ReadDirection
 import com.tim.reader.engine.ImageDecode
 import com.tim.reader.engine.PageSize
 import com.tim.reader.engine.PageSource
@@ -49,12 +52,6 @@ import com.tim.reader.timed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private enum class ReadMode(val label: String) {
-    LeftToRight("Left to right"),
-    RightToLeft("Right to left"),
-    Vertical("Vertical"),
-}
 
 /** A page, or one slice of a very tall page, as a row in the vertical reader. */
 private data class ReaderRow(val page: Int, val top: Int = -1, val bottom: Int = -1)
@@ -69,26 +66,38 @@ private fun loadPage(source: PageSource, page: Int, width: Int): Bitmap? = try {
 }
 
 @Composable
-fun ImageReaderScreen(source: PageSource) {
-    var mode by remember { mutableStateOf(ReadMode.LeftToRight) }
-    var currentPage by remember { mutableStateOf(0) }
+fun ImageReaderScreen(
+    source: PageSource,
+    initialPage: Int = 0,
+    initialDirection: ReadDirection = ReadDirection.LeftToRight,
+    alwaysShowControls: Boolean = false,
+    onPage: (Int) -> Unit = {},
+) {
+    var mode by remember { mutableStateOf(initialDirection) }
+    var currentPage by remember { mutableStateOf(initialPage) }
     var running by remember { mutableStateOf(false) }
+    var controls by remember { mutableStateOf(alwaysShowControls) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(currentPage) { onPage(currentPage) }
 
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .pointerInput(alwaysShowControls) {
+                detectTapGestures { if (!alwaysShowControls) controls = !controls }
+            },
     ) {
         val width = constraints.maxWidth
 
         when (mode) {
-            ReadMode.LeftToRight -> PagedReader(source, width, rightToLeft = false, currentPage) { currentPage = it }
-            ReadMode.RightToLeft -> PagedReader(source, width, rightToLeft = true, currentPage) { currentPage = it }
-            ReadMode.Vertical -> VerticalReader(source, width, currentPage) { currentPage = it }
+            ReadDirection.LeftToRight -> PagedReader(source, width, rightToLeft = false, currentPage) { currentPage = it }
+            ReadDirection.RightToLeft -> PagedReader(source, width, rightToLeft = true, currentPage) { currentPage = it }
+            ReadDirection.Vertical -> VerticalReader(source, width, currentPage) { currentPage = it }
         }
 
-        Column(
+        if (controls) Column(
             Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
@@ -103,7 +112,7 @@ fun ImageReaderScreen(source: PageSource) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton({
-                    mode = ReadMode.entries[(mode.ordinal + 1) % ReadMode.entries.size]
+                    mode = ReadDirection.entries[(mode.ordinal + 1) % ReadDirection.entries.size]
                 }) { Text(mode.label) }
                 Button(
                     onClick = {

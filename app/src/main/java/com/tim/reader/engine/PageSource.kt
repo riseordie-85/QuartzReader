@@ -234,11 +234,15 @@ class ArchivePageSource(
 
     override fun label(page: Int) = listing.pages[page].path.substringAfterLast('/')
 
-    override fun bytes(page: Int): ByteArray {
+    /** The comic's ComicInfo.xml, when it has one. */
+    fun comicInfo(): ByteArray? = listing.comicInfoOrdinal?.let { entryBytes(it) }
+
+    override fun bytes(page: Int): ByteArray = entryBytes(listing.pages[page].ordinal)
+
+    private fun entryBytes(ordinal: Int): ByteArray {
         return synchronized(this) {
             // A page may still be loading when the reader closes, and the mapped file is gone by then.
             check(!closed) { "This book is closed" }
-            val ordinal = listing.pages[page].ordinal
             cache.get(ordinal)?.let { return it }
 
             val current = cursor?.takeIf { it.ordinal < ordinal } ?: run {
@@ -259,7 +263,7 @@ class ArchivePageSource(
                 runCatching { dropCursor() }
                 throw error
             }
-            error("Page $page is missing from the archive")
+            error("Entry $ordinal is missing from the archive")
         }
     }
 
@@ -278,7 +282,12 @@ class ArchivePageSource(
 }
 
 /** Reads a chosen folder of images, including one level of chapter folders. */
-class FolderPageSource(context: Context, tree: Uri, override val title: String) : ImagePageSource() {
+class FolderPageSource(
+    context: Context,
+    tree: Uri,
+    override val title: String,
+    rootDocumentId: String = DocumentsContract.getTreeDocumentId(tree),
+) : ImagePageSource() {
     private val resolver = context.contentResolver
     private val documents = HashMap<Int, Uri>()
     private val listing: PageListing
@@ -305,7 +314,7 @@ class FolderPageSource(context: Context, tree: Uri, override val title: String) 
                 }
             }
         }
-        walk(DocumentsContract.getTreeDocumentId(tree), "", 0)
+        walk(rootDocumentId, "", 0)
         listing = buildPageListing(found)
     }
 

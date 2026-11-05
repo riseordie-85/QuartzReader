@@ -45,6 +45,8 @@ data class PageListing(
     val duplicateNested: List<String>,
     /** Archives inside the archive holding pages found nowhere else. Phase 1 will read these. */
     val unreadNested: List<String>,
+    /** Where the comic's ComicInfo.xml sits in the archive, when it has one. */
+    val comicInfoOrdinal: Int? = null,
 )
 
 private val imageExtensions = setOf(
@@ -78,5 +80,8 @@ fun buildPageListing(entries: List<RawEntry>): PageListing {
             .map { Page(it.ordinal, it.path, it.path.substringBeforeLast('/', "")) },
         duplicateNested = duplicates.map { it.path },
         unreadNested = unread.map { it.path },
+        comicInfoOrdinal = files.firstOrNull {
+            it.path.substringAfterLast('/').equals("ComicInfo.xml", ignoreCase = true)
+        }?.ordinal,
     )
 }
