@@ -100,52 +100,82 @@ class Importer(context: Context) {
         withContext(Dispatchers.IO) {
             val items = ArrayList<ImportItem>()
             val skipped = ArrayList<String>()
-            files.forEach { uri -> addFile(uri, displayName(uri), null, items, skipped) }
+            files.forEach { uri ->
+                val name = displayName(uri)
+                addFile(uri, name, null, name, items, skipped)
+            }
             folders.forEach { tree -> scanFolder(tree, items, skipped) }
             items to skipped
         }
 
-    private fun addFile(uri: Uri, name: String, series: String?, items: MutableList<ImportItem>, skipped: MutableList<String>) {
+    private fun addFile(
+        uri: Uri,
+        name: String,
+        series: String?,
+        path: String,
+        items: MutableList<ImportItem>,
+        skipped: MutableList<String>,
+    ) {
         val kind = runCatching { readKind(uri, name) }.getOrDefault(Kind.UNKNOWN)
         if (kind == Kind.UNKNOWN) {
             skipped += name
         } else {
-            items += ImportItem(uri, name, kind, guessType(name, kind), seriesHint = series)
+            items += ImportItem(uri, name, kind, guessType(path, kind), seriesHint = series)
         }
     }
 
+    /** True for names like "Vol. 3", "Chapter 12", and "007", which mark one part of a series. */
+    private fun isNumbered(name: String) =
+        parseName(name).number != null || name.trim().toDoubleOrNull() != null
+
+    /** The series a folder stands for, without tags like (2021) or [Digital]. */
+    private fun seriesName(folderName: String) =
+        parseName(folderName, allowTrailingNumber = false).let { it.series ?: it.title }
+
+    /**
+     * Walks everything under a picked folder. A folder of nothing but images is one book. Each book
+     * file is one book. Numbered entries form a series named after their folder, while unnumbered
+     * ones stand alone, so a folder of unrelated titles stays unrelated.
+     */
     private fun scanFolder(tree: Uri, items: MutableList<ImportItem>, skipped: MutableList<String>) {
         val rootId = DocumentsContract.getTreeDocumentId(tree)
         val rootName = rootId.substringAfterLast('/').substringAfterLast(':')
-        fun folderItem(documentId: String, name: String, series: String?) = ImportItem(
-            uri = DocumentsContract.buildDocumentUriUsingTree(tree, documentId),
-            name = name,
-            kind = null,
-            guess = guessType("$rootName $name", null),
-            folderTree = tree,
-            folderDocumentId = documentId,
-            seriesHint = series,
-        )
+        val libraryRoot = folder.treeUri?.let { DocumentsContract.getTreeDocumentId(it) }
 
-        val children = folder.children(tree, rootId)
-        val files = children.filterNot { it.isFolder }
-        val hasPages = files.any { imageNames.containsMatchIn(it.name) }
-        val hasBooks = files.any { bookNames.containsMatchIn(it.name) }
-        if (hasPages && !hasBooks && children.none { it.isFolder }) {
-            // A folder of nothing but images is one book.
-            items += folderItem(rootId, rootName, null)
-            return
-        }
-        // Anything else is a series: each subfolder of images and each book file is one entry.
-        children.forEach { child ->
-            if (child.isFolder) {
-                val images = folder.children(tree, child.documentId).any { !it.isFolder && imageNames.containsMatchIn(it.name) }
-                if (images) items += folderItem(child.documentId, child.name, rootName) else skipped += child.name
-            } else if (!imageNames.containsMatchIn(child.name)) {
-                // Loose images beside the volumes, such as cover.jpg, aren't books.
-                addFile(DocumentsContract.buildDocumentUriUsingTree(tree, child.documentId), child.name, rootName, items, skipped)
+        fun walk(documentId: String, name: String, parent: String?, path: String, depth: Int) {
+            val children = folder.children(tree, documentId).filterNot { it.name.startsWith(".") }
+            val files = children.filterNot { it.isFolder }
+            val folders = children.filter { it.isFolder && it.documentId != libraryRoot }
+            val pages = files.filter { imageNames.containsMatchIn(it.name) }
+            val others = files - pages.toSet()
+
+            if (pages.isNotEmpty() && folders.isEmpty() && others.none { bookNames.containsMatchIn(it.name) }) {
+                items += ImportItem(
+                    uri = DocumentsContract.buildDocumentUriUsingTree(tree, documentId),
+                    name = name,
+                    kind = null,
+                    guess = guessType(path, null),
+                    folderTree = tree,
+                    folderDocumentId = documentId,
+                    seriesHint = parent?.takeIf { isNumbered(name) }?.let(::seriesName),
+                )
+                return
+            }
+            others.forEach { file ->
+                val hint = if (isNumbered(file.name)) seriesName(name) else null
+                val uri = DocumentsContract.buildDocumentUriUsingTree(tree, file.documentId)
+                addFile(uri, file.name, hint, "$path ${file.name}", items, skipped)
+            }
+            folders.forEach { child ->
+                if (depth < MAX_DEPTH) {
+                    walk(child.documentId, child.name, name, "$path ${child.name}", depth + 1)
+                } else {
+                    skipped += child.name
+                }
             }
         }
+
+        walk(rootId, rootName, null, rootName, 0)
     }
 
     suspend fun run(items: List<ImportItem>, options: ImportOptions, onProgress: (ImportProgress) -> Unit): ImportResult =
@@ -306,5 +336,6 @@ class Importer(context: Context) {
 
     companion object {
         const val FOLDER_FORMAT = "FOLDER"
+        private const val MAX_DEPTH = 6
     }
 }
