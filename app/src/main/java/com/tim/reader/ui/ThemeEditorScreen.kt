@@ -280,8 +280,17 @@ fun ThemeEditorScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(1.5.dp, EditorColors.Border),
+                            contentPadding = EDITOR_BUTTON_PADDING,
                         ) {
-                            Text(part.label, color = EditorColors.Ink, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+                            Text(
+                                part.label,
+                                color = EditorColors.Ink,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
                             ListArrow()
                         }
                         DropdownMenu(expanded = showParts, onDismissRequest = { showParts = false }) {

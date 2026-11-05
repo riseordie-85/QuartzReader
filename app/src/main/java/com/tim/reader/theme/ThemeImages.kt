@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 
 private const val MEMORY_BYTES = 192 * 1024 * 1024
 private const val MAX_PIXELS = 16_000_000L
+private const val THUMBNAIL_SIZE = 320
 
 /** Theme artwork, sized to the screen once and then shared. */
 object ThemeImages {
@@ -30,10 +31,13 @@ object ThemeImages {
         "burst" to R.drawable.wall_burst,
     )
 
-    fun cached(name: String): ImageBitmap? = memory.get(name)
+    private fun key(name: String, thumbnail: Boolean) = if (thumbnail) "$name#thumbnail" else name
 
-    suspend fun load(context: Context, name: String): ImageBitmap? = memory.get(name) ?: withContext(Dispatchers.IO) {
-        val screenWidth = maxOf(context.resources.displayMetrics.widthPixels, context.resources.displayMetrics.heightPixels)
+    fun cached(name: String, thumbnail: Boolean = false): ImageBitmap? = memory.get(key(name, thumbnail))
+
+    suspend fun load(context: Context, name: String, thumbnail: Boolean = false): ImageBitmap? = memory.get(key(name, thumbnail)) ?: withContext(Dispatchers.IO) {
+        val metrics = context.resources.displayMetrics
+        val screenWidth = if (thumbnail) THUMBNAIL_SIZE else maxOf(metrics.widthPixels, metrics.heightPixels)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val file = if (ThemeFiles.isImported(name)) ThemeFiles.imageFile(name) ?: return@withContext null else null
         val resource = placeholders[name]
@@ -52,7 +56,7 @@ object ThemeImages {
         ) {
             sample *= 2
         }
-        decode(BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()?.also { memory.put(name, it) }
+        decode(BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()?.also { memory.put(key(name, thumbnail), it) }
     }
 
     /** The wallpapers that come with the app, with names to show for them. */
@@ -60,9 +64,9 @@ object ThemeImages {
 }
 
 @Composable
-fun rememberThemeImage(name: String?): State<ImageBitmap?> {
+fun rememberThemeImage(name: String?, thumbnail: Boolean = false): State<ImageBitmap?> {
     val context = LocalContext.current.applicationContext
-    return produceState(name?.let(ThemeImages::cached), name) {
-        value = name?.let { ThemeImages.load(context, it) }
+    return produceState(name?.let { ThemeImages.cached(it, thumbnail) }, name, thumbnail) {
+        value = name?.let { ThemeImages.load(context, it, thumbnail) }
     }
 }

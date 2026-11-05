@@ -1,5 +1,6 @@
 package com.tim.reader.ui
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,11 +44,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import kotlin.math.roundToInt
 
 /** The light workspace the customizing screens share. */
@@ -63,8 +68,20 @@ object EditorColors {
 
 private val CONTROL_SHAPE = RoundedCornerShape(16.dp)
 
+/** Tighter than the default, so labels fit on phones. */
+val EDITOR_BUTTON_PADDING = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+
 @Composable
 fun EditorTheme(content: @Composable () -> Unit) {
+    // The panel is light in any system theme, so the status bar icons have to stay dark on it.
+    val window = LocalActivity.current?.window
+    val view = LocalView.current
+    DisposableEffect(window, view) {
+        val bars = window?.let { WindowCompat.getInsetsController(it, view) }
+        val before = bars?.isAppearanceLightStatusBars
+        bars?.isAppearanceLightStatusBars = true
+        onDispose { if (before != null) bars.isAppearanceLightStatusBars = before }
+    }
     val colors = lightColorScheme(
         primary = EditorColors.Accent,
         onPrimary = Color.White,
@@ -224,7 +241,17 @@ fun EditorOutlineButton(label: String, modifier: Modifier = Modifier, onClick: (
         modifier,
         shape = CONTROL_SHAPE,
         border = BorderStroke(1.5.dp, EditorColors.Border),
-    ) { Text(label, color = EditorColors.Ink, fontWeight = FontWeight.Medium, maxLines = 1) }
+        contentPadding = EDITOR_BUTTON_PADDING,
+    ) {
+        Text(
+            label,
+            color = EditorColors.Ink,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable

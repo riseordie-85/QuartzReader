@@ -214,7 +214,7 @@ private fun PictureIcon() {
 
 @Composable
 private fun ImageThumb(name: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val image by rememberThemeImage(name)
+    val image by rememberThemeImage(name, thumbnail = true)
     val shape = RoundedCornerShape(16.dp)
     Box(
         modifier
