@@ -60,6 +60,7 @@ import com.tim.reader.theme.Presets
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.SolidFill
 import com.tim.reader.theme.TextLook
+import com.tim.reader.theme.ThemeFiles
 import com.tim.reader.theme.ThemeJson
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -226,12 +227,13 @@ fun ThemeEditorScreen(
     var copying by remember { mutableStateOf(false) }
     val parts = ThemePart.entries.filter { !isHome || (it != ThemePart.Button && it != ThemePart.Bottom) }
 
-    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) {
             scope.launch {
                 val saved = withContext(Dispatchers.IO) {
                     runCatching {
-                        context.contentResolver.openOutputStream(uri)?.use { it.write(ThemeJson.write(theme).toByteArray()) }
+                        val output = context.contentResolver.openOutputStream(uri) ?: error("No output")
+                        output.use { ThemeFiles.exportStyle(theme, it) }
                     }.isSuccess
                 }
                 Toast.makeText(context, if (saved) "Style exported" else "Couldn't export the style", Toast.LENGTH_SHORT).show()
@@ -243,7 +245,7 @@ fun ThemeEditorScreen(
             scope.launch {
                 val text = withContext(Dispatchers.IO) {
                     runCatching {
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+                        context.contentResolver.openInputStream(uri)?.use { ThemeFiles.importStyle(it) }
                     }.getOrNull()
                 }
                 val parsed = text?.let { runCatching { ThemeJson.parse(it) }.getOrNull() }
@@ -319,11 +321,11 @@ fun ThemeEditorScreen(
                             })
                             DropdownMenuItem(text = { Text("Export this style") }, onClick = {
                                 showMore = false
-                                export.launch("$name style.json")
+                                export.launch("$name style.zip")
                             })
                             DropdownMenuItem(text = { Text("Import a style") }, onClick = {
                                 showMore = false
-                                import.launch(arrayOf("application/json", "application/octet-stream"))
+                                import.launch(arrayOf("application/zip", "application/json", "application/octet-stream"))
                             })
                         }
                     }

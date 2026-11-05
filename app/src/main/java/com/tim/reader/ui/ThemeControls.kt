@@ -304,7 +304,7 @@ fun FillEditor(title: String, fill: Fill, onChange: (Fill) -> Unit) {
                 }
             }
             is ImageFill -> {
-                val names = remember(imported) { ThemeImages.builtIn.map { it.first } + ThemeFiles.images() }
+                val names = remember(imported, fill.name) { ThemeImages.builtIn.map { it.first } + ThemeFiles.images() }
                 EditorDivider()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Image", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -381,7 +381,7 @@ fun FontEditor(font: String, onChange: (String) -> Unit) {
             }
         }
     }
-    val fonts = remember(imported) {
+    val fonts = remember(imported, font) {
         listOf("sans" to "Sans", "serif" to "Serif", "mono" to "Mono", "cursive" to "Cursive") +
             ThemeFiles.fonts().map { it to ThemeFiles.fontLabel(it) }
     }
