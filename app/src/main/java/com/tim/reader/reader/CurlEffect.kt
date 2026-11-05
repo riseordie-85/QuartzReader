@@ -113,7 +113,9 @@ private const val BOOK_SHADER = """
     }
 """
 
-class CurlEffect private constructor(private val shader: RuntimeShader, private val bookShader: RuntimeShader) {
+class CurlEffect private constructor(private val shader: RuntimeShader, private val bookShader: RuntimeShader?) {
+    val canTurnLikeBook get() = bookShader != null
+
 
     /** The effect at this stage of the turn, from 0 at rest to 1 fully turned. */
     fun at(width: Float, height: Float, progress: Float, rightToLeft: Boolean) = run {
@@ -127,21 +129,27 @@ class CurlEffect private constructor(private val shader: RuntimeShader, private 
 
     /** One leaf of an open book at this stage of the turn, from 0 at rest to 1 landed. */
     fun book(width: Float, height: Float, progress: Float, rightToLeft: Boolean): androidx.compose.ui.graphics.RenderEffect {
+        val book = checkNotNull(bookShader)
         val lift = sin(PI.toFloat() * progress)
         val leaf = width / 2f
-        bookShader.setFloatUniform("size", width, height)
-        bookShader.setFloatUniform("curlAt", leaf * (1f - progress))
-        bookShader.setFloatUniform("radius", max(leaf * 0.16f * lift, 0.5f))
-        bookShader.setFloatUniform("tilt", 0.14f * lift)
-        bookShader.setFloatUniform("lift", lift)
-        bookShader.setFloatUniform("mirror", if (rightToLeft) 1f else 0f)
-        return RenderEffect.createRuntimeShaderEffect(bookShader, "content").asComposeRenderEffect()
+        book.setFloatUniform("size", width, height)
+        book.setFloatUniform("curlAt", leaf * (1f - progress))
+        book.setFloatUniform("radius", max(leaf * 0.16f * lift, 0.5f))
+        book.setFloatUniform("tilt", 0.14f * lift)
+        book.setFloatUniform("lift", lift)
+        book.setFloatUniform("mirror", if (rightToLeft) 1f else 0f)
+        return RenderEffect.createRuntimeShaderEffect(book, "content").asComposeRenderEffect()
     }
 
     companion object {
-        /** Returns null if this device can't compile the shaders, and pages slide instead. */
-        fun create(): CurlEffect? = try {
-            CurlEffect(RuntimeShader(CURL_SHADER), RuntimeShader(BOOK_SHADER))
+        /** Returns null if this device can't compile the page curl, and pages slide instead. */
+        fun create(): CurlEffect? {
+            val page = compile(CURL_SHADER) ?: return null
+            return CurlEffect(page, compile(BOOK_SHADER))
+        }
+
+        private fun compile(code: String): RuntimeShader? = try {
+            RuntimeShader(code)
         } catch (error: RuntimeException) {
             ResultsLog.add("Page curl unavailable: ${error.message}")
             null

@@ -119,6 +119,7 @@ private data class ReaderRow(val page: Int, val top: Int = -1, val bottom: Int =
 private const val DEFAULT_ASPECT = 0.7f
 private const val MAX_ZOOM = 5f
 private const val DOUBLE_TAP_ZOOM = 2.5f
+private const val NEARLY_UNZOOMED = 1.05f
 private const val ROWS_AHEAD = 4
 
 /** Page turns, set by whichever reading mode is on screen. */
@@ -184,6 +185,8 @@ private fun Modifier.zoomGestures(zoom: ZoomState, width: Int, height: Int, list
                     }
                 }
             } while (event.changes.any { it.pressed })
+            // A page left barely zoomed looks normal, but it would block swipes.
+            if (zoom.scale < NEARLY_UNZOOMED) zoom.reset()
         }
     }
 
@@ -193,8 +196,9 @@ private suspend fun PointerInputScope.detectReaderTaps(
     onTap: (Offset) -> Unit,
     onDoubleTap: (Offset) -> Unit,
 ) = awaitEachGesture {
-    awaitFirstDown()
+    val down = awaitFirstDown()
     val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+    if ((up.position - down.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
     up.consume()
     val at = up.position
     if (turnsPage(at)) {
@@ -571,15 +575,21 @@ private fun PagedReader(
     }
 
     // A wide page is already two facing pages, so it can turn like any open spread.
-    val isOpenBook = { spread: Spread -> spread.pages.size == 2 || spread.pages.first() in widePages }
+    val isOpenBook = { spread: Spread ->
+        spread.pages.size == 2 || (spread.pages.first() in widePages && look.fit == FitMode.Screen)
+    }
     val turnsLikeBook = { lower: Int ->
-        animation == PageAnimation.Curl && curl != null &&
+        animation == PageAnimation.Curl && curl?.canTurnLikeBook == true &&
             spreads.getOrNull(lower)?.let(isOpenBook) == true &&
             spreads.getOrNull(lower + 1)?.let(isOpenBook) == true
     }
     val turningFrom by remember(pager) {
         derivedStateOf {
-            if (pager.currentPageOffsetFraction == 0f) -1 else floor(pager.position()).toInt()
+            if (!pager.isScrollInProgress || pager.currentPageOffsetFraction == 0f) {
+                -1
+            } else {
+                floor(pager.position()).toInt()
+            }
         }
     }
 
@@ -800,6 +810,8 @@ private fun SpreadView(
     val scope = rememberCoroutineScope()
     val zoom = remember(index) { ZoomState() }
     val visualPages = if (rightToLeft) spread.pages.reversed() else spread.pages
+    // At Fit Width, a tall page scrolls within itself, so one finger stays free to do that.
+    val scrollsInside = !vertical && visualPages.size == 1 && look.fit == FitMode.Width
     val latestOnMenu by rememberUpdatedState(onMenu)
     val latestOnTurn by rememberUpdatedState(onTurn)
     var links by remember(spread) { mutableStateOf<Map<Int, Pair<List<PageLink>, PageSize?>>>(emptyMap()) }
@@ -824,7 +836,7 @@ private fun SpreadView(
             .zIndex(-index.toFloat())
             .pageTransition(pager, index, animation, vertical, rightToLeft, curl, turnsLikeBook)
             .background(Color(look.background))
-            .zoomGestures(zoom, width, height)
+            .zoomGestures(zoom, width, height, listScrolls = scrollsInside)
             .pointerInput(spread, width, height, rightToLeft, look.fit) {
                 detectReaderTaps(
                     turnsPage = { at -> zoom.scale == 1f && at.x !in (width / 3f)..(width * 2f / 3f) },
@@ -839,6 +851,7 @@ private fun SpreadView(
                         when {
                             link != null -> scope.launch { onLink(link.target) }
                             at.x in (width / 3f)..(width * 2f / 3f) -> latestOnMenu()
+                            zoom.scale > 1f -> Unit
                             else -> scope.launch { latestOnTurn(forward) }
                         }
                     },
@@ -1014,9 +1027,10 @@ private fun ContinuousReader(
                     onDoubleTap = { at -> zoom.toggle(at, width, height) },
                     onTap = { at ->
                         when {
+                            at.y in (height / 3f)..(height * 2f / 3f) -> onMenu()
+                            zoom.scale > 1f -> Unit
                             at.y < height / 3f -> scope.launch { nav.previous() }
-                            at.y > height * 2f / 3f -> scope.launch { nav.next() }
-                            else -> onMenu()
+                            else -> scope.launch { nav.next() }
                         }
                     },
                 )
@@ -1030,6 +1044,7 @@ private fun ContinuousReader(
                     scaleX = zoom.scale
                     scaleY = zoom.scale
                     translationX = zoom.x
+                    translationY = zoom.y
                 },
         ) {
             itemsIndexed(rows, key = { _, row -> "${row.page}:${row.top}" }) { _, row ->
