@@ -90,13 +90,18 @@ private fun DrawScope.ribbon(): Path {
     }
 }
 
+@Composable
+fun GlyphButton(glyph: Glyph, color: Color, description: String, onClick: () -> Unit) {
+    GlyphButton(glyph, color, description, iconSize = 26.dp, onClick = onClick)
+}
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun GlyphButton(
     glyph: Glyph,
     color: Color,
     description: String,
-    iconSize: Dp = 26.dp,
+    iconSize: Dp,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
