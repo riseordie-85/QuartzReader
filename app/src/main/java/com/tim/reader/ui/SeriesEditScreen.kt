@@ -86,7 +86,7 @@ fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, o
         BookType.entries.forEach { option ->
             ChoiceRow(option.label, type == option) {
                 // The series follows its type to the matching shelf.
-                state.shelves.filter { it.defaultType == type }.forEach { shelfIds.remove(it.id) }
+                state.shelves.filter { it.defaultType != null && it.defaultType == type }.forEach { shelfIds.remove(it.id) }
                 state.shelves.filter { it.defaultType == option && it.id !in shelfIds }.forEach { shelfIds.add(it.id) }
                 type = option
                 direction = option.direction
