@@ -21,6 +21,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,7 +31,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tim.reader.data.Book
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.Shelf
 import com.tim.reader.data.ShelfItem
@@ -68,7 +68,8 @@ fun HomeScreen(
                         HomeList(state, theme, columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf)
                     }
                     Box(Modifier.weight(1f)) {
-                        CoverPager(state, theme, actions)
+                        val covers = state.recentlyRead.ifEmpty { state.books.sortedByDescending { it.addedAt } }
+                        CoverPager(covers.map { ShelfItem.Single(it) }, theme, actions)
                     }
                 }
             } else {
@@ -184,14 +185,13 @@ private fun ShelfButton(shelf: Shelf, modifier: Modifier, onClick: () -> Unit) {
     }
 }
 
-/** The right pane when unfolded: large covers to swipe through. */
+/** Large covers to swipe through, in the right pane when unfolded. */
 @Composable
-private fun CoverPager(state: LibraryState, theme: ShelfTheme, actions: BookActions) {
-    val books: List<Book> = state.recentlyRead.ifEmpty { state.books.sortedByDescending { it.addedAt } }
-    if (books.isEmpty()) return
-    val pager = rememberPagerState { books.size }
+fun CoverPager(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions) {
+    if (items.isEmpty()) return
+    val pager = rememberPagerState { items.size }
     HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
-        val book = books[page]
+        val item = items[page]
         Column(
             Modifier
                 .fillMaxSize()
@@ -199,20 +199,16 @@ private fun CoverPager(state: LibraryState, theme: ShelfTheme, actions: BookActi
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            BookTile(
-                coverPath = book.displayCover,
-                look = theme.book,
-                progress = book.progress,
-                label = book.title,
-                badge = null,
-                onClick = { actions.onOpen(book) },
-                onLongClick = { actions.onDetails(book) },
-                modifier = Modifier
+            ShelfItemTile(
+                item,
+                theme.book,
+                actions,
+                Modifier
                     .weight(1f, fill = false)
                     .fillMaxHeight(0.86f),
             )
             Text(
-                text = book.title,
+                text = item.displayTitle(),
                 color = Color(theme.title.color),
                 fontSize = 18.sp,
                 textAlign = TextAlign.Center,
@@ -222,6 +218,49 @@ private fun CoverPager(state: LibraryState, theme: ShelfTheme, actions: BookActi
                     .fillMaxWidth()
                     .padding(top = 20.dp),
             )
+        }
+    }
+}
+
+/**
+ * Keeps the Home split on every library page when unfolded: the page on the left, and that page's
+ * titles to swipe through on the right. Narrow screens show the page alone.
+ */
+@Composable
+fun CoverSplit(
+    items: List<ShelfItem>,
+    theme: ShelfTheme,
+    actions: BookActions,
+    paneKey: Any,
+    page: @Composable (Modifier) -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= TWO_PANE_WIDTH) {
+            Row(Modifier.fillMaxSize()) {
+                page(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+                key(paneKey) {
+                    ThemedBackground(
+                        theme.background,
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .windowInsetsPadding(WindowInsets.safeDrawing),
+                        ) {
+                            CoverPager(items, theme, actions)
+                        }
+                    }
+                }
+            }
+        } else {
+            page(Modifier.fillMaxSize())
         }
     }
 }

@@ -248,6 +248,11 @@ fun ShelfItemTile(item: ShelfItem, look: BookLook, actions: BookActions, modifie
     }
 }
 
+fun ShelfItem.displayTitle() = when (this) {
+    is ShelfItem.Single -> book.title
+    is ShelfItem.Stack -> series.title
+}
+
 /** One row of covers standing on one ledge. */
 @Composable
 fun ShelfRow(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, actions: BookActions) {

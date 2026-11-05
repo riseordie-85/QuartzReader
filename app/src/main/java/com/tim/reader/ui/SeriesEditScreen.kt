@@ -1,6 +1,5 @@
 package com.tim.reader.ui
 
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -32,7 +31,7 @@ import com.tim.reader.data.LibraryState
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.Series
 import com.tim.reader.data.SeriesEdit
-import com.tim.reader.library.LibraryFolder
+import com.tim.reader.library.LibraryOrganizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,15 +119,8 @@ fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, o
                 )
                 // This carries on if the screen closes, so moved files are never left unrecorded.
                 appScope.launch {
-                    if (newType != null) {
-                        val folder = LibraryFolder.get(context)
-                        val moved = volumes.filter { it.type != newType }.mapNotNull { book ->
-                            folder.moveBetweenTypes(Uri.parse(book.documentUri), book.type, newType)
-                                ?.let { book.id to it.toString() }
-                        }.toMap()
-                        repository.setDocumentUris(moved)
-                    }
                     repository.updateSeries(series.id, edit)
+                    LibraryOrganizer(context).place(volumes.map { it.id })
                     withContext(Dispatchers.Main) { onDone() }
                 }
             },

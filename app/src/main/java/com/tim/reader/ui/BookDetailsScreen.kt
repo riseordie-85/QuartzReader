@@ -47,6 +47,7 @@ import com.tim.reader.data.LibraryState
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.library.Covers
 import com.tim.reader.library.LibraryFolder
+import com.tim.reader.library.LibraryOrganizer
 import com.tim.reader.library.rememberCover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -155,10 +156,6 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
             Button({
                 // This carries on if the screen closes, so a moved file is never left unrecorded.
                 appScope.launch {
-                    if (type != book.type) {
-                        val moved = LibraryFolder.get(context).moveBetweenTypes(Uri.parse(book.documentUri), book.type, type)
-                        if (moved != null) repository.setDocumentUris(mapOf(book.id to moved.toString()))
-                    }
                     repository.updateBookDetails(
                         book.id,
                         title.trim().ifBlank { book.title },
@@ -170,6 +167,7 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
                     )
                     repository.setReadList(book.id, inReadList)
                     repository.setBookShelves(book.id, shelfIds.toSet())
+                    LibraryOrganizer(context).place(listOf(book.id))
                     withContext(Dispatchers.Main) { onGone() }
                 }
             }) { Text("Save") }
@@ -187,7 +185,11 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
                     confirmDelete = false
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            runCatching { LibraryFolder.get(context).delete(Uri.parse(book.documentUri)) }
+                            val folder = LibraryFolder.get(context)
+                            val document = Uri.parse(book.documentUri)
+                            val parent = folder.parentOf(document)
+                            runCatching { folder.delete(document) }
+                            parent?.let { folder.removeIfEmpty(it) }
                             Covers.delete(context, book.id)
                         }
                         repository.deleteBook(book.id)

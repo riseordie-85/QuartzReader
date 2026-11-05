@@ -36,7 +36,8 @@ fun SeriesScreen(
     onEdit: () -> Unit,
 ) {
     val ordered = volumes.sortedWith(volumeOrder)
-    ThemedBackground(theme.background, Modifier.fillMaxSize()) {
+    CoverSplit(ordered.map { ShelfItem.Single(it) }, theme, actions, series.id) { pageModifier ->
+    ThemedBackground(theme.background, pageModifier) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -61,5 +62,6 @@ fun SeriesScreen(
                 }
             }
         }
+    }
     }
 }

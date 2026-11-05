@@ -91,7 +91,14 @@ fun ShelfPager(
             }
         }
 
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+        val visible = shelves[pager.currentPage % count]
+        CoverSplit(
+            items = shelfItems(state.booksOn(visible.id), visible.sort, visible.groupSeries, state),
+            theme = visible.theme,
+            actions = actions,
+            paneKey = visible.id,
+        ) { pageModifier ->
+        HorizontalPager(state = pager, modifier = pageModifier, beyondViewportPageCount = 1) { page ->
             val shelf = shelves[page % count]
             val neighbors = if (count > 1) {
                 ShelfNeighbors(
@@ -119,6 +126,7 @@ fun ShelfPager(
                 onStyle = { style -> scope.launch { repository.setShelfTheme(shelf.id, style) } },
             )
         }
+        }
     }
 }
 
@@ -132,21 +140,24 @@ fun ListPage(
     actions: BookActions,
 ) {
     var viewMode by remember(title) { mutableStateOf(ViewMode.Shelf) }
-    ShelfContent(
-        title = title,
-        theme = theme,
-        items = items,
-        viewMode = viewMode,
-        sort = null,
-        groupSeries = false,
-        neighbors = null,
-        header = header,
-        actions = actions,
-        onViewMode = { viewMode = it },
-        onSort = {},
-        onGroupSeries = {},
-        onStyle = {},
-    )
+    CoverSplit(items, theme, actions, title) { pageModifier ->
+        ShelfContent(
+            title = title,
+            theme = theme,
+            items = items,
+            viewMode = viewMode,
+            sort = null,
+            groupSeries = false,
+            neighbors = null,
+            header = header,
+            actions = actions,
+            onViewMode = { viewMode = it },
+            onSort = {},
+            onGroupSeries = {},
+            onStyle = {},
+            modifier = pageModifier,
+        )
+    }
 }
 
 @Composable
@@ -164,11 +175,12 @@ private fun ShelfContent(
     onSort: (SortOrder) -> Unit,
     onGroupSeries: (Boolean) -> Unit,
     onStyle: (ShelfTheme) -> Unit,
+    modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     val controls = Color(theme.controls.color)
     val bottomSpace = if (neighbors != null) theme.bottom.heightDp.dp else 24.dp
 
-    ThemedBackground(theme.background, Modifier.fillMaxSize()) {
+    ThemedBackground(theme.background, modifier) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -285,11 +297,6 @@ private fun GridView(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, ac
             }
         }
     }
-}
-
-private fun ShelfItem.displayTitle() = when (this) {
-    is ShelfItem.Single -> book.title
-    is ShelfItem.Stack -> series.title
 }
 
 @Composable

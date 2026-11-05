@@ -108,19 +108,31 @@ class LibraryFolder private constructor(context: Context) {
         return target
     }
 
-    /**
-     * Moves a book to the folder for its new type. Returns its new address, or null if Android
-     * refuses, in which case the book stays where it is and keeps working.
-     */
-    fun moveBetweenTypes(document: Uri, from: BookType, to: BookType): Uri? = runCatching {
-        val tree = requireTree()
-        DocumentsContract.moveDocument(
-            resolver,
-            document,
-            DocumentsContract.buildDocumentUriUsingTree(tree, typeFolder(from)),
-            DocumentsContract.buildDocumentUriUsingTree(tree, typeFolder(to)),
-        )
+    /** The folder a book belongs in: Manga, or Manga/One Piece when it's part of a series. */
+    fun bookFolder(type: BookType, series: String?): String {
+        val base = typeFolder(type)
+        return if (series.isNullOrBlank()) base else findOrCreateFolder(requireTree(), base, safeFileName(series))
+    }
+
+    /** The folder a library document sits in, or null if this provider can't say. */
+    fun parentOf(document: Uri): String? = runCatching {
+        val path = DocumentsContract.findDocumentPath(resolver, document)?.path
+        path?.getOrNull(path.size - 2)
     }.getOrNull()
+
+    /** Moves a book. Returns null if Android refuses, and the book keeps working where it is. */
+    fun move(document: Uri, fromId: String, toId: String): Uri? = runCatching {
+        DocumentsContract.moveDocument(resolver, document, documentUri(fromId), documentUri(toId))
+    }.getOrNull()
+
+    /** Removes a series folder once its last book has left. Type folders always stay. */
+    fun removeIfEmpty(folderId: String) {
+        val tree = requireTree()
+        val keep = BookType.entries.map { typeFolder(it) } + DocumentsContract.getTreeDocumentId(tree)
+        if (folderId !in keep && children(tree, folderId).isEmpty()) {
+            runCatching { DocumentsContract.deleteDocument(resolver, documentUri(folderId)) }
+        }
+    }
 
     fun delete(document: Uri) {
         DocumentsContract.deleteDocument(resolver, document)

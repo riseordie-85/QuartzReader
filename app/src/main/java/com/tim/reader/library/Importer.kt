@@ -71,6 +71,7 @@ class Importer(context: Context) {
     private val appContext = context.applicationContext
     private val folder = LibraryFolder.get(appContext)
     private val repository = LibraryRepository.get(appContext)
+    private val organizer = LibraryOrganizer(appContext)
 
     private fun displayName(uri: Uri): String {
         val name = runCatching {
@@ -231,6 +232,7 @@ class Importer(context: Context) {
             val series = parsed.series ?: hint
             if (existing.seriesId == null && series != null) {
                 repository.assignSeries(existing.id, series, parsed.number ?: existing.seriesNumber)
+                organizer.place(listOf(existing.id))
             }
             return false
         }
@@ -275,6 +277,8 @@ class Importer(context: Context) {
             // Loose novels in a folder aren't assumed to be a series, but volumes of comics are.
             val hint = item.seriesHint?.takeIf { item.isFolder || type != BookType.Book }
             repository.addBook(book, details.series ?: hint, shelves)
+            // The book is in the library now, so a failed move mustn't undo the import.
+            runCatching { organizer.place(listOf(id)) }
         } catch (error: Exception) {
             runCatching { folder.delete(copy) }
             throw error
