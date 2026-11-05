@@ -147,7 +147,7 @@ private fun ShelfRowEditor(
         TextButton({ onMove(-1) }) { Text("Up") }
         TextButton({ onMove(1) }) { Text("Down") }
         Box {
-            TextButton({ menu = true }) { Text("More") }
+            TextButton({ menu = true }) { Text("Edit") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Rename") }, onClick = {
                     menu = false

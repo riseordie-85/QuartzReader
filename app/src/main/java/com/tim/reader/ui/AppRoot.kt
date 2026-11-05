@@ -68,7 +68,7 @@ private sealed interface Route {
     data object Shelves : Route
     data object Settings : Route
     data object Tools : Route
-    data class SeriesPage(val seriesId: String) : Route
+    data class SeriesPage(val seriesId: String, val shelfId: String?) : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -197,7 +197,8 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
     val actions = BookActions(
         onOpen = { book -> scope.launch { openBook(context, book, ::push) } },
         onDetails = { book -> push(Route.Details(book.id)) },
-        onSeries = { id -> push(Route.SeriesPage(id)) },
+        // A series keeps the style of the shelf it was opened from.
+        onSeries = { id -> push(Route.SeriesPage(id, (stack.last() as? Route.ShelfPages)?.shelfId)) },
     )
 
     BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
@@ -229,7 +230,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         Route.Tools -> TestToolsScreen(onExit = { stack.removeAt(stack.lastIndex) })
         is Route.SeriesPage -> {
             val series = state.seriesFor(route.seriesId)
-            val theme = state.homeTheme
+            val theme = route.shelfId?.let { state.shelf(it)?.theme } ?: state.homeTheme
             if (series != null && theme != null) {
                 SeriesScreen(series, state.books.filter { it.seriesId == series.id }, theme, header, actions)
             } else {
