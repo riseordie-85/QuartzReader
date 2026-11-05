@@ -64,10 +64,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tim.reader.R
 import com.tim.reader.ResultsLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.max
 
 private enum class ShadowMode(val label: String) {
@@ -103,6 +106,7 @@ private const val SWIPE_RANGE = 10_000
 private const val COVER_WIDTH = 360
 private const val COVER_HEIGHT = 540
 private const val SHADOW_PAD = 60
+private const val STEP_TIMEOUT_MS = 20_000L
 
 private class ShelfAssets(
     val wallpapers: Map<Int, ImageBitmap>,
@@ -191,6 +195,21 @@ private class FrameStats {
     }
 }
 
+/** Logs before and after a step, so a stall shows exactly where it happened. */
+private suspend fun testStep(label: String, stats: FrameStats, block: suspend () -> Unit) {
+    ResultsLog.add("Starting: $label")
+    stats.reset()
+    val finished = withTimeoutOrNull(STEP_TIMEOUT_MS) {
+        block()
+        true
+    }
+    if (finished == true) {
+        ResultsLog.add("$label: ${stats.summary()}")
+    } else {
+        ResultsLog.add("TIMED OUT: $label, ${stats.summary()}")
+    }
+}
+
 @Composable
 fun ShelfTestScreen() {
     val context = LocalContext.current
@@ -223,7 +242,8 @@ private fun Shelves(assets: ShelfAssets, columns: Int) {
     val stats = remember { FrameStats() }
     var shadowMode by remember { mutableStateOf(ShadowMode.PreRendered) }
     var readout by remember { mutableStateOf("Measuring") }
-    var running by remember { mutableStateOf(false) }
+    var testJob by remember { mutableStateOf<Job?>(null) }
+    val running = testJob != null
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -247,6 +267,8 @@ private fun Shelves(assets: ShelfAssets, columns: Int) {
             state = pager,
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
+            // A touch would cancel the scripted scrolling.
+            userScrollEnabled = !running,
         ) { page ->
             val themeIndex = page % themes.size
             ShelfPage(
@@ -258,6 +280,7 @@ private fun Shelves(assets: ShelfAssets, columns: Int) {
                 columns = columns,
                 shadowMode = shadowMode,
                 seed = themeIndex,
+                touchEnabled = !running,
             )
         }
 
@@ -276,28 +299,42 @@ private fun Shelves(assets: ShelfAssets, columns: Int) {
                 }) { Text(shadowMode.label, fontSize = 12.sp) }
                 Button(
                     onClick = {
-                        running = true
-                        scope.launch {
-                            for (mode in ShadowMode.entries) {
-                                shadowMode = mode
-                                delay(500)
-                                stats.reset()
-                                val current = lists[pager.currentPage % themes.size]
-                                current.animateScrollBy(4000f, tween(4000, easing = LinearEasing))
-                                current.animateScrollBy(-4000f, tween(2000, easing = LinearEasing))
-                                ResultsLog.add("Scroll, ${mode.label}: ${stats.summary()}")
-                                stats.reset()
-                                repeat(themes.size) {
-                                    pager.animateScrollToPage(pager.currentPage + 1, animationSpec = tween(600))
+                        val job = testJob
+                        if (job != null) {
+                            job.cancel(CancellationException("Stop was tapped"))
+                        } else {
+                            testJob = scope.launch {
+                                try {
+                                    ResultsLog.add("--- Shelf test, $columns columns")
+                                    for (mode in ShadowMode.entries) {
+                                        shadowMode = mode
+                                        delay(500)
+                                        testStep("Scroll, ${mode.label}", stats) {
+                                            val current = lists[pager.currentPage % themes.size]
+                                            current.animateScrollBy(4000f, tween(4000, easing = LinearEasing))
+                                            current.animateScrollBy(-4000f, tween(2000, easing = LinearEasing))
+                                        }
+                                        testStep("Swipe, ${mode.label}", stats) {
+                                            repeat(themes.size) {
+                                                pager.animateScrollToPage(
+                                                    pager.currentPage + 1,
+                                                    animationSpec = tween(600),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    ResultsLog.add("Shelf test finished")
+                                } catch (error: CancellationException) {
+                                    ResultsLog.add("Shelf test stopped: ${error.message}")
+                                    throw error
+                                } finally {
+                                    shadowMode = ShadowMode.PreRendered
+                                    testJob = null
                                 }
-                                ResultsLog.add("Swipe, ${mode.label}: ${stats.summary()}")
                             }
-                            shadowMode = ShadowMode.PreRendered
-                            running = false
                         }
                     },
-                    enabled = !running,
-                ) { Text(if (running) "Running" else "Run test", fontSize = 12.sp) }
+                ) { Text(if (running) "Stop" else "Run test", fontSize = 12.sp) }
             }
         }
     }
@@ -313,6 +350,7 @@ private fun ShelfPage(
     columns: Int,
     shadowMode: ShadowMode,
     seed: Int,
+    touchEnabled: Boolean,
 ) {
     val shape = RoundedCornerShape(theme.cornerDp.dp)
     Box(
@@ -334,6 +372,7 @@ private fun ShelfPage(
             state = list,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 180.dp, bottom = 96.dp),
+            userScrollEnabled = touchEnabled,
         ) {
             items(60) { row ->
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
