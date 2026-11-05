@@ -116,6 +116,9 @@ object Schema {
     const val SELECT_BOOKMARKS = "SELECT id, book_id, page, label, created_at FROM bookmarks " +
         "WHERE deleted_at IS NULL ORDER BY page"
     const val REMOVE_BOOKMARK = "UPDATE bookmarks SET deleted_at = ?, updated_at = ? WHERE id = ?"
+    const val SELECT_SERIES_TYPES = "SELECT s.id, s.title, s.match_key, b.type FROM series s " +
+        "JOIN books b ON b.series_id = s.id WHERE s.deleted_at IS NULL AND b.deleted_at IS NULL " +
+        "GROUP BY s.id, b.type ORDER BY s.id, COUNT(*) DESC"
     const val SELECT_SERIES_BY_KEY = "SELECT id FROM series WHERE match_key = ? AND deleted_at IS NULL LIMIT 1"
     const val DELETE_EMPTY_SERIES = "UPDATE series SET deleted_at = ?, updated_at = ? WHERE deleted_at IS NULL " +
         "AND id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL AND deleted_at IS NULL)"

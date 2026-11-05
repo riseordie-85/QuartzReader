@@ -71,7 +71,7 @@ fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, o
         Text("Changes apply to all ${volumes.size} volumes.")
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Series name") }, singleLine = true)
-        Text("Using the name of another series merges the two.", style = MaterialTheme.typography.bodySmall)
+        Text("Using the name of another series of the same type merges the two.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(
             author,
             { author = it },

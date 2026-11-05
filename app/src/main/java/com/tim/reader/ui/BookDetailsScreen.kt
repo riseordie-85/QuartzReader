@@ -104,6 +104,7 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
         )
         if (seriesFocused) {
             state.series
+                .distinctBy { it.title.lowercase() }
                 .filter { it.title.contains(series.trim(), ignoreCase = true) && !it.title.equals(series.trim(), ignoreCase = true) }
                 .sortedBy { it.title.lowercase() }
                 .take(6)

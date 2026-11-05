@@ -1,5 +1,7 @@
 package com.tim.reader.library
 
+import com.tim.reader.data.BookType
+
 /** A title worked out from a file name, with its series when the name shows a volume number. */
 data class ParsedName(val title: String, val series: String?, val number: Double?)
 
@@ -33,8 +35,12 @@ fun parseName(fileName: String, allowTrailingNumber: Boolean = true): ParsedName
     return ParsedName(title, series, number)
 }
 
-/** Treats "One Piece", "one_piece", and "ONE-PIECE" as the same series. */
-fun seriesMatchKey(title: String) = title.lowercase().filter { it.isLetterOrDigit() }
+/**
+ * Treats "One Piece", "one_piece", and "ONE-PIECE" as the same series. Each type keeps its own, so
+ * a manga and its light novels stay apart even with the same name.
+ */
+fun seriesMatchKey(title: String, type: BookType) =
+    "${type.name}:" + title.lowercase().filter { it.isLetterOrDigit() }
 
 /** The name a file gets in the library folder. */
 fun safeFileName(name: String) = name.replace(Regex("""[/\\:*?"<>|]"""), "_").trim().ifBlank { "Untitled" }

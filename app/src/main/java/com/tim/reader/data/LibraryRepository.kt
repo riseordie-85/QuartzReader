@@ -26,7 +26,50 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion < 2) Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
+        if (oldVersion < 2) {
+            Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
+            separateSeriesByType(db)
+        }
+    }
+
+    /** Series used to be shared by every book with the same name, whatever its type. */
+    private fun separateSeriesByType(db: SQLiteDatabase) {
+        class Row(val id: String, val title: String, val key: String, val type: String)
+
+        val time = now()
+        val rows = db.rawQuery(Schema.SELECT_SERIES_TYPES, null).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(Row(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3)))
+                }
+            }
+        }
+        val kept = HashSet<String>()
+        for (row in rows) {
+            val key = "${row.type}:${row.key}"
+            if (kept.add(row.id)) {
+                val values = ContentValues().apply {
+                    put("match_key", key)
+                    put("updated_at", time)
+                }
+                db.update("series", values, "id = ?", arrayOf(row.id))
+            } else {
+                val id = UUID.randomUUID().toString()
+                val series = ContentValues().apply {
+                    put("id", id)
+                    put("title", row.title)
+                    put("match_key", key)
+                    put("updated_at", time)
+                }
+                db.insertOrThrow("series", null, series)
+                val books = ContentValues().apply {
+                    put("series_id", id)
+                    put("updated_at", time)
+                }
+                db.update("books", books, "series_id = ? AND type = ? AND deleted_at IS NULL", arrayOf(row.id, row.type))
+            }
+        }
+        db.execSQL(Schema.DELETE_EMPTY_SERIES, arrayOf<Any>(time, time))
     }
 }
 
@@ -240,11 +283,12 @@ class LibraryRepository private constructor(context: Context) {
 
     suspend fun setHomeTheme(theme: ShelfTheme) = write { saveSetting(KEY_HOME_THEME, ThemeJson.write(theme)) }
 
-    /** Applies one edit to every volume. Renaming to an existing series merges the two. */
+    /** Applies one edit to every volume. Matching an existing series of the same type merges the two. */
     suspend fun updateSeries(seriesId: String, edit: SeriesEdit) = write {
         val time = now()
         val title = edit.title.trim()
-        val key = seriesMatchKey(title)
+        val type = edit.type ?: state.value.books.firstOrNull { it.seriesId == seriesId }?.type ?: BookType.Book
+        val key = seriesMatchKey(title, type)
         val match = db.rawQuery(Schema.SELECT_SERIES_BY_KEY, arrayOf(key)).use { rows ->
             if (rows.moveToFirst()) rows.getString(0) else null
         }
@@ -326,16 +370,17 @@ class LibraryRepository private constructor(context: Context) {
 
     /** Puts a book in a series, for when a later import shows which series it belongs to. */
     suspend fun assignSeries(id: String, seriesTitle: String, number: Double?) = write {
+        val type = state.value.books.firstOrNull { it.id == id }?.type ?: BookType.Book
         val values = ContentValues().apply {
-            put("series_id", seriesIdFor(seriesTitle.trim()))
+            put("series_id", seriesIdFor(seriesTitle.trim(), type))
             put("series_number", number)
             put("updated_at", now())
         }
         db.update("books", values, "id = ?", arrayOf(id))
     }
 
-    private fun seriesIdFor(title: String): String {
-        val key = seriesMatchKey(title)
+    private fun seriesIdFor(title: String, type: BookType): String {
+        val key = seriesMatchKey(title, type)
         db.rawQuery(Schema.SELECT_SERIES_BY_KEY, arrayOf(key)).use { rows ->
             if (rows.moveToFirst()) return rows.getString(0)
         }
@@ -351,7 +396,7 @@ class LibraryRepository private constructor(context: Context) {
     }
 
     suspend fun addBook(book: Book, seriesTitle: String?, shelfIds: Collection<String>) = write {
-        val seriesId = seriesTitle?.takeIf { it.isNotBlank() }?.let { seriesIdFor(it.trim()) }
+        val seriesId = seriesTitle?.takeIf { it.isNotBlank() }?.let { seriesIdFor(it.trim(), book.type) }
         val values = ContentValues().apply {
             put("id", book.id)
             put("hash", book.hash)
@@ -383,7 +428,7 @@ class LibraryRepository private constructor(context: Context) {
         type: BookType,
         direction: ReadDirection,
     ) = write {
-        val seriesId = seriesTitle.takeIf { it.isNotBlank() }?.let { seriesIdFor(it.trim()) }
+        val seriesId = seriesTitle.takeIf { it.isNotBlank() }?.let { seriesIdFor(it.trim(), type) }
         val values = ContentValues().apply {
             put("title", title)
             put("author", author)
