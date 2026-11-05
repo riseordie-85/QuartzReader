@@ -59,7 +59,9 @@ import com.tim.reader.reader.capturePage
 import com.tim.reader.reader.epubPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
 import org.readium.r2.navigator.Decoration
@@ -119,6 +121,7 @@ fun EpubControls(
     navigator: EpubNavigatorFragment,
     showControls: Boolean,
     isSelecting: Boolean,
+    onEndSelection: () -> Unit,
     onShowControls: (Boolean) -> Unit,
     onAnimatedTurns: (Boolean) -> Unit,
     onPageColor: (Int) -> Unit,
@@ -136,6 +139,7 @@ fun EpubControls(
     val direction = liveBook?.direction ?: testDirection
     var sheet by remember { mutableStateOf<ReaderSheet?>(null) }
     var draft by remember { mutableStateOf<NoteDraft?>(null) }
+    var notesTab by remember { mutableStateOf(NotesTab.Highlights) }
     var shareRequest by remember { mutableStateOf<ShareRequest?>(null) }
     val activity = LocalActivity.current
     var settingScope by remember { mutableStateOf(SettingScope.ThisBook) }
@@ -177,6 +181,8 @@ fun EpubControls(
             else -> sheet = null
         }
     }
+
+    BackHandler(enabled = isSelecting && sheet == null && draft == null, onBack = onEndSelection)
 
     val highlights = liveBook?.let { library.highlights[it.id] }.orEmpty()
     val latestHighlights by rememberUpdatedState(highlights)
@@ -225,9 +231,13 @@ fun EpubControls(
             draft = null
             onShowControls(false)
             val target = highlight?.let { locatorOf(it.locator) }
-            if (target != null) navigator.go(target)
+            if (target != null) {
+                navigator.go(target)
+                // Another chapter can take a while to load, and a blank page is no use.
+                withTimeoutOrNull(3000) { navigator.currentLocator.first { it.href.isEquivalent(target.href) } }
+            }
             // The bars and any page change need a moment to reach the screen.
-            delay(if (target != null) 600 else 250)
+            delay(if (target != null) 350 else 250)
             val page = activity?.capturePage()
             if (page != null) shareRequest = ShareRequest(page, highlight?.text, highlight?.note)
         }
@@ -237,12 +247,13 @@ fun EpubControls(
         scope.launch {
             val selection = navigator.currentSelection() ?: return@launch
             val text = selection.locator.text.highlight.orEmpty()
+            // Clearing first means a double tap can't save the same text twice.
+            onEndSelection()
             if (writeNote) {
                 draft = NoteDraft(null, selection.locator, text)
             } else if (liveBook != null) {
                 repository.addHighlight(liveBook.id, selection.locator.toJSON().toString(), text, "")
             }
-            navigator.clearSelection()
         }
     }
 
@@ -336,6 +347,7 @@ fun EpubControls(
         when (open) {
             ReaderSheet.Settings -> QuickSettings(
                 look = look,
+                fixedLayout = fixedLayout,
                 onChange = changeLook,
                 onColors = { sheet = ReaderSheet.Colors },
                 onAdvanced = { sheet = ReaderSheet.Advanced },
@@ -350,7 +362,7 @@ fun EpubControls(
                     onRemove = { set -> scope.launch { repository.removeColorSet(set) } },
                 )
             }
-            ReaderSheet.Notes -> NotesSheet(highlights) { highlight ->
+            ReaderSheet.Notes -> NotesSheet(highlights, notesTab, { notesTab = it }) { highlight ->
                 locatorOf(highlight.locator)?.let { draft = NoteDraft(highlight, it, highlight.text) }
             }
             ReaderSheet.Advanced -> TextSettings(

@@ -42,7 +42,7 @@ import java.util.Locale
 /** A highlight being written or changed. [highlight] is null until it's saved. */
 class NoteDraft(val highlight: Highlight?, val locator: Locator, val text: String)
 
-private enum class NotesTab(val label: String) {
+enum class NotesTab(val label: String) {
     Highlights("Highlights"),
     Notes("Notes"),
 }
@@ -50,15 +50,19 @@ private enum class NotesTab(val label: String) {
 private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US)
 
 @Composable
-fun ColumnScope.NotesSheet(highlights: List<Highlight>, onOpen: (Highlight) -> Unit) {
-    var tab by remember { mutableStateOf(NotesTab.Highlights) }
+fun ColumnScope.NotesSheet(
+    highlights: List<Highlight>,
+    tab: NotesTab,
+    onTab: (NotesTab) -> Unit,
+    onOpen: (Highlight) -> Unit,
+) {
     val shown = if (tab == NotesTab.Notes) highlights.filter { it.note.isNotBlank() } else highlights
 
     ReaderSheetBody {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             NotesTab.entries.forEach { option ->
                 OutlinedButton(
-                    onClick = { tab = option },
+                    onClick = { onTab(option) },
                     border = BorderStroke(2.dp, if (tab == option) Color(0xFF3B78F6) else Color.White),
                     modifier = Modifier.weight(1f),
                 ) { Text(option.label, color = Color.White, fontSize = 18.sp) }
@@ -104,6 +108,7 @@ fun NoteEditor(
         Column(
             Modifier
                 .fillMaxSize()
+                .pointerInput(Unit) { }
                 .safeDrawingPadding()
                 .padding(16.dp),
         ) {
@@ -113,7 +118,6 @@ fun NoteEditor(
                     .weight(1f)
                     .fillMaxWidth()
                     .background(PANEL_COLOR, RoundedCornerShape(28.dp))
-                    .pointerInput(Unit) { }
                     .padding(20.dp),
             ) {
                 Text(

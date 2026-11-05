@@ -66,7 +66,7 @@ private fun QuickRow(label: String, content: @Composable RowScope.() -> Unit) {
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(100.dp))
+        Text(label, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(92.dp))
         Row(
             Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -80,7 +80,7 @@ private fun QuickRow(label: String, content: @Composable RowScope.() -> Unit) {
 private fun ThemeDot(set: ColorSet, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(46.dp)
+            .size(42.dp)
             .background(Color(set.background), CircleShape)
             .border(if (selected) 3.dp else 1.dp, if (selected) QUICK_BLUE else Color.White, CircleShape)
             .clickable(onClick = onClick),
@@ -128,6 +128,7 @@ private fun DrawScope.marginIcon(reach: Float) {
 @Composable
 fun ColumnScope.QuickSettings(
     look: ReaderLook,
+    fixedLayout: Boolean,
     onChange: ((ReaderPrefs) -> ReaderPrefs) -> Unit,
     onColors: () -> Unit,
     onAdvanced: () -> Unit,
@@ -139,92 +140,94 @@ fun ColumnScope.QuickSettings(
     val margins = look.pageMargins ?: NORMAL_MARGIN
 
     ReaderSheetBody {
-        QuickRow("Theme") {
-            listOf(DAY_COLORS, SEPIA_COLORS, NAVY_COLORS).forEach { set ->
-                ThemeDot(set, set == colors) {
-                    onChange { it.copy(pageBackground = set.background, textColor = set.text) }
+        if (!fixedLayout) {
+            QuickRow("Theme") {
+                listOf(DAY_COLORS, SEPIA_COLORS, NAVY_COLORS).forEach { set ->
+                    ThemeDot(set, set == colors) {
+                        onChange { it.copy(pageBackground = set.background, textColor = set.text) }
+                    }
                 }
-            }
-            Box(
-                Modifier
-                    .size(46.dp)
-                    .background(
-                        Brush.sweepGradient(
-                            listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red),
-                        ),
-                        CircleShape,
-                    )
-                    .clickable(onClick = onColors),
-            )
-        }
-
-        QuickRow("Size") {
-            Text("T", fontSize = 18.sp, fontFamily = FontFamily.Serif)
-            PillSlider(
-                value = look.fontSize.toFloat(),
-                range = 0.5f..3f,
-                thumb = QUICK_BLUE,
-                onDone = { size -> onChange { it.copy(fontSize = size.toDouble()) } },
-                modifier = Modifier.weight(1f),
-            )
-            Text("T", fontSize = 34.sp, fontFamily = FontFamily.Serif)
-        }
-
-        QuickRow("Font") {
-            MAIN_FONTS.forEach { (label, family) ->
-                val selected = look.fontFamily == family
-                OutlinedButton(
-                    onClick = { onChange { it.copy(fontFamily = family) } },
-                    border = BorderStroke(1.dp, if (selected) QUICK_BLUE else Color.White),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (selected) QUICK_BLUE else Color.Transparent,
-                    ),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.weight(1f),
-                ) { Text(label, color = Color.White, maxLines = 1) }
-            }
-            Box {
-                OutlinedButton(
-                    onClick = { moreFonts = true },
-                    border = BorderStroke(1.dp, Color.White),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-                ) { Text("▼", color = Color.White) }
-                DropdownMenu(expanded = moreFonts, onDismissRequest = { moreFonts = false }) {
-                    TEXT_FONTS.filter { font -> MAIN_FONTS.none { it.second == font.second } }.forEach { (label, family) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                moreFonts = false
-                                onChange { it.copy(fontFamily = family) }
-                            },
+                Box(
+                    Modifier
+                        .size(42.dp)
+                        .background(
+                            Brush.sweepGradient(
+                                listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red),
+                            ),
+                            CircleShape,
                         )
+                        .clickable(onClick = onColors),
+                )
+            }
+
+            QuickRow("Size") {
+                Text("T", fontSize = 18.sp, fontFamily = FontFamily.Serif)
+                PillSlider(
+                    value = look.fontSize.toFloat(),
+                    range = 0.5f..3f,
+                    thumb = QUICK_BLUE,
+                    onDone = { size -> onChange { it.copy(fontSize = size.toDouble()) } },
+                    modifier = Modifier.weight(1f),
+                )
+                Text("T", fontSize = 34.sp, fontFamily = FontFamily.Serif)
+            }
+
+            QuickRow("Font") {
+                MAIN_FONTS.forEach { (label, family) ->
+                    val selected = look.fontFamily == family
+                    OutlinedButton(
+                        onClick = { onChange { it.copy(fontFamily = family) } },
+                        border = BorderStroke(1.dp, if (selected) QUICK_BLUE else Color.White),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (selected) QUICK_BLUE else Color.Transparent,
+                        ),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier.weight(1f),
+                    ) { Text(label, color = Color.White, maxLines = 1) }
+                }
+                Box {
+                    OutlinedButton(
+                        onClick = { moreFonts = true },
+                        border = BorderStroke(1.dp, Color.White),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                    ) { Text("▼", color = Color.White) }
+                    DropdownMenu(expanded = moreFonts, onDismissRequest = { moreFonts = false }) {
+                        TEXT_FONTS.filter { font -> MAIN_FONTS.none { it.second == font.second } }.forEach { (label, family) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    moreFonts = false
+                                    onChange { it.copy(fontFamily = family) }
+                                },
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        QuickRow("Spacing") {
-            OptionBox("Tight", lineHeight != null && same(lineHeight, TIGHT), {
-                onChange { it.copy(lineHeight = TIGHT, bookLayout = false) }
-            }) { spacingIcon(5f) }
-            OptionBox("Normal", lineHeight == null, {
-                onChange { it.copy(lineHeight = USE_BOOK_VALUE, bookLayout = false) }
-            }) { spacingIcon(9f) }
-            OptionBox("Loose", lineHeight != null && same(lineHeight, LOOSE), {
-                onChange { it.copy(lineHeight = LOOSE, bookLayout = false) }
-            }) { spacingIcon(14f) }
-        }
+            QuickRow("Spacing") {
+                OptionBox("Tight", lineHeight != null && same(lineHeight, TIGHT), {
+                    onChange { it.copy(lineHeight = TIGHT, bookLayout = false) }
+                }) { spacingIcon(5f) }
+                OptionBox("Normal", lineHeight == null, {
+                    onChange { it.copy(lineHeight = USE_BOOK_VALUE, bookLayout = false) }
+                }) { spacingIcon(9f) }
+                OptionBox("Loose", lineHeight != null && same(lineHeight, LOOSE), {
+                    onChange { it.copy(lineHeight = LOOSE, bookLayout = false) }
+                }) { spacingIcon(14f) }
+            }
 
-        QuickRow("Margin") {
-            OptionBox("Narrow", same(margins, NARROW), {
-                onChange { it.copy(pageMargins = NARROW, bookLayout = false) }
-            }) { marginIcon(0.22f) }
-            OptionBox("Normal", same(margins, NORMAL_MARGIN), {
-                onChange { it.copy(pageMargins = NORMAL_MARGIN, bookLayout = false) }
-            }) { marginIcon(0.34f) }
-            OptionBox("Wide", same(margins, WIDE), {
-                onChange { it.copy(pageMargins = WIDE, bookLayout = false) }
-            }) { marginIcon(0.46f) }
+            QuickRow("Margin") {
+                OptionBox("Narrow", same(margins, NARROW), {
+                    onChange { it.copy(pageMargins = NARROW, bookLayout = false) }
+                }) { marginIcon(0.22f) }
+                OptionBox("Normal", same(margins, NORMAL_MARGIN), {
+                    onChange { it.copy(pageMargins = NORMAL_MARGIN, bookLayout = false) }
+                }) { marginIcon(0.34f) }
+                OptionBox("Wide", same(margins, WIDE), {
+                    onChange { it.copy(pageMargins = WIDE, bookLayout = false) }
+                }) { marginIcon(0.46f) }
+            }
         }
 
         QuickRow("Custom") {

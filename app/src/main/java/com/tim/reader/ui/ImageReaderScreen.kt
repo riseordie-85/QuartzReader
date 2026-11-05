@@ -429,7 +429,6 @@ fun ImageReaderScreen(
                         onRemove = { id -> scope.launch { repository.removeBookmark(id) } },
                         onDone = { sheet = null },
                     )
-                    else -> Unit
                     ReaderSheet.Chapters -> ChapterSheet(
                         chapters = source.chapters,
                         onChoose = { page ->
@@ -438,6 +437,7 @@ fun ImageReaderScreen(
                         },
                         onDone = { sheet = null },
                     )
+                    else -> Unit
                 }
             }
         }

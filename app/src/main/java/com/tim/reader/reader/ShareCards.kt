@@ -3,7 +3,9 @@ package com.tim.reader.reader
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
 import android.graphics.Bitmap
+import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -141,7 +143,8 @@ private fun renderQuote(canvas: Canvas, height: Int, page: Bitmap, palette: Shar
     canvas.drawRect(0f, 0f, CARD_WIDTH.toFloat(), height.toFloat(), tint(palette, CARD_WIDTH, height))
     canvas.drawCover(page, CARD_WIDTH, height, Paint(Paint.FILTER_BITMAP_FLAG).apply {
         alpha = 70
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
+        // Unlike the PorterDuff version, this leaves the card opaque where the page is see-through.
+        blendMode = BlendMode.MULTIPLY
     })
 
     val margin = 96
@@ -192,6 +195,7 @@ fun shareImage(context: Context, image: Bitmap) {
         .setType("image/png")
         .putExtra(Intent.EXTRA_STREAM, address)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    send.clipData = ClipData.newRawUri(null, address)
     context.startActivity(Intent.createChooser(send, "Share"))
 }
 

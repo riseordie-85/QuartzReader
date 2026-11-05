@@ -54,6 +54,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var navigator: EpubNavigatorFragment? = null
     private var controls by mutableStateOf(false)
     private var selecting by mutableStateOf(false)
+    private var selectionMode: ActionMode? = null
     private var animatedTurns = true
     private var pageContainer: FragmentContainerView? = null
     private var cutout = Insets.NONE
@@ -92,7 +93,8 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             // The activity keeps pages clear of the cutout, so Readium shouldn't add it again.
             configuration = EpubNavigatorFragment.Configuration(
                 shouldApplyInsetsPadding = false,
-                selectionActionModeCallback = selectionWatcher,
+                // Readium can't read a selection from a fixed-layout page, so those keep Android's menu.
+                selectionActionModeCallback = selectionWatcher.takeIf { publication.metadata.layout != Layout.FIXED },
             ),
         )
         super.onCreate(savedInstanceState)
@@ -147,6 +149,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                             navigator = navigator,
                             showControls = controls,
                             isSelecting = selecting,
+                            onEndSelection = ::endSelection,
                             onShowControls = { controls = it },
                             onAnimatedTurns = { animatedTurns = it },
                             onPageColor = container::setBackgroundColor,
@@ -182,6 +185,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private val selectionWatcher = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
             selecting = true
+            selectionMode = mode
             menu.add(Menu.NONE, MENU_COPY, Menu.NONE, "Copy")
             return true
         }
@@ -196,14 +200,20 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                     val clipboard = getSystemService(ClipboardManager::class.java)
                     clipboard.setPrimaryClip(ClipData.newPlainText("Book text", text))
                 }
-                current.clearSelection()
+                endSelection()
             }
             return true
         }
 
         override fun onDestroyActionMode(mode: ActionMode) {
             selecting = false
+            selectionMode = null
         }
+    }
+
+    private fun endSelection() {
+        navigator?.clearSelection()
+        selectionMode?.finish()
     }
 
     /** Both sides match even when only one has a camera, so the spine stays in the middle. */
@@ -223,7 +233,8 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             else -> return super.dispatchKeyEvent(event)
         }
         val current = navigator ?: return super.dispatchKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+        // A selection stays on its old page if the chapter changes under it.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && !selecting) {
             if (current.overflow.value.scroll) {
                 scrollOneScreen(current, isForward)
             } else if (isForward) {
