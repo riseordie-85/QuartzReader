@@ -5,7 +5,7 @@ package com.tim.reader.data
  * to this schema rather than replace it.
  */
 object Schema {
-    const val VERSION = 2
+    const val VERSION = 3
 
     const val CREATE_BOOKS = """
         CREATE TABLE books (
@@ -90,8 +90,21 @@ object Schema {
             deleted_at INTEGER
         )"""
 
+    const val CREATE_HIGHLIGHTS = """
+        CREATE TABLE highlights (
+            id TEXT PRIMARY KEY NOT NULL,
+            book_id TEXT NOT NULL,
+            locator TEXT NOT NULL,
+            text TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            deleted_at INTEGER
+        )"""
+
     /** Each list brings a database from the version before it up to its version. */
     val UPGRADE_TO_2 = listOf(ADD_BOOK_READER_PREFS, ADD_BOOK_SPREAD_SHIFT, CREATE_BOOKMARKS)
+    val UPGRADE_TO_3 = listOf(CREATE_HIGHLIGHTS)
 
     val CREATE_ALL = listOf(
         CREATE_BOOKS,
@@ -115,6 +128,9 @@ object Schema {
     const val SELECT_SETTING = "SELECT value FROM settings WHERE key = ?"
     const val SELECT_BOOKMARKS = "SELECT id, book_id, page, label, created_at FROM bookmarks " +
         "WHERE deleted_at IS NULL ORDER BY page"
+    const val SELECT_HIGHLIGHTS = "SELECT id, book_id, locator, text, note, created_at FROM highlights " +
+        "WHERE deleted_at IS NULL ORDER BY created_at DESC"
+    const val REMOVE_HIGHLIGHT = "UPDATE highlights SET deleted_at = ?, updated_at = ? WHERE id = ?"
     const val REMOVE_BOOKMARK = "UPDATE bookmarks SET deleted_at = ?, updated_at = ? WHERE id = ?"
     const val SELECT_SERIES_TYPES = "SELECT s.id, s.title, s.match_key, b.type FROM series s " +
         "JOIN books b ON b.series_id = s.id WHERE s.deleted_at IS NULL AND b.deleted_at IS NULL " +

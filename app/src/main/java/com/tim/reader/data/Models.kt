@@ -42,6 +42,9 @@ enum class SettingScope { ThisBook, ThisType, AllBooks }
 /** The font value meaning "whatever the book asks for". */
 const val BOOK_FONT = "book"
 
+/** A layout value meaning "whatever the book asks for", which overrides a wider setting. */
+const val USE_BOOK_VALUE = 0.0
+
 /** Reader settings at one level. A null value falls back to the level above it. */
 data class ReaderPrefs(
     val fit: FitMode? = null,
@@ -106,7 +109,7 @@ fun resolveLook(vararg levels: ReaderPrefs): ReaderLook {
         textColor = first { it.textColor } ?: defaults.textColor,
         fontFamily = first { it.fontFamily } ?: defaults.fontFamily,
         fontSize = first { it.fontSize } ?: defaults.fontSize,
-        lineHeight = first { it.lineHeight }.takeIf { customLayout },
+        lineHeight = first { it.lineHeight }.takeIf { customLayout && it != USE_BOOK_VALUE },
         paragraphSpacing = first { it.paragraphSpacing }.takeIf { customLayout },
         pageMargins = first { it.pageMargins }.takeIf { customLayout },
         alignment = first { it.alignment }.takeIf { customLayout },
@@ -118,6 +121,16 @@ fun resolveLook(vararg levels: ReaderPrefs): ReaderLook {
 data class ColorSet(val background: Long, val text: Long)
 
 data class Bookmark(val id: String, val bookId: String, val page: Int, val label: String, val createdAt: Long)
+
+/** Marked text in a book, with a note if one was written. [locator] is Readium's JSON. */
+data class Highlight(
+    val id: String,
+    val bookId: String,
+    val locator: String,
+    val text: String,
+    val note: String,
+    val createdAt: Long,
+)
 
 /** The three views the grid icon cycles through. */
 enum class ViewMode { Shelf, Grid, List }
@@ -184,6 +197,7 @@ data class LibraryState(
     val typePrefs: Map<BookType, ReaderPrefs> = emptyMap(),
     val bookmarks: Map<String, List<Bookmark>> = emptyMap(),
     val colorSets: List<ColorSet> = emptyList(),
+    val highlights: Map<String, List<Highlight>> = emptyMap(),
 ) {
     fun readerLook(book: Book): ReaderLook =
         resolveLook(book.readerPrefs, typePrefs[book.type] ?: ReaderPrefs(), globalPrefs)

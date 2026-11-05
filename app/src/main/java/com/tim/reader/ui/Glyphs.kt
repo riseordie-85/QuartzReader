@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search }
+enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search, Notes, Share }
 
 private fun DrawScope.drawPlus(color: Color) {
     val width = size.minDimension * 0.14f
@@ -84,6 +84,34 @@ private fun DrawScope.drawSearch(color: Color) {
     drawLine(color, Offset(unit * 0.64f, unit * 0.64f), Offset(unit * 0.92f, unit * 0.92f), unit * 0.13f, StrokeCap.Round)
 }
 
+private fun DrawScope.drawNotes(color: Color) {
+    val unit = size.minDimension
+    val line = unit * 0.09f
+    drawRoundRect(
+        color,
+        Offset(unit * 0.14f, unit * 0.1f),
+        Size(unit * 0.72f, unit * 0.84f),
+        CornerRadius(unit * 0.08f),
+        style = Stroke(line),
+    )
+    listOf(0.34f, 0.62f).forEach { x ->
+        drawLine(color, Offset(unit * x, unit * 0.02f), Offset(unit * x, unit * 0.2f), line, StrokeCap.Round)
+    }
+    listOf(0.42f, 0.58f, 0.74f).forEach { y ->
+        drawLine(color, Offset(unit * 0.3f, unit * y), Offset(unit * 0.7f, unit * y), line * 0.8f, StrokeCap.Round)
+    }
+}
+
+private fun DrawScope.drawShare(color: Color) {
+    val unit = size.minDimension
+    val top = Offset(unit * 0.76f, unit * 0.18f)
+    val left = Offset(unit * 0.22f, unit * 0.5f)
+    val bottom = Offset(unit * 0.76f, unit * 0.82f)
+    drawLine(color, left, top, unit * 0.08f)
+    drawLine(color, left, bottom, unit * 0.08f)
+    listOf(top, left, bottom).forEach { drawCircle(color, unit * 0.15f, it) }
+}
+
 private fun DrawScope.ribbon(): Path {
     val unit = size.minDimension
     return Path().apply {
@@ -124,6 +152,8 @@ fun GlyphButton(
             Glyph.Grid -> drawGrid(color)
             Glyph.List -> drawList(color)
             Glyph.Search -> drawSearch(color)
+            Glyph.Notes -> drawNotes(color)
+            Glyph.Share -> drawShare(color)
             Glyph.Bookmark -> drawPath(ribbon(), color)
             Glyph.BookmarkOutline -> drawPath(ribbon(), color, style = Stroke(size.minDimension * 0.09f))
         }

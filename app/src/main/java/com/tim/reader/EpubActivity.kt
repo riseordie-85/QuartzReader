@@ -1,8 +1,13 @@
 package com.tim.reader
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.ActionMode
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.MaterialTheme
@@ -41,11 +46,14 @@ import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.util.AbsoluteUrl
 
 /** The text reader: Readium draws the book, and floating Compose controls sit over it. */
+private const val MENU_COPY = 1
+
 @OptIn(ExperimentalReadiumApi::class)
 class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var opened: Publication? = null
     private var navigator: EpubNavigatorFragment? = null
     private var controls by mutableStateOf(false)
+    private var selecting by mutableStateOf(false)
     private var animatedTurns = true
     private var pageContainer: FragmentContainerView? = null
     private var cutout = Insets.NONE
@@ -82,7 +90,10 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             initialPreferences = epubPreferences(look, direction, twoColumns, publication.metadata.layout == Layout.FIXED),
             listener = this,
             // The activity keeps pages clear of the cutout, so Readium shouldn't add it again.
-            configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false),
+            configuration = EpubNavigatorFragment.Configuration(
+                shouldApplyInsetsPadding = false,
+                selectionActionModeCallback = selectionWatcher,
+            ),
         )
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub)
@@ -135,6 +146,8 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                             publication = publication,
                             navigator = navigator,
                             showControls = controls,
+                            isSelecting = selecting,
+                            onShowControls = { controls = it },
                             onAnimatedTurns = { animatedTurns = it },
                             onPageColor = container::setBackgroundColor,
                             onPagePadding = { outer, gap ->
@@ -164,6 +177,34 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     }
 
     override fun onExternalLinkActivated(url: AbsoluteUrl) = Unit
+
+    /** Readium hands text selection to this, so the app knows when to show its buttons. */
+    private val selectionWatcher = object : ActionMode.Callback {
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+            selecting = true
+            menu.add(Menu.NONE, MENU_COPY, Menu.NONE, "Copy")
+            return true
+        }
+
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
+
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+            val current = navigator ?: return false
+            lifecycleScope.launch {
+                val text = current.currentSelection()?.locator?.text?.highlight
+                if (text != null) {
+                    val clipboard = getSystemService(ClipboardManager::class.java)
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Book text", text))
+                }
+                current.clearSelection()
+            }
+            return true
+        }
+
+        override fun onDestroyActionMode(mode: ActionMode) {
+            selecting = false
+        }
+    }
 
     /** Both sides match even when only one has a camera, so the spine stays in the middle. */
     private fun updatePagePadding() {

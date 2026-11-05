@@ -101,8 +101,10 @@ import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.TwoPageMode
 import com.tim.reader.reader.CurlEffect
 import com.tim.reader.reader.PageLoader
+import com.tim.reader.reader.capturePage
 import com.tim.reader.timed
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -251,6 +253,8 @@ fun ImageReaderScreen(
     var rotationLocked by remember { mutableStateOf(false) }
     var testShift by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
+    var shareRequest by remember { mutableStateOf<ShareRequest?>(null) }
+    val activity = LocalActivity.current
     var widePages by remember(source) { mutableStateOf(loader.savedWidePages().orEmpty()) }
     val shift = liveBook?.spreadShift ?: testShift
 
@@ -260,7 +264,9 @@ fun ImageReaderScreen(
     LaunchedEffect(sheet) {
         if (sheet == null) focus.requestFocus()
     }
-    BackHandler(enabled = sheet != null) { sheet = null }
+    BackHandler(enabled = sheet != null || shareRequest != null) {
+        if (shareRequest != null) shareRequest = null else sheet = null
+    }
 
     fun changeLook(change: (ReaderPrefs) -> ReaderPrefs) {
         val current = liveBook
@@ -372,6 +378,17 @@ fun ImageReaderScreen(
                         }
                     }
                 },
+                onShare = {
+                    scope.launch {
+                        sheet = null
+                        controls = false
+                        // The bars need a moment to leave the screen before the copy.
+                        delay(250)
+                        val page = activity?.capturePage()
+                        controls = true
+                        if (page != null) shareRequest = ShareRequest(page, null, null)
+                    }
+                },
                 onSeek = { target -> scope.launch { nav.goTo(target) } },
             ) { open ->
                 when (open) {
@@ -412,7 +429,7 @@ fun ImageReaderScreen(
                         onRemove = { id -> scope.launch { repository.removeBookmark(id) } },
                         onDone = { sheet = null },
                     )
-                    ReaderSheet.Search -> Unit
+                    else -> Unit
                     ReaderSheet.Chapters -> ChapterSheet(
                         chapters = source.chapters,
                         onChoose = { page ->
@@ -423,6 +440,10 @@ fun ImageReaderScreen(
                     )
                 }
             }
+        }
+
+        shareRequest?.let { request ->
+            ShareOverlay(request, book?.title ?: source.title) { shareRequest = null }
         }
 
         if (alwaysShowControls) {

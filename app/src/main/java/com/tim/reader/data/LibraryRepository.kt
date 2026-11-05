@@ -24,6 +24,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
     override fun onCreate(db: SQLiteDatabase) {
         Schema.CREATE_ALL.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
+        Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -31,6 +32,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
             Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
             separateSeriesByType(db)
         }
+        if (oldVersion < 3) Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
     }
 
     /** Series used to be shared by every book with the same name, whatever its type. */
@@ -116,6 +118,22 @@ class LibraryRepository private constructor(context: Context) {
                 }
             }
         }
+        val highlights = db.rawQuery(Schema.SELECT_HIGHLIGHTS, null).use { rows ->
+            buildList {
+                while (rows.moveToNext()) {
+                    add(
+                        Highlight(
+                            rows.getString(0),
+                            rows.getString(1),
+                            rows.getString(2),
+                            rows.getString(3),
+                            rows.getString(4),
+                            rows.getLong(5),
+                        ),
+                    )
+                }
+            }
+        }
         mutableState.value = LibraryState(
             books = books,
             series = series,
@@ -125,6 +143,7 @@ class LibraryRepository private constructor(context: Context) {
             globalPrefs = readPrefs(setting(KEY_PREFS_GLOBAL)),
             typePrefs = BookType.entries.associateWith { readPrefs(setting(KEY_PREFS_TYPE + it.name)) },
             colorSets = readColorSets(setting(KEY_COLOR_SETS)),
+            highlights = highlights.groupBy { it.bookId },
             bookmarks = bookmarks.groupBy { it.bookId },
         )
     }
@@ -437,6 +456,33 @@ class LibraryRepository private constructor(context: Context) {
             put("updated_at", now())
         }
         db.insertOrThrow("bookmarks", null, values)
+    }
+
+    suspend fun addHighlight(bookId: String, locator: String, text: String, note: String) = write {
+        val time = now()
+        val values = ContentValues().apply {
+            put("id", UUID.randomUUID().toString())
+            put("book_id", bookId)
+            put("locator", locator)
+            put("text", text)
+            put("note", note)
+            put("created_at", time)
+            put("updated_at", time)
+        }
+        db.insertOrThrow("highlights", null, values)
+    }
+
+    suspend fun updateNote(id: String, note: String) = write {
+        val values = ContentValues().apply {
+            put("note", note)
+            put("updated_at", now())
+        }
+        db.update("highlights", values, "id = ?", arrayOf(id))
+    }
+
+    suspend fun removeHighlight(id: String) = write {
+        val time = now()
+        db.execSQL(Schema.REMOVE_HIGHLIGHT, arrayOf<Any>(time, time, id))
     }
 
     suspend fun removeBookmark(id: String) = write {

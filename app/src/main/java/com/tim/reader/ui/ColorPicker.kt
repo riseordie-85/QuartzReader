@@ -33,9 +33,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.tim.reader.data.ColorSet
 
+val DAY_COLORS = ColorSet(0xFFFFFFFF, 0xFF1A1A1A)
+val SEPIA_COLORS = ColorSet(0xFFF4ECD8, 0xFF3B2F21)
+val NAVY_COLORS = ColorSet(0xFF141B2B, 0xFFDCE3F0)
+
 private val BUILT_IN_SETS = listOf(
-    ColorSet(0xFFFFFFFF, 0xFF1A1A1A),
-    ColorSet(0xFFF4ECD8, 0xFF3B2F21),
+    DAY_COLORS,
+    SEPIA_COLORS,
+    NAVY_COLORS,
     ColorSet(0xFFD9D9D9, 0xFF202020),
     ColorSet(0xFF2B2B2B, 0xFFE4E4E4),
     ColorSet(0xFF000000, 0xFFD8D8D8),

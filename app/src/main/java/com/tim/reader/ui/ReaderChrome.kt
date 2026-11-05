@@ -44,12 +44,13 @@ import androidx.compose.ui.unit.sp
 import com.tim.reader.data.Bookmark
 import com.tim.reader.engine.Chapter
 
-private val PANEL_COLOR = Color(0xBF303030)
+val PANEL_COLOR = Color(0xBF000000)
 private val PILL_SHAPE = RoundedCornerShape(50)
+private val BAR_SHAPE = RoundedCornerShape(28.dp)
 private val SHEET_SHAPE = RoundedCornerShape(28.dp)
 
 /** What opens between the bars. */
-enum class ReaderSheet { Settings, Bookmarks, Chapters, Search }
+enum class ReaderSheet { Settings, Advanced, Colors, Bookmarks, Chapters, Search, Notes }
 
 /** Keeps touches on a panel from reaching the page behind it. */
 private fun Modifier.blocksTouches() = pointerInput(Unit) { }
@@ -66,9 +67,11 @@ fun ReaderChrome(
     isBookmarked: Boolean?,
     hasChapters: Boolean,
     hasSearch: Boolean = false,
+    hasNotes: Boolean = false,
     sheet: ReaderSheet?,
     onSheet: (ReaderSheet?) -> Unit,
     onBookmark: () -> Unit,
+    onShare: () -> Unit,
     onSeek: (Int) -> Unit,
     sheetContent: @Composable ColumnScope.(ReaderSheet) -> Unit,
 ) {
@@ -81,35 +84,13 @@ fun ReaderChrome(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(PANEL_COLOR, PILL_SHAPE)
-                    .blocksTouches()
-                    .padding(start = 24.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    title,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Light,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (hasSearch) {
-                    GlyphButton(Glyph.Search, Color.White, "Search", iconSize = 30.dp) {
-                        onSheet(if (sheet == ReaderSheet.Search) null else ReaderSheet.Search)
-                    }
-                }
-                if (hasChapters) {
-                    GlyphButton(Glyph.List, Color.White, "Chapters", iconSize = 30.dp) {
-                        onSheet(if (sheet == ReaderSheet.Chapters) null else ReaderSheet.Chapters)
-                    }
-                }
-                GlyphButton(Glyph.Gear, Color.White, "Reader settings", iconSize = 30.dp) {
-                    onSheet(if (sheet == ReaderSheet.Settings) null else ReaderSheet.Settings)
-                }
+            val icons: @Composable () -> Unit = {
+                fun toggle(target: ReaderSheet) = onSheet(if (sheet == target) null else target)
+                if (hasChapters) GlyphButton(Glyph.List, Color.White, "Contents", iconSize = 30.dp) { toggle(ReaderSheet.Chapters) }
+                if (hasSearch) GlyphButton(Glyph.Search, Color.White, "Search", iconSize = 30.dp) { toggle(ReaderSheet.Search) }
+                if (hasNotes) GlyphButton(Glyph.Notes, Color.White, "Highlights and notes", iconSize = 30.dp) { toggle(ReaderSheet.Notes) }
+                GlyphButton(Glyph.Share, Color.White, "Share this page", iconSize = 30.dp, onClick = onShare)
+                GlyphButton(Glyph.Gear, Color.White, "Reader settings", iconSize = 30.dp) { toggle(ReaderSheet.Settings) }
                 if (isBookmarked != null) {
                     GlyphButton(
                         glyph = if (isBookmarked) Glyph.Bookmark else Glyph.BookmarkOutline,
@@ -119,6 +100,36 @@ fun ReaderChrome(
                         onLongClick = { onSheet(ReaderSheet.Bookmarks) },
                         onClick = onBookmark,
                     )
+                }
+            }
+
+            // The text reader has more icons than fit beside a title.
+            if (hasSearch || hasNotes) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(PANEL_COLOR, BAR_SHAPE)
+                        .blocksTouches()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    TopTitle(title, Modifier.padding(start = 8.dp, bottom = 4.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { icons() }
+                }
+            } else {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(PANEL_COLOR, PILL_SHAPE)
+                        .blocksTouches()
+                        .padding(start = 24.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TopTitle(title, Modifier.weight(1f))
+                    icons()
                 }
             }
 
@@ -132,7 +143,60 @@ fun ReaderChrome(
     }
 }
 
+@Composable
+private fun TopTitle(title: String, modifier: Modifier) {
+    Text(
+        title,
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Light,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+}
+
+/** A round thumb on a plain white line, which reports where it stops. */
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PillSlider(
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    thumb: Color,
+    onDone: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onDrag: (Float?) -> Unit = {},
+) {
+    var dragging by remember(value) { mutableStateOf<Float?>(null) }
+    Slider(
+        value = dragging ?: value,
+        onValueChange = {
+            dragging = it
+            onDrag(it)
+        },
+        onValueChangeFinished = {
+            dragging?.let(onDone)
+            onDrag(null)
+        },
+        valueRange = range,
+        thumb = {
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .background(thumb, CircleShape),
+            )
+        },
+        track = {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Color.White, CircleShape),
+            )
+        },
+        modifier = modifier,
+    )
+}
+
 @Composable
 private fun ReaderTimeline(page: Int, pageCount: Int, onSeek: (Int) -> Unit) {
     var scrubbing by remember { mutableStateOf<Float?>(null) }
@@ -148,33 +212,34 @@ private fun ReaderTimeline(page: Int, pageCount: Int, onSeek: (Int) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("${shown + 1}/$pageCount", fontSize = 18.sp, fontWeight = FontWeight.Light)
-        Slider(
-            value = scrubbing ?: page.toFloat(),
-            onValueChange = { scrubbing = it },
-            onValueChangeFinished = {
-                val target = scrubbing?.toInt() ?: page
-                scrubbing = null
-                onSeek(target)
-            },
-            valueRange = 0f..(pageCount - 1).toFloat(),
-            thumb = {
-                Box(
-                    Modifier
-                        .size(26.dp)
-                        .background(Color.White, CircleShape),
-                )
-            },
-            track = {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .background(Color.White, CircleShape),
-                )
-            },
+        PillSlider(
+            value = page.toFloat(),
+            range = 0f..(pageCount - 1).toFloat(),
+            thumb = Color.White,
+            onDone = { onSeek(it.toInt()) },
+            onDrag = { scrubbing = it },
             modifier = Modifier.weight(1f),
         )
     }
+}
+
+/** A panel with no heading, for sheets that lead with their own controls. */
+@Composable
+fun ColumnScope.ReaderSheetBody(
+    scrollState: ScrollState = rememberScrollState(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .background(PANEL_COLOR, SHEET_SHAPE)
+            .blocksTouches()
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .verticalScroll(scrollState),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        content = content,
+    )
 }
 
 /** A panel filling the space under the title bar. */
