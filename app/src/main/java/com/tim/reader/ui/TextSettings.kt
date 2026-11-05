@@ -58,6 +58,7 @@ fun ColumnScope.TextSettings(
     type: BookType?,
     scope: SettingScope,
     colorSets: List<ColorSet>,
+    fixedLayout: Boolean,
     rotationLocked: Boolean,
     actions: TextSettingsActions,
 ) {
@@ -71,39 +72,43 @@ fun ColumnScope.TextSettings(
             ChoiceRow("Everything", scope == SettingScope.AllBooks) { actions.onScope(SettingScope.AllBooks) }
         }
 
-        PanelHeading("Font")
-        TEXT_FONTS.forEach { (label, family) ->
-            ChoiceRow(label, look.fontFamily == family) { change { it.copy(fontFamily = family) } }
-        }
-        SettingSlider("Text size", look.fontSize.toFloat(), 0.5f..3f) { size ->
-            change { it.copy(fontSize = size.toDouble()) }
-        }
+        if (!fixedLayout) {
+            PanelHeading("Font")
+            TEXT_FONTS.forEach { (label, family) ->
+                ChoiceRow(label, look.fontFamily == family) { change { it.copy(fontFamily = family) } }
+            }
+            SettingSlider("Text size", look.fontSize.toFloat(), 0.5f..3f) { size ->
+                change { it.copy(fontSize = size.toDouble()) }
+            }
 
-        PanelHeading("Colors")
-        ColorSection(
-            current = ColorSet(look.pageBackground, look.textColor),
-            saved = colorSets,
-            onChange = { set -> change { it.copy(pageBackground = set.background, textColor = set.text) } },
-            onSave = { actions.onSaveColors(ColorSet(look.pageBackground, look.textColor)) },
-            onRemove = actions.onRemoveColors,
-        )
+            PanelHeading("Colors")
+            ColorSection(
+                current = ColorSet(look.pageBackground, look.textColor),
+                saved = colorSets,
+                onChange = { set -> change { it.copy(pageBackground = set.background, textColor = set.text) } },
+                onSave = { actions.onSaveColors(ColorSet(look.pageBackground, look.textColor)) },
+                onRemove = actions.onRemoveColors,
+            )
 
-        PanelHeading("Layout")
-        SettingSlider("Line height", (look.lineHeight ?: 1.4).toFloat(), 1f..2f) { height ->
-            change { it.copy(lineHeight = height.toDouble()) }
+            PanelHeading("Layout")
+            SettingSlider("Line height", (look.lineHeight ?: 1.4).toFloat(), 1f..2f) { height ->
+                change { it.copy(lineHeight = height.toDouble(), bookLayout = false) }
+            }
+            SettingSlider("Paragraph spacing", (look.paragraphSpacing ?: 0.0).toFloat(), 0f..2f) { spacing ->
+                change { it.copy(paragraphSpacing = spacing.toDouble(), bookLayout = false) }
+            }
+            SettingSlider("Page margins", (look.pageMargins ?: 1.0).toFloat(), 0f..4f) { margins ->
+                change { it.copy(pageMargins = margins.toDouble(), bookLayout = false) }
+            }
+            TextAlignment.entries.forEach { option ->
+                ChoiceRow(option.label, look.alignment == option) { change { it.copy(alignment = option, bookLayout = false) } }
+            }
+            TextButton({
+                change {
+                    it.copy(lineHeight = null, paragraphSpacing = null, pageMargins = null, alignment = null, bookLayout = true)
+                }
+            }) { Text("Use the book's layout") }
         }
-        SettingSlider("Paragraph spacing", (look.paragraphSpacing ?: 0.0).toFloat(), 0f..2f) { spacing ->
-            change { it.copy(paragraphSpacing = spacing.toDouble()) }
-        }
-        SettingSlider("Page margins", (look.pageMargins ?: 1.0).toFloat(), 0f..4f) { margins ->
-            change { it.copy(pageMargins = margins.toDouble()) }
-        }
-        TextAlignment.entries.forEach { option ->
-            ChoiceRow(option.label, look.alignment == option) { change { it.copy(alignment = option) } }
-        }
-        TextButton({
-            change { it.copy(lineHeight = null, paragraphSpacing = null, pageMargins = null, alignment = null) }
-        }) { Text("Use the book's layout") }
 
         PanelHeading("Reading")
         ChoiceRow("Left to right", direction != ReadDirection.RightToLeft) {
@@ -112,7 +117,9 @@ fun ColumnScope.TextSettings(
         ChoiceRow("Right to left", direction == ReadDirection.RightToLeft) {
             actions.onDirection(ReadDirection.RightToLeft)
         }
-        ToggleRow("Scroll instead of turning pages", scrolling) { on -> change { it.copy(scrolling = on) } }
+        if (!fixedLayout) {
+            ToggleRow("Scroll instead of turning pages", scrolling) { on -> change { it.copy(scrolling = on) } }
+        }
 
         if (!scrolling) {
             PanelHeading("Page turn")

@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.publication.Layout
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -90,7 +91,10 @@ fun EpubControls(
         screen.screenWidthDp.toFloat(),
         screen.screenHeightDp.toFloat(),
     )
-    val preferences = remember(look, direction, twoColumns) { epubPreferences(look, direction, twoColumns) }
+    val fixedLayout = publication.metadata.layout == Layout.FIXED
+    val preferences = remember(look, direction, twoColumns) {
+        epubPreferences(look, direction, twoColumns, fixedLayout)
+    }
     LaunchedEffect(preferences) { navigator.submitPreferences(preferences) }
     SideEffect {
         onAnimatedTurns(look.animation != PageAnimation.None)
@@ -145,6 +149,7 @@ fun EpubControls(
                 type = liveBook?.type,
                 scope = settingScope,
                 colorSets = library.colorSets,
+                fixedLayout = fixedLayout,
                 rotationLocked = rotationLocked,
                 actions = TextSettingsActions(
                     onChange = { change ->
@@ -185,7 +190,24 @@ fun EpubControls(
                 },
                 onDone = { sheet = null },
             )
-            ReaderSheet.Search -> SearchSheet(publication, navigator) { sheet = null }
+            ReaderSheet.Search -> SearchSheet(
+                publication = publication,
+                navigator = navigator,
+                onMatch = { result ->
+                    sheet = null
+                    navigator.go(result)
+                    // The sheet is closing, so the highlight belongs to the longer-lived scope.
+                    scope.launch {
+                        val match = Decoration(
+                            id = "match",
+                            locator = result,
+                            style = Decoration.Style.Highlight(tint = android.graphics.Color.YELLOW),
+                        )
+                        navigator.applyDecorations(listOf(match), SEARCH_GROUP)
+                    }
+                },
+                onDone = { sheet = null },
+            )
         }
     }
 }
@@ -193,7 +215,12 @@ fun EpubControls(
 /** Finds text in the book, and highlights the match it jumps to. */
 @OptIn(ExperimentalReadiumApi::class)
 @Composable
-private fun ColumnScope.SearchSheet(publication: Publication, navigator: EpubNavigatorFragment, onDone: () -> Unit) {
+private fun ColumnScope.SearchSheet(
+    publication: Publication,
+    navigator: EpubNavigatorFragment,
+    onMatch: (Locator) -> Unit,
+    onDone: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
@@ -245,18 +272,7 @@ private fun ColumnScope.SearchSheet(publication: Publication, navigator: EpubNav
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        navigator.go(result)
-                        scope.launch {
-                            val match = Decoration(
-                                id = "match",
-                                locator = result,
-                                style = Decoration.Style.Highlight(tint = android.graphics.Color.YELLOW),
-                            )
-                            navigator.applyDecorations(listOf(match), SEARCH_GROUP)
-                        }
-                        onDone()
-                    }
+                    .clickable { onMatch(result) }
                     .padding(vertical = 10.dp),
             )
         }

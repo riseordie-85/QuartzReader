@@ -170,6 +170,7 @@ class LibraryRepository private constructor(context: Context) {
             pageMargins = root.doubleOrNull("pageMargins"),
             alignment = root.optString("alignment").takeIf { it.isNotEmpty() }?.let { enumOr(it, TextAlignment.Start) },
             scrolling = if (root.has("scrolling")) root.getBoolean("scrolling") else null,
+            bookLayout = if (root.has("bookLayout")) root.getBoolean("bookLayout") else null,
         )
     } catch (_: JSONException) {
         ReaderPrefs()
@@ -192,6 +193,7 @@ class LibraryRepository private constructor(context: Context) {
         prefs.pageMargins?.let { put("pageMargins", it) }
         prefs.alignment?.let { put("alignment", it.name) }
         prefs.scrolling?.let { put("scrolling", it) }
+        prefs.bookLayout?.let { put("bookLayout", it) }
     }.toString()
 
     private fun readColorSets(json: String?): List<ColorSet> = try {
@@ -377,33 +379,37 @@ class LibraryRepository private constructor(context: Context) {
     }
 
     /** Saves a change at the chosen level, clearing narrower levels that would hide it. */
-    suspend fun changePrefs(book: Book, scope: SettingScope, change: (ReaderPrefs) -> ReaderPrefs) {
+    suspend fun changePrefs(book: Book, scope: SettingScope, change: (ReaderPrefs) -> ReaderPrefs) = write {
         val current = state.value
         val bookPrefs = current.book(book.id)?.readerPrefs ?: book.readerPrefs
         val changed = change(ReaderPrefs())
         when (scope) {
-            SettingScope.ThisBook -> setBookPrefs(book.id, change(bookPrefs))
+            SettingScope.ThisBook -> saveBookPrefs(book.id, change(bookPrefs))
             SettingScope.ThisType -> {
-                setTypePrefs(book.type, change(current.typePrefs[book.type] ?: ReaderPrefs()))
-                setBookPrefs(book.id, bookPrefs.clearFieldsSetIn(changed))
+                val typePrefs = current.typePrefs[book.type] ?: ReaderPrefs()
+                saveSetting(KEY_PREFS_TYPE + book.type.name, writePrefs(change(typePrefs)))
+                saveBookPrefs(book.id, bookPrefs.clearFieldsSetIn(changed))
             }
             SettingScope.AllBooks -> {
-                setGlobalPrefs(change(current.globalPrefs))
-                BookType.entries.forEach { type ->
-                    current.typePrefs[type]?.let { setTypePrefs(type, it.clearFieldsSetIn(changed)) }
+                saveSetting(KEY_PREFS_GLOBAL, writePrefs(change(current.globalPrefs)))
+                current.typePrefs.forEach { (type, prefs) ->
+                    saveSetting(KEY_PREFS_TYPE + type.name, writePrefs(prefs.clearFieldsSetIn(changed)))
                 }
-                setBookPrefs(book.id, bookPrefs.clearFieldsSetIn(changed))
+                saveBookPrefs(book.id, bookPrefs.clearFieldsSetIn(changed))
             }
         }
     }
 
-    suspend fun addColorSet(set: ColorSet) = saveColorSets(state.value.colorSets + set)
+    private fun saveBookPrefs(id: String, prefs: ReaderPrefs) =
+        updateBookField(id) { put("reader_prefs", writePrefs(prefs)) }
 
-    suspend fun removeColorSet(set: ColorSet) = saveColorSets(state.value.colorSets - set)
+    suspend fun addColorSet(set: ColorSet) = saveColorSets { it + set }
 
-    private suspend fun saveColorSets(sets: List<ColorSet>) = write {
+    suspend fun removeColorSet(set: ColorSet) = saveColorSets { it - set }
+
+    private suspend fun saveColorSets(change: (List<ColorSet>) -> List<ColorSet>) = write {
         val rows = JSONArray()
-        sets.distinct().forEach { set ->
+        change(state.value.colorSets).distinct().forEach { set ->
             rows.put(JSONObject().apply {
                 put("background", set.background)
                 put("text", set.text)

@@ -108,6 +108,9 @@ private fun ColorSetChip(set: ColorSet, selected: Boolean, onClick: () -> Unit, 
 
 private fun toHex(color: Long) = "%06X".format(color and 0xFFFFFF)
 
+private fun colorOf(hue: Float, saturation: Float, brightness: Float) =
+    AndroidColor.HSVToColor(floatArrayOf(hue, saturation, brightness)).toLong() and 0xFFFFFFFF
+
 private fun fromHex(text: String): Long? =
     text.trim().removePrefix("#").takeIf { it.length == 6 }?.toLongOrNull(16)?.let { it or 0xFF000000 }
 
@@ -119,8 +122,8 @@ fun ColorPicker(color: Long, onColor: (Long) -> Unit) {
     var saturation by remember(color) { mutableFloatStateOf(start[1]) }
     var brightness by remember(color) { mutableFloatStateOf(start[2]) }
     var hex by remember(color) { mutableStateOf(toHex(color)) }
-    val shown = AndroidColor.HSVToColor(floatArrayOf(hue, saturation, brightness)).toLong() and 0xFFFFFFFF
-    val finish = { onColor(shown) }
+    val shown = colorOf(hue, saturation, brightness)
+    val finish = { onColor(colorOf(hue, saturation, brightness)) }
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

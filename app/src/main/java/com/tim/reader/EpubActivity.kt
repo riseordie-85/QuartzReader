@@ -32,6 +32,7 @@ import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.util.DirectionalNavigationAdapter
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.publication.Layout
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.positions
@@ -72,8 +73,10 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         )
         supportFragmentManager.fragmentFactory = EpubNavigatorFactory(publication).createFragmentFactory(
             initialLocator = start,
-            initialPreferences = epubPreferences(look, direction, twoColumns),
+            initialPreferences = epubPreferences(look, direction, twoColumns, publication.metadata.layout == Layout.FIXED),
             listener = this,
+            // The activity keeps pages clear of the cutout, so Readium shouldn't add it again.
+            configuration = EpubNavigatorFragment.Configuration(shouldApplyInsetsPadding = false),
         )
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub)
@@ -155,9 +158,28 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         }
         val current = navigator ?: return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            if (isForward) current.goForward(animated = animatedTurns) else current.goBackward(animated = animatedTurns)
+            if (current.overflow.value.scroll) {
+                scrollOneScreen(current, isForward)
+            } else if (isForward) {
+                current.goForward(animated = animatedTurns)
+            } else {
+                current.goBackward(animated = animatedTurns)
+            }
         }
         return true
+    }
+
+    /** In scroll mode, Readium's forward jumps a whole chapter, so this moves one screen instead. */
+    private fun scrollOneScreen(current: EpubNavigatorFragment, isForward: Boolean) {
+        val direction = if (isForward) "1" else "-1"
+        val script = "(function(){var s=document.scrollingElement,b=s.scrollTop;" +
+            "s.scrollTop+=$direction*window.innerHeight*0.9;return s.scrollTop!==b})()"
+        lifecycleScope.launch {
+            // At the end of a chapter there's nothing left to scroll, so it moves to the next one.
+            if (current.evaluateJavascript(script) != "true") {
+                if (isForward) current.goForward() else current.goBackward()
+            }
+        }
     }
 
     override fun onDestroy() {

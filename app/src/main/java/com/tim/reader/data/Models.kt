@@ -34,7 +34,6 @@ enum class PageAnimation(val label: String) {
 enum class TextAlignment(val label: String) {
     Start("Left"),
     Justify("Justified"),
-    Center("Centered"),
 }
 
 /** Where a settings change is saved. */
@@ -57,6 +56,7 @@ data class ReaderPrefs(
     val pageMargins: Double? = null,
     val alignment: TextAlignment? = null,
     val scrolling: Boolean? = null,
+    val bookLayout: Boolean? = null,
 ) {
     /** These settings with any field set in [changed] cleared, so that wider setting takes effect. */
     fun clearFieldsSetIn(changed: ReaderPrefs) = ReaderPrefs(
@@ -72,6 +72,7 @@ data class ReaderPrefs(
         pageMargins = pageMargins.takeIf { changed.pageMargins == null },
         alignment = alignment.takeIf { changed.alignment == null },
         scrolling = scrolling.takeIf { changed.scrolling == null },
+        bookLayout = bookLayout.takeIf { changed.bookLayout == null },
     )
 }
 
@@ -95,6 +96,8 @@ data class ReaderLook(
 fun resolveLook(vararg levels: ReaderPrefs): ReaderLook {
     fun <T : Any> first(field: (ReaderPrefs) -> T?): T? = levels.firstNotNullOfOrNull(field)
     val defaults = ReaderLook()
+    // Asking for the book's layout hides any line height or spacing from a wider level.
+    val customLayout = first { it.bookLayout } != true
     return ReaderLook(
         fit = first { it.fit } ?: defaults.fit,
         animation = first { it.animation } ?: defaults.animation,
@@ -103,10 +106,10 @@ fun resolveLook(vararg levels: ReaderPrefs): ReaderLook {
         textColor = first { it.textColor } ?: defaults.textColor,
         fontFamily = first { it.fontFamily } ?: defaults.fontFamily,
         fontSize = first { it.fontSize } ?: defaults.fontSize,
-        lineHeight = first { it.lineHeight },
-        paragraphSpacing = first { it.paragraphSpacing },
-        pageMargins = first { it.pageMargins },
-        alignment = first { it.alignment },
+        lineHeight = first { it.lineHeight }.takeIf { customLayout },
+        paragraphSpacing = first { it.paragraphSpacing }.takeIf { customLayout },
+        pageMargins = first { it.pageMargins }.takeIf { customLayout },
+        alignment = first { it.alignment }.takeIf { customLayout },
         scrolling = first { it.scrolling },
     )
 }

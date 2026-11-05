@@ -75,6 +75,7 @@ fun ReaderChrome(
         Column(
             Modifier
                 .fillMaxSize()
+                .then(if (sheet != null) Modifier.blocksTouches() else Modifier)
                 .safeDrawingPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
