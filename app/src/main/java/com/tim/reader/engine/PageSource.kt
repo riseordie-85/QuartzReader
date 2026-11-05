@@ -39,6 +39,15 @@ interface PageSource : Closeable {
 
     /** The whole page in memory, for tall formats that are slow to read from the middle. */
     fun fullForSlicing(page: Int): Bitmap? = null
+
+    /** Reports every page's size, without disturbing pages being read at the same time. */
+    fun forEachSize(isActive: () -> Boolean, report: (Int, PageSize?) -> Unit) {
+        for (page in 0 until pageCount) {
+            if (!isActive()) return
+            report(page, runCatching { size(page) }.getOrNull())
+        }
+    }
+
     fun label(page: Int): String
     fun size(page: Int): PageSize?
     fun render(page: Int, targetWidth: Int): Bitmap?
@@ -258,6 +267,34 @@ class ArchivePageSource(
     override val pageCount get() = listing.pages.size
 
     override fun label(page: Int) = listing.pages[page].path.substringAfterLast('/')
+
+    /** Solid archives read in one direction, so this walks its own copy and leaves the reader's in place. */
+    override fun forEachSize(isActive: () -> Boolean, report: (Int, PageSize?) -> Unit) {
+        if (!passThrough) return super.forEachSize(isActive, report)
+        val pageOf = listing.pages.withIndex().associate { (index, page) -> page.ordinal to index }
+        val scan = synchronized(this) {
+            check(!closed) { "This book is closed" }
+            Cursor(address, mappedSize)
+        }
+        try {
+            while (isActive()) {
+                var page: Int? = null
+                var data: ByteArray? = null
+                val more = synchronized(this) {
+                    if (closed || !scan.next()) return@synchronized false
+                    page = pageOf[scan.ordinal]
+                    if (page != null) data = scan.readCurrent()
+                    true
+                }
+                if (!more) return
+                val found = page ?: continue
+                val content = data ?: continue
+                report(found, runCatching { ImageDecode.size(content) }.getOrNull())
+            }
+        } finally {
+            synchronized(this) { scan.close() }
+        }
+    }
 
     /** The comic's ComicInfo.xml, when it has one. */
     fun comicInfo(): ByteArray? = listing.comicInfoOrdinal?.let { entryBytes(it) }

@@ -2,6 +2,7 @@ package com.tim.reader.ui
 
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -12,7 +13,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -68,7 +69,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
@@ -81,6 +84,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.tim.reader.ResultsLog
 import com.tim.reader.data.Book
+import com.tim.reader.data.BookType
 import com.tim.reader.data.FitMode
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.PageAnimation
@@ -133,11 +137,15 @@ private class ZoomState {
         y = (y + pan.y).coerceIn(-maxY, maxY)
     }
 
+    fun reset() {
+        scale = 1f
+        x = 0f
+        y = 0f
+    }
+
     fun toggle(at: Offset, width: Int, height: Int) {
         if (scale > 1f) {
-            scale = 1f
-            x = 0f
-            y = 0f
+            reset()
         } else {
             scale = DOUBLE_TAP_ZOOM
             val centerX = width / 2f
@@ -151,17 +159,54 @@ private class ZoomState {
 private fun Modifier.zoomGestures(zoom: ZoomState, width: Int, height: Int, panWhenZoomed: Boolean = true) =
     pointerInput(zoom, width, height, panWhenZoomed) {
         awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            var active = false
+            var travel = 0f
             do {
-                val event = awaitPointerEvent()
+                // The early pass lets a pinch claim the fingers before a list or pager can scroll.
+                val event = awaitPointerEvent(PointerEventPass.Initial)
                 val fingers = event.changes.count { it.pressed }
                 if (fingers >= 2 || (panWhenZoomed && zoom.scale > 1f)) {
-                    zoom.change(event.calculateZoom(), event.calculatePan(), width, height)
-                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    if (!active) {
+                        travel += event.calculatePan().getDistance()
+                        active = fingers >= 2 || travel > viewConfiguration.touchSlop
+                    }
+                    if (active) {
+                        zoom.change(event.calculateZoom(), event.calculatePan(), width, height)
+                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    }
                 }
             } while (event.changes.any { it.pressed })
         }
     }
+
+/** Page-turn taps act at once. Elsewhere a short wait tells a single tap from a double tap. */
+private suspend fun PointerInputScope.detectReaderTaps(
+    turnsPage: (Offset) -> Boolean,
+    onTap: (Offset) -> Unit,
+    onDoubleTap: (Offset) -> Unit,
+) = awaitEachGesture {
+    awaitFirstDown()
+    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+    up.consume()
+    val at = up.position
+    if (turnsPage(at)) {
+        onTap(at)
+        return@awaitEachGesture
+    }
+    val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitFirstDown() }
+    if (second == null) {
+        onTap(at)
+        return@awaitEachGesture
+    }
+    val secondUp = waitForUpOrCancellation()
+    if (secondUp == null) {
+        onTap(at)
+    } else {
+        secondUp.consume()
+        onDoubleTap(secondUp.position)
+    }
+}
 
 /** Two pages show on wide, nearly square windows: an unfolded Fold, or a tablet held sideways. */
 private fun showsTwoPages(mode: TwoPageMode, direction: ReadDirection, widthDp: Float, heightDp: Float) = when {
@@ -202,12 +247,16 @@ fun ImageReaderScreen(
     var rotationLocked by remember { mutableStateOf(false) }
     var testShift by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
-    var widePages by remember(source) { mutableStateOf(emptySet<Int>()) }
+    var widePages by remember(source) { mutableStateOf(loader.savedWidePages().orEmpty()) }
     val shift = liveBook?.spreadShift ?: testShift
 
     ReaderWindow(controls || panel, rotationLocked)
     LaunchedEffect(currentPage) { onPage(currentPage) }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    // Keys go to this screen, and a closed panel or dialog can leave them with nowhere to go.
+    LaunchedEffect(panel, showChapters, showBookmarks) {
+        if (!panel && !showChapters && !showBookmarks) focus.requestFocus()
+    }
+    BackHandler(enabled = panel) { panel = false }
 
     fun changeLook(change: (ReaderPrefs) -> ReaderPrefs) {
         val current = liveBook
@@ -231,6 +280,9 @@ fun ImageReaderScreen(
                 }
                 SettingScope.AllBooks -> {
                     repository.setGlobalPrefs(change(library.globalPrefs))
+                    BookType.entries.forEach { type ->
+                        library.typePrefs[type]?.let { repository.setTypePrefs(type, clearChanged(it, change)) }
+                    }
                     repository.setBookPrefs(current.id, clearChanged(current.readerPrefs, change))
                 }
             }
@@ -244,26 +296,30 @@ fun ImageReaderScreen(
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.VolumeDown, Key.DirectionRight, Key.DirectionDown, Key.PageDown, Key.Spacebar -> {
-                        scope.launch { nav.next() }
-                        true
-                    }
-                    Key.VolumeUp, Key.DirectionLeft, Key.DirectionUp, Key.PageUp -> {
-                        scope.launch { nav.previous() }
-                        true
-                    }
-                    else -> false
+                val isVolume = event.key == Key.VolumeDown || event.key == Key.VolumeUp
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent isVolume
+                val rightToLeft = direction == ReadDirection.RightToLeft
+                val forward = when (event.key) {
+                    Key.VolumeDown, Key.DirectionDown, Key.PageDown, Key.Spacebar -> true
+                    Key.VolumeUp, Key.DirectionUp, Key.PageUp -> false
+                    Key.DirectionRight -> !rightToLeft
+                    Key.DirectionLeft -> rightToLeft
+                    else -> return@onPreviewKeyEvent false
                 }
+                // Holding a key would restart the same turn over and over.
+                if (event.nativeKeyEvent.repeatCount == 0) {
+                    scope.launch { if (forward) nav.next() else nav.previous() }
+                }
+                true
             }
             .pointerInput(direction) {
                 if (direction == ReadDirection.Vertical) return@pointerInput
                 awaitPointerEventScope {
                     while (true) {
-                        val event = awaitPointerEvent()
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.type == PointerEventType.Scroll) {
                             val delta = event.changes.first().scrollDelta.y
+                            if (delta == 0f) continue
                             scope.launch { if (delta > 0f) nav.next() else nav.previous() }
                             event.changes.forEach { it.consume() }
                         }
@@ -295,7 +351,12 @@ fun ImageReaderScreen(
                     width = width,
                     height = height,
                     nav = nav,
-                    onSpread = { currentPage = it },
+                    // Only a real page turn moves the position, not rearranging the same page into new spreads.
+                    onSpread = { spread ->
+                        if (currentPage !in spread.pages) {
+                            currentPage = if (spread == spreads.last()) spread.pages.last() else spread.pages.first()
+                        }
+                    },
                     onMenu = { controls = !controls },
                 )
             }
@@ -487,14 +548,14 @@ private fun PagedReader(
     width: Int,
     height: Int,
     nav: ReaderNav,
-    onSpread: (Int) -> Unit,
+    onSpread: (Spread) -> Unit,
     onMenu: () -> Unit,
 ) {
     val vertical = direction == ReadDirection.VerticalPaged
     val rightToLeft = direction == ReadDirection.RightToLeft
     val pager = rememberPagerState(initialPage = spreadIndexOf(spreads, startPage)) { spreads.size }
     val curl = remember { CurlEffect.create() }
-    var zoomed by remember { mutableStateOf(false) }
+    var zoomedPage by remember { mutableStateOf(-1) }
     val animation = when {
         look.animation == PageAnimation.Curl && (vertical || curl == null) -> PageAnimation.Slide
         else -> look.animation
@@ -510,14 +571,14 @@ private fun PagedReader(
     }
 
     SideEffect {
-        nav.next = { turnTo(pager.currentPage + 1) }
-        nav.previous = { turnTo(pager.currentPage - 1) }
+        nav.next = { turnTo(pager.targetPage + 1) }
+        nav.previous = { turnTo(pager.targetPage - 1) }
         nav.goTo = { page -> pager.scrollToPage(spreadIndexOf(spreads, page)) }
     }
 
     LaunchedEffect(pager) {
         snapshotFlow { pager.currentPage }.collect { index ->
-            spreads.getOrNull(index)?.let { onSpread(it.pages.last()) }
+            spreads.getOrNull(index)?.let { onSpread(it) }
         }
     }
     LaunchedEffect(pager, width) {
@@ -543,8 +604,14 @@ private fun PagedReader(
             look = look,
             width = width,
             height = height,
-            onZoomed = { if (index == pager.currentPage) zoomed = it },
-            onTurn = { forward -> turnTo(pager.currentPage + if (forward) 1 else -1) },
+            onZoomed = { isZoomed ->
+                if (isZoomed) {
+                    zoomedPage = index
+                } else if (zoomedPage == index) {
+                    zoomedPage = -1
+                }
+            },
+            onTurn = { forward -> turnTo(pager.targetPage + if (forward) 1 else -1) },
             onLink = { page -> pager.scrollToPage(spreadIndexOf(spreads, page)) },
             onMenu = onMenu,
         )
@@ -555,7 +622,7 @@ private fun PagedReader(
             state = pager,
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
-            userScrollEnabled = !zoomed,
+            userScrollEnabled = zoomedPage != pager.currentPage,
         ) { index -> pageContent(index) }
     } else {
         HorizontalPager(
@@ -563,7 +630,7 @@ private fun PagedReader(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
             reverseLayout = rightToLeft,
-            userScrollEnabled = !zoomed,
+            userScrollEnabled = zoomedPage != pager.currentPage,
         ) { index -> pageContent(index) }
     }
 }
@@ -577,13 +644,19 @@ private fun Modifier.pageTransition(
     rightToLeft: Boolean,
     curl: CurlEffect?,
 ) = graphicsLayer {
-    val offset = ((index - pager.currentPage) - pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
-    val pinned = animation == PageAnimation.Fade || animation == PageAnimation.Curl
+    val distance = (index - pager.currentPage) - pager.currentPageOffsetFraction
+    val offset = distance.coerceIn(-1f, 1f)
+    // Only pages mid-turn are pinned. A resting neighbor on screen would take the current page's touches.
+    val pinned = abs(distance) < 1f && (animation == PageAnimation.Fade || animation == PageAnimation.Curl)
     if (pinned && vertical) translationY = -offset * size.height
     if (pinned && !vertical) translationX = -offset * size.width * if (rightToLeft) -1f else 1f
-    if (animation == PageAnimation.Fade) alpha = 1f - abs(offset)
+    if (pinned && animation == PageAnimation.Fade) alpha = if (offset < 0f) 1f + offset else 1f
     if (animation == PageAnimation.Curl) {
-        renderEffect = if (offset < 0f && curl != null) curl.at(size.width, size.height, -offset, rightToLeft) else null
+        renderEffect = if (pinned && offset < 0f && curl != null) {
+            curl.at(size.width, size.height, -offset, rightToLeft)
+        } else {
+            null
+        }
     }
 }
 
@@ -610,9 +683,13 @@ private fun SpreadView(
     val zoom = remember(index) { ZoomState() }
     val visualPages = if (rightToLeft) spread.pages.reversed() else spread.pages
     val latestOnMenu by rememberUpdatedState(onMenu)
+    val latestOnTurn by rememberUpdatedState(onTurn)
     var links by remember(spread) { mutableStateOf<Map<Int, Pair<List<PageLink>, PageSize?>>>(emptyMap()) }
 
     LaunchedEffect(zoom.scale > 1f) { onZoomed(zoom.scale > 1f) }
+    LaunchedEffect(pager, index) {
+        snapshotFlow { pager.settledPage }.collect { if (it != index) zoom.reset() }
+    }
     LaunchedEffect(spread) {
         if (source.isVector) {
             links = withContext(Dispatchers.IO) {
@@ -631,7 +708,8 @@ private fun SpreadView(
             .background(Color(look.background))
             .zoomGestures(zoom, width, height)
             .pointerInput(spread, width, height, rightToLeft, look.fit) {
-                detectTapGestures(
+                detectReaderTaps(
+                    turnsPage = { at -> zoom.scale == 1f && at.x !in (width / 3f)..(width * 2f / 3f) },
                     onDoubleTap = { at -> zoom.toggle(at, width, height) },
                     onTap = { at ->
                         val link = if (zoom.scale == 1f && look.fit == FitMode.Screen) {
@@ -643,7 +721,7 @@ private fun SpreadView(
                         when {
                             link != null -> scope.launch { onLink(link.target) }
                             at.x in (width / 3f)..(width * 2f / 3f) -> latestOnMenu()
-                            else -> scope.launch { onTurn(forward) }
+                            else -> scope.launch { latestOnTurn(forward) }
                         }
                     },
                 )
@@ -802,7 +880,13 @@ private fun ContinuousReader(
         snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collectLatest { last ->
             for (index in (last + 1)..(last + ROWS_AHEAD)) {
                 val row = rows.getOrNull(index) ?: break
-                if (row.top >= 0) loader.slice(row.page, row.top, row.bottom, width) else loader.page(row.page, width)
+                if (row.top >= 0) {
+                    loader.slice(row.page, row.top, row.bottom, width)
+                    continue
+                }
+                // A tall page decoded whole would be shrunk, so it waits to be cut into slices.
+                val size = loader.size(row.page)
+                if (size == null || !size.isTall || !source.canSlice) loader.page(row.page, width)
             }
         }
     }
@@ -811,8 +895,9 @@ private fun ContinuousReader(
         Modifier
             .fillMaxSize()
             .zoomGestures(zoom, width, height, panWhenZoomed = false)
-            .pointerInput(height) {
-                detectTapGestures(
+            .pointerInput(width, height) {
+                detectReaderTaps(
+                    turnsPage = { at -> zoom.scale == 1f && at.y !in (height / 3f)..(height * 2f / 3f) },
                     onDoubleTap = { at -> zoom.toggle(at, width, height) },
                     onTap = { at ->
                         when {
@@ -851,24 +936,22 @@ private fun VerticalRow(
     rows: SnapshotStateList<ReaderRow>,
     aspects: SnapshotStateMap<ReaderRow, Float>,
 ) {
-    val scope = rememberCoroutineScope()
     val isSlice = row.top >= 0
-    var image by remember(row) {
+    var image by remember(row, width) {
         mutableStateOf(if (isSlice) loader.cachedSlice(row.page, row.top, width) else loader.cachedPage(row.page, width))
     }
     LaunchedEffect(row, width) {
-        if (image != null) return@LaunchedEffect
         if (isSlice) {
-            image = loader.slice(row.page, row.top, row.bottom, width)
+            if (image == null) image = loader.slice(row.page, row.top, row.bottom, width)
+            return@LaunchedEffect
+        }
+        val size = loader.size(row.page)
+        if (size != null && size.isTall && source.canSlice) {
+            loader.prepareTallPage(row.page, size)
+            replaceWithSlices(rows, aspects, row, size)
         } else {
-            val size = loader.size(row.page)
-            if (size != null && size.isTall && source.canSlice) {
-                loader.prepareTallPage(scope, row.page, size)
-                replaceWithSlices(rows, aspects, row, size)
-            } else {
-                if (size != null) aspects[row] = size.width.toFloat() / size.height
-                image = loader.page(row.page, width)
-            }
+            if (size != null) aspects[row] = size.width.toFloat() / size.height
+            if (image == null) image = loader.page(row.page, width)
         }
     }
 
