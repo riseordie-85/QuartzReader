@@ -200,6 +200,53 @@ class LibraryRepository private constructor(context: Context) {
 
     suspend fun setHomeTheme(theme: ShelfTheme) = write { saveSetting(KEY_HOME_THEME, ThemeJson.write(theme)) }
 
+    /** Applies one edit to every volume. Renaming to an existing series merges the two. */
+    suspend fun updateSeries(seriesId: String, edit: SeriesEdit) = write {
+        val time = now()
+        val title = edit.title.trim()
+        val key = seriesMatchKey(title)
+        val match = db.rawQuery(Schema.SELECT_SERIES_BY_KEY, arrayOf(key)).use { rows ->
+            if (rows.moveToFirst()) rows.getString(0) else null
+        }
+        val targetId = if (match == null || match == seriesId) {
+            val values = ContentValues().apply {
+                put("title", title)
+                put("match_key", key)
+                put("updated_at", time)
+            }
+            db.update("series", values, "id = ?", arrayOf(seriesId))
+            seriesId
+        } else {
+            match
+        }
+
+        val bookIds = state.value.books.filter { it.seriesId == seriesId }.map { it.id }
+        val values = ContentValues().apply {
+            put("series_id", targetId)
+            put("updated_at", time)
+            edit.author?.let { put("author", it) }
+            edit.type?.let { put("type", it.name) }
+            edit.direction?.let { put("direction", it.name) }
+        }
+        db.update("books", values, "series_id = ? AND deleted_at IS NULL", arrayOf(seriesId))
+        for (bookId in bookIds) {
+            edit.removeShelves.forEach { db.execSQL(Schema.REMOVE_SHELF_BOOK, arrayOf<Any>(time, time, it, bookId)) }
+            edit.addShelves.forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, bookId, time)) }
+        }
+        db.execSQL(Schema.DELETE_EMPTY_SERIES, arrayOf<Any>(time, time))
+    }
+
+    /** Records where books moved to in the library folder. */
+    suspend fun setDocumentUris(moved: Map<String, String>) = write {
+        moved.forEach { (id, uri) ->
+            val values = ContentValues().apply {
+                put("document_uri", uri)
+                put("updated_at", now())
+            }
+            db.update("books", values, "id = ?", arrayOf(id))
+        }
+    }
+
     /** Puts a book in a series, for when a later import shows which series it belongs to. */
     suspend fun assignSeries(id: String, seriesTitle: String, number: Double?) = write {
         val values = ContentValues().apply {

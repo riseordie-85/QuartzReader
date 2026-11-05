@@ -108,6 +108,20 @@ class LibraryFolder private constructor(context: Context) {
         return target
     }
 
+    /**
+     * Moves a book to the folder for its new type. Returns its new address, or null if Android
+     * refuses, in which case the book stays where it is and keeps working.
+     */
+    fun moveBetweenTypes(document: Uri, from: BookType, to: BookType): Uri? = runCatching {
+        val tree = requireTree()
+        DocumentsContract.moveDocument(
+            resolver,
+            document,
+            DocumentsContract.buildDocumentUriUsingTree(tree, typeFolder(from)),
+            DocumentsContract.buildDocumentUriUsingTree(tree, typeFolder(to)),
+        )
+    }.getOrNull()
+
     fun delete(document: Uri) {
         DocumentsContract.deleteDocument(resolver, document)
     }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +33,7 @@ fun SeriesScreen(
     theme: ShelfTheme,
     header: HeaderActions,
     actions: BookActions,
+    onEdit: () -> Unit,
 ) {
     val ordered = volumes.sortedWith(volumeOrder)
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
@@ -43,11 +45,14 @@ fun SeriesScreen(
         ) {
             LibraryHeader(theme.header, header)
             ThemedText(series.title, theme.title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            if (ordered.isNotEmpty()) {
-                Button(
-                    onClick = { actions.onOpen(nextVolume(ordered)) },
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                ) { Text("Continue") }
+            Row(
+                Modifier.padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (ordered.isNotEmpty()) {
+                    Button(onClick = { actions.onOpen(nextVolume(ordered)) }) { Text("Continue") }
+                }
+                Button(onClick = onEdit) { Text("Edit series") }
             }
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val columns = columnsFor(maxWidth.value)

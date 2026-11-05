@@ -69,6 +69,7 @@ class BookActions(
     val onOpen: (Book) -> Unit,
     val onDetails: (Book) -> Unit,
     val onSeries: (String) -> Unit,
+    val onSeriesEdit: (String) -> Unit,
 )
 
 @Composable
@@ -240,7 +241,7 @@ fun ShelfItemTile(item: ShelfItem, look: BookLook, actions: BookActions, modifie
                 label = item.series.title,
                 badge = item.volumes.size,
                 onClick = { actions.onSeries(item.series.id) },
-                onLongClick = { actions.onSeries(item.series.id) },
+                onLongClick = { actions.onSeriesEdit(item.series.id) },
                 modifier = modifier,
             )
         }

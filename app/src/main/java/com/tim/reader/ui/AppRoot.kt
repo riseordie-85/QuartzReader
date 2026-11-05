@@ -69,6 +69,7 @@ private sealed interface Route {
     data object Settings : Route
     data object Tools : Route
     data class SeriesPage(val seriesId: String, val shelfId: String?) : Route
+    data class SeriesEditor(val seriesId: String) : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -199,6 +200,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         onDetails = { book -> push(Route.Details(book.id)) },
         // A series keeps the style of the shelf it was opened from.
         onSeries = { id -> push(Route.SeriesPage(id, (stack.last() as? Route.ShelfPages)?.shelfId)) },
+        onSeriesEdit = { id -> push(Route.SeriesEditor(id)) },
     )
 
     BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
@@ -232,7 +234,19 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             val series = state.seriesFor(route.seriesId)
             val theme = route.shelfId?.let { state.shelf(it)?.theme } ?: state.homeTheme
             if (series != null && theme != null) {
-                SeriesScreen(series, state.books.filter { it.seriesId == series.id }, theme, header, actions)
+                SeriesScreen(series, state.books.filter { it.seriesId == series.id }, theme, header, actions) {
+                    push(Route.SeriesEditor(series.id))
+                }
+            } else {
+                LaunchedEffect(route) { stack.remove(route) }
+            }
+        }
+        is Route.SeriesEditor -> {
+            val series = state.seriesFor(route.seriesId)
+            if (series != null) {
+                SeriesEditScreen(series, state.books.filter { it.seriesId == series.id }, state) {
+                    stack.remove(route)
+                }
             } else {
                 LaunchedEffect(route) { stack.remove(route) }
             }

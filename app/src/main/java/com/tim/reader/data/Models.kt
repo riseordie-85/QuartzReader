@@ -90,6 +90,16 @@ data class LibraryState(
     val readList get() = books.filter { it.inReadList }.sortedByDescending { it.addedAt }
 }
 
+/** Changes to every volume of a series. A null value leaves that field as it is on each volume. */
+class SeriesEdit(
+    val title: String,
+    val author: String?,
+    val type: BookType?,
+    val direction: ReadDirection?,
+    val addShelves: Set<String>,
+    val removeShelves: Set<String>,
+)
+
 /** What a shelf shows: one book, or a series as a single stack. */
 sealed interface ShelfItem {
     val key: String

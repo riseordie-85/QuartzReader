@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tim.reader.appScope
 import com.tim.reader.data.Book
 import com.tim.reader.data.BookType
 import com.tim.reader.data.LibraryRepository
@@ -128,6 +129,9 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
         Text("Type", style = MaterialTheme.typography.titleMedium)
         BookType.entries.forEach { option ->
             ChoiceRow(option.label, type == option) {
+                // The book follows its type to the matching shelf.
+                state.shelves.filter { it.defaultType == type }.forEach { shelfIds.remove(it.id) }
+                state.shelves.filter { it.defaultType == option && it.id !in shelfIds }.forEach { shelfIds.add(it.id) }
                 type = option
                 direction = option.direction
             }
@@ -149,7 +153,12 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button({
-                scope.launch {
+                // This carries on if the screen closes, so a moved file is never left unrecorded.
+                appScope.launch {
+                    if (type != book.type) {
+                        val moved = LibraryFolder.get(context).moveBetweenTypes(Uri.parse(book.documentUri), book.type, type)
+                        if (moved != null) repository.setDocumentUris(mapOf(book.id to moved.toString()))
+                    }
                     repository.updateBookDetails(
                         book.id,
                         title.trim().ifBlank { book.title },
@@ -161,7 +170,7 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
                     )
                     repository.setReadList(book.id, inReadList)
                     repository.setBookShelves(book.id, shelfIds.toSet())
-                    onGone()
+                    withContext(Dispatchers.Main) { onGone() }
                 }
             }) { Text("Save") }
             OutlinedButton({ confirmDelete = true }) { Text("Delete") }
@@ -195,7 +204,7 @@ private fun formatNumber(value: Double) =
     if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
 
 @Composable
-private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -208,7 +217,7 @@ private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
 }
 
 @Composable
-private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
