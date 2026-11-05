@@ -21,7 +21,11 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.Shelf
 import com.tim.reader.data.ShelfItem
+import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -42,8 +47,11 @@ import com.tim.reader.theme.fontFamily
 import com.tim.reader.theme.themedFill
 import com.tim.reader.theme.themedShadow
 import com.tim.reader.theme.themedStroke
+import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 
 private val TWO_PANE_WIDTH = 700.dp
+private const val MAX_ANIMATED_JUMP = 6
 
 @Composable
 fun HomeScreen(
@@ -61,15 +69,21 @@ fun HomeScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            if (maxWidth >= TWO_PANE_WIDTH) {
+            if (maxWidth >= TWO_PANE_WIDTH && DeviceSettings.splitView) {
                 val paneWidth = maxWidth.value / 2
+                val selection = remember { CoverSelection() }
+                // Every title Home can show is on the right, so any tile can bring up its cover.
+                val covers = (state.recentlyRead + state.readList + state.books.sortedByDescending { it.addedAt })
+                    .distinctBy { it.id }
+                    .map { ShelfItem.Single(it) }
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
-                        HomeList(state, theme, columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf)
+                        CompositionLocalProvider(LocalCoverSelection provides selection) {
+                            HomeList(state, theme, columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf)
+                        }
                     }
                     Box(Modifier.weight(1f)) {
-                        val covers = state.recentlyRead.ifEmpty { state.books.sortedByDescending { it.addedAt } }
-                        CoverPager(covers.map { ShelfItem.Single(it) }, theme, actions)
+                        CoverPager(covers, theme, actions, selection)
                     }
                 }
             } else {
@@ -187,9 +201,35 @@ private fun ShelfButton(shelf: Shelf, modifier: Modifier, onClick: () -> Unit) {
 
 /** Large covers to swipe through, in the right pane when unfolded. */
 @Composable
-fun CoverPager(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions) {
+fun CoverPager(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions, selection: CoverSelection) {
     if (items.isEmpty()) return
     val pager = rememberPagerState { items.size }
+    // True while a tap moves the pager, so the pages it passes don't take over the highlight.
+    val jumping = remember { booleanArrayOf(false) }
+
+    LaunchedEffect(pager, selection, items) {
+        snapshotFlow { selection.key }.collectLatest { key ->
+            val index = items.indexOfFirst { it.key == key }
+            if (index >= 0 && index != pager.currentPage) {
+                jumping[0] = true
+                try {
+                    if (abs(index - pager.currentPage) > MAX_ANIMATED_JUMP) {
+                        pager.scrollToPage(index)
+                    } else {
+                        pager.animateScrollToPage(index)
+                    }
+                } finally {
+                    jumping[0] = false
+                }
+            }
+        }
+    }
+    LaunchedEffect(pager, selection, items) {
+        snapshotFlow { pager.currentPage }.collect { page ->
+            if (!jumping[0]) items.getOrNull(page)?.let { selection.key = it.key }
+        }
+    }
+
     HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
         val item = items[page]
         Column(
@@ -206,6 +246,7 @@ fun CoverPager(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions) 
                 Modifier
                     .weight(1f, fill = false)
                     .fillMaxHeight(0.86f),
+                inCoverPane = true,
             )
             Text(
                 text = item.displayTitle(),
@@ -235,13 +276,16 @@ fun CoverSplit(
     page: @Composable (Modifier) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth >= TWO_PANE_WIDTH) {
+        if (maxWidth >= TWO_PANE_WIDTH && DeviceSettings.splitView) {
+            val selection = remember(paneKey) { CoverSelection() }
             Row(Modifier.fillMaxSize()) {
-                page(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                )
+                CompositionLocalProvider(LocalCoverSelection provides selection) {
+                    page(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
                 key(paneKey) {
                     ThemedBackground(
                         theme.background,
@@ -254,7 +298,7 @@ fun CoverSplit(
                                 .fillMaxSize()
                                 .windowInsetsPadding(WindowInsets.safeDrawing),
                         ) {
-                            CoverPager(items, theme, actions)
+                            CoverPager(items, theme, actions, selection)
                         }
                     }
                 }

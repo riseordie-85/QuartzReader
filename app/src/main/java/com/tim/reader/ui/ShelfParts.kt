@@ -19,13 +19,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -134,6 +137,7 @@ fun BookTile(
     progress: Float,
     label: String,
     badge: Int?,
+    selected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -202,6 +206,14 @@ fun BookTile(
                                 Size(width * progress.coerceIn(0f, 1f), barHeight),
                             )
                         }
+                        if (selected) {
+                            drawRect(
+                                Color(0xFF4C8DFF),
+                                Offset(left.toFloat(), top.toFloat()),
+                                Size(width, height),
+                                style = Stroke(3f * density),
+                            )
+                        }
                     }
                 },
         )
@@ -220,7 +232,17 @@ fun BookTile(
 }
 
 @Composable
-fun ShelfItemTile(item: ShelfItem, look: BookLook, actions: BookActions, modifier: Modifier = Modifier) {
+fun ShelfItemTile(
+    item: ShelfItem,
+    look: BookLook,
+    actions: BookActions,
+    modifier: Modifier = Modifier,
+    inCoverPane: Boolean = false,
+) {
+    // The large cover opens on one tap. Shelf tiles select first while the split view shows.
+    val selection = if (inCoverPane) null else LocalCoverSelection.current
+    val selected by remember(selection, item.key) { derivedStateOf { selection?.key == item.key } }
+    val onTap = { tapItem(item, selection, actions) }
     when (item) {
         is ShelfItem.Single -> BookTile(
             coverPath = item.book.displayCover,
@@ -228,7 +250,8 @@ fun ShelfItemTile(item: ShelfItem, look: BookLook, actions: BookActions, modifie
             progress = item.book.progress,
             label = item.book.title,
             badge = null,
-            onClick = { actions.onOpen(item.book) },
+            selected = selected,
+            onClick = onTap,
             onLongClick = { actions.onDetails(item.book) },
             modifier = modifier,
         )
@@ -240,7 +263,8 @@ fun ShelfItemTile(item: ShelfItem, look: BookLook, actions: BookActions, modifie
                 progress = 0f,
                 label = item.series.title,
                 badge = item.volumes.size,
-                onClick = { actions.onSeries(item.series.id) },
+                selected = selected,
+                onClick = onTap,
                 onLongClick = { actions.onSeriesEdit(item.series.id) },
                 modifier = modifier,
             )

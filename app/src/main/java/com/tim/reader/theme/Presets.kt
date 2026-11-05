@@ -1,6 +1,6 @@
 package com.tim.reader.theme
 
-/** The built-in looks, from Tim's mockups. Image fills use placeholder art until his own arrives. */
+/** The built-in looks, from Tim's mockups. Wood and Burst use placeholder art until his own arrives. */
 object Presets {
     val silverGloss = ShelfTheme(
         background = GradientFill(listOf(0xFFB2B2B2, 0xFFD6D6D6)),
@@ -72,9 +72,8 @@ object Presets {
         GradientDirection.Diagonal,
     )
 
-    /** A plain pink stands in until Tim's pattern art arrives. */
     val pinkPattern = ShelfTheme(
-        background = SolidFill(0xFFFBD9F2),
+        background = ImageFill("kawaii"),
         header = BarLook(
             fill = purpleBar,
             cornerDp = 32f,

@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.tim.reader.appScope
 import com.tim.reader.data.LibraryRepository
+import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.library.LibraryOrganizer
 import com.tim.reader.theme.Presets
@@ -71,6 +72,8 @@ fun SettingsScreen(onTestTools: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(name) }
         }
+        Text("Display", style = MaterialTheme.typography.titleMedium)
+        ToggleRow("Split view on large screens", DeviceSettings.splitView) { DeviceSettings.updateSplitView(it) }
         Text("Testing", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onTestTools, Modifier.fillMaxWidth()) { Text("Test tools") }
     }

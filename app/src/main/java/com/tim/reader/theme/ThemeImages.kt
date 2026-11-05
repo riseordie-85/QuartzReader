@@ -20,6 +20,7 @@ object ThemeImages {
     private val placeholders = mapOf(
         "wood" to R.drawable.wall_wood,
         "speed" to R.drawable.wall_speed,
+        "kawaii" to R.drawable.wall_kawaii,
         "burst" to R.drawable.wall_burst,
     )
 

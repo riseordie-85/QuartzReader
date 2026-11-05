@@ -19,7 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.DropdownMenu
@@ -214,11 +216,21 @@ private fun ShelfContent(
                         color = Color(theme.title.color).copy(alpha = 0.7f),
                         modifier = Modifier.padding(24.dp),
                     )
-                    viewMode == ViewMode.Shelf -> LazyColumn(
-                        Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = bottomSpace),
-                    ) {
-                        shelfRows(items, columns, theme, actions)
+                    viewMode == ViewMode.Shelf -> {
+                        val list = rememberLazyListState()
+                        FollowSelection(
+                            items,
+                            columns,
+                            { row -> list.layoutInfo.visibleItemsInfo.any { it.index == row } },
+                            { row -> list.animateScrollToItem(row) },
+                        )
+                        LazyColumn(
+                            Modifier.fillMaxSize(),
+                            state = list,
+                            contentPadding = PaddingValues(bottom = bottomSpace),
+                        ) {
+                            shelfRows(items, columns, theme, actions)
+                        }
                     }
                     viewMode == ViewMode.Grid -> GridView(items, columns + 1, theme, actions, bottomSpace)
                     else -> ListView(items, theme, actions, bottomSpace)
@@ -276,9 +288,17 @@ private fun SortMenu(
 
 @Composable
 private fun GridView(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, actions: BookActions, bottom: Dp) {
+    val grid = rememberLazyGridState()
+    FollowSelection(
+        items,
+        1,
+        { index -> grid.layoutInfo.visibleItemsInfo.any { it.index == index } },
+        { index -> grid.animateScrollToItem(index) },
+    )
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         modifier = Modifier.fillMaxSize(),
+        state = grid,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottom),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -302,7 +322,19 @@ private fun GridView(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, ac
 @Composable
 private fun ListView(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions, bottom: Dp) {
     val text = Color(theme.title.color)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = bottom)) {
+    val selection = LocalCoverSelection.current
+    val list = rememberLazyListState()
+    FollowSelection(
+        items,
+        1,
+        { index -> list.layoutInfo.visibleItemsInfo.any { it.index == index } },
+        { index -> list.animateScrollToItem(index) },
+    )
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        state = list,
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = bottom),
+    ) {
         items(items, key = { it.key }) { item ->
             val subtitle = when (item) {
                 is ShelfItem.Single -> item.book.author
@@ -311,12 +343,8 @@ private fun ListView(items: List<ShelfItem>, theme: ShelfTheme, actions: BookAct
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        when (item) {
-                            is ShelfItem.Single -> actions.onOpen(item.book)
-                            is ShelfItem.Stack -> actions.onSeries(item.series.id)
-                        }
-                    }
+                    .background(if (selection?.key == item.key) Color(0x664C8DFF) else Color.Transparent)
+                    .clickable { tapItem(item, selection, actions) }
                     .padding(vertical = 10.dp),
             ) {
                 Text(item.displayTitle(), color = text, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

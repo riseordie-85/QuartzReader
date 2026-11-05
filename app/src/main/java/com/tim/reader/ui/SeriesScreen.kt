@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
@@ -57,8 +58,16 @@ fun SeriesScreen(
             }
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val columns = columnsFor(maxWidth.value)
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-                    shelfRows(ordered.map { ShelfItem.Single(it) }, columns, theme, actions)
+                val items = ordered.map { ShelfItem.Single(it) }
+                val list = rememberLazyListState()
+                FollowSelection(
+                    items,
+                    columns,
+                    { row -> list.layoutInfo.visibleItemsInfo.any { it.index == row } },
+                    { row -> list.animateScrollToItem(row) },
+                )
+                LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 24.dp)) {
+                    shelfRows(items, columns, theme, actions)
                 }
             }
         }

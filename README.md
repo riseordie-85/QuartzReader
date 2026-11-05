@@ -21,3 +21,8 @@ The Phase 0 tests are under **Settings > Test tools**.
 4. **Library folder speed test:** pick the folder you'd use as a library. It creates a test folder
    inside it and deletes that folder when it finishes.
 5. **Results:** tap **Copy** and paste the results into the chat.
+
+## Art
+
+`art/backgrounds` holds Tim's original SVG backgrounds for the Phase 5 theme builder. Their backgrounds
+are transparent, so they work over any color. Book files never go in this repo, but this art does.
