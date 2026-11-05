@@ -103,7 +103,14 @@ private fun ContrastWarning(text: Long, behind: Fill) {
 
 /** A tiny shelf, so a style can be chosen by how it looks. */
 @Composable
-private fun StyleTile(name: String, style: ShelfTheme, modifier: Modifier, onPick: () -> Unit, onDelete: (() -> Unit)?) {
+fun StyleTile(
+    name: String,
+    style: ShelfTheme,
+    selected: Boolean = false,
+    modifier: Modifier,
+    onPick: () -> Unit,
+    onDelete: (() -> Unit)?,
+) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ThemedBackground(
             style.background,
@@ -111,7 +118,7 @@ private fun StyleTile(name: String, style: ShelfTheme, modifier: Modifier, onPic
                 .fillMaxWidth()
                 .height(92.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, EditorColors.Border, RoundedCornerShape(14.dp))
+                .border(if (selected) 3.dp else 1.dp, if (selected) EditorColors.Accent else EditorColors.Border, RoundedCornerShape(14.dp))
                 .clickable(onClick = onPick),
         ) {
             Box(
@@ -159,9 +166,9 @@ private fun StylePicker(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEach { (label, style) ->
                             StyleTile(
-                                label,
-                                style,
-                                Modifier.weight(1f),
+                                name = label,
+                                style = style,
+                                modifier = Modifier.weight(1f),
                                 onPick = { onPick(style) },
                                 onDelete = if (label in saved) ({ onDelete(label) }) else null,
                             )

@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.Shelf
-import com.tim.reader.theme.Presets
 import kotlinx.coroutines.launch
 
 @Composable
@@ -45,11 +44,12 @@ fun ShelvesListScreen(
     onAllBooks: () -> Unit,
     onShelf: (String) -> Unit,
     onEditStyle: (String) -> Unit,
+    onNewShelf: () -> Unit,
+    onChooseBooks: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = LibraryRepository.get(context)
     val scope = rememberCoroutineScope()
-    var adding by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Shelf?>(null) }
     var deleting by remember { mutableStateOf<Shelf?>(null) }
 
@@ -62,7 +62,7 @@ fun ShelvesListScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Shelves", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            Button({ adding = true }) { Text("New shelf") }
+            Button(onNewShelf) { Text("New shelf") }
         }
         LazyColumn(Modifier.fillMaxSize()) {
             item {
@@ -85,18 +85,13 @@ fun ShelvesListScreen(
                     onRename = { renaming = shelf },
                     onDelete = { deleting = shelf },
                     onStyle = { onEditStyle(shelf.id) },
+                    onChooseBooks = { onChooseBooks(shelf.id) },
                 )
                 HorizontalDivider()
             }
         }
     }
 
-    if (adding) {
-        NameDialog("New shelf", "", { adding = false }) { name ->
-            adding = false
-            scope.launch { repository.addShelf(name, Presets.silverGloss) }
-        }
-    }
     renaming?.let { shelf ->
         NameDialog("Rename shelf", shelf.name, { renaming = null }) { name ->
             renaming = null
@@ -128,6 +123,7 @@ private fun ShelfRowEditor(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onStyle: () -> Unit,
+    onChooseBooks: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -154,6 +150,10 @@ private fun ShelfRowEditor(
                 DropdownMenuItem(text = { Text("Rename") }, onClick = {
                     menu = false
                     onRename()
+                })
+                DropdownMenuItem(text = { Text("Add or remove books") }, onClick = {
+                    menu = false
+                    onChooseBooks()
                 })
                 DropdownMenuItem(text = { Text("Edit style") }, onClick = {
                     menu = false

@@ -74,6 +74,8 @@ private sealed interface Route {
     /** Styles a shelf, or Home when there's no shelf. */
     data class ThemeEditor(val shelfId: String?) : Route
     data class PageSettings(val shelfId: String?, val seriesId: String?) : Route
+    /** Makes a new shelf, or changes the books on one. */
+    data class ShelfMaker(val shelfId: String?) : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -225,6 +227,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             actions,
             onEditStyle = { push(Route.ThemeEditor(it)) },
             onPageSettings = { push(Route.PageSettings(it, null)) },
+            onChooseBooks = { push(Route.ShelfMaker(it)) },
         ) { id ->
             val index = stack.lastIndex
             if (index >= 0 && stack[index] is Route.ShelfPages && stack[index] != Route.ShelfPages(id)) {
@@ -239,7 +242,13 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             onAllBooks = { push(Route.AllBooks) },
             onShelf = { push(Route.ShelfPages(it)) },
             onEditStyle = { push(Route.ThemeEditor(it)) },
+            onNewShelf = { push(Route.ShelfMaker(null)) },
+            onChooseBooks = { push(Route.ShelfMaker(it)) },
         )
+        is Route.ShelfMaker -> {
+            val shelf = route.shelfId?.let { state.shelf(it) }
+            ShelfMakerScreen(shelf, state) { stack.remove(route) }
+        }
         Route.Settings -> SettingsScreen(
             onHomeStyle = { push(Route.ThemeEditor(null)) },
             onTestTools = { push(Route.Tools) },

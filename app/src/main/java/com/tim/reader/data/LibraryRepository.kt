@@ -319,6 +319,25 @@ class LibraryRepository private constructor(context: Context) {
         insertShelf(name, state.value.shelves.maxOfOrNull { it.order + 1 } ?: 0, theme, null)
     }
 
+    /** Makes a shelf with its books in one save. */
+    suspend fun createShelf(name: String, theme: ShelfTheme, bookIds: Set<String>) = write {
+        val id = insertShelf(name, state.value.shelves.maxOfOrNull { it.order + 1 } ?: 0, theme, null)
+        val time = now()
+        bookIds.forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(id, it, time)) }
+    }
+
+    /** Renames a shelf and makes its books match [bookIds]. */
+    suspend fun updateShelf(id: String, name: String, bookIds: Set<String>) = write {
+        val time = now()
+        updateShelfField(id) { put("name", name) }
+        val current = state.value.shelfBooks[id].orEmpty()
+        (current - bookIds).forEach { db.execSQL(Schema.REMOVE_SHELF_BOOK, arrayOf<Any>(time, time, id, it)) }
+        (bookIds - current).forEach { bookId ->
+            db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(id, bookId, time))
+            state.value.book(bookId)?.let { applyShelfDefaults(it, listOf(id)) }
+        }
+    }
+
     suspend fun renameShelf(id: String, name: String) = write { updateShelfField(id) { put("name", name) } }
 
     suspend fun setShelfTheme(id: String, theme: ShelfTheme) =

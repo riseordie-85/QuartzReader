@@ -77,6 +77,7 @@ fun ShelfPager(
     actions: BookActions,
     onEditStyle: (String) -> Unit,
     onPageSettings: (String) -> Unit,
+    onChooseBooks: (String) -> Unit,
     onCurrentShelf: (String) -> Unit,
 ) {
     val shelves = state.shelves
@@ -134,6 +135,7 @@ fun ShelfPager(
                 onGroupSeries = { group -> scope.launch { repository.setShelfGrouping(shelf.id, group) } },
                 onEditStyle = { onEditStyle(shelf.id) },
                 onPageSettings = { onPageSettings(shelf.id) },
+                onChooseBooks = { onChooseBooks(shelf.id) },
             )
         }
         }
@@ -167,6 +169,7 @@ fun ListPage(
             onGroupSeries = {},
             onEditStyle = null,
             onPageSettings = null,
+            onChooseBooks = null,
             modifier = pageModifier,
         )
     }
@@ -189,6 +192,7 @@ private fun ShelfContent(
     onGroupSeries: (Boolean) -> Unit,
     onEditStyle: (() -> Unit)?,
     onPageSettings: (() -> Unit)?,
+    onChooseBooks: (() -> Unit)?,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     val controls = Color(theme.controls.color)
@@ -225,6 +229,7 @@ private fun ShelfContent(
                         onBooksPerRow = if (viewMode == ViewMode.List) null else ({ choosingRow = true }),
                         onEditStyle = onEditStyle,
                         onPageSettings = onPageSettings,
+                        onChooseBooks = onChooseBooks,
                     )
                 } else if (viewMode != ViewMode.List) {
                     PillButton("Books per row", theme.controls) { choosingRow = true }
@@ -282,6 +287,7 @@ private fun SortMenu(
     onBooksPerRow: (() -> Unit)?,
     onEditStyle: (() -> Unit)?,
     onPageSettings: (() -> Unit)?,
+    onChooseBooks: (() -> Unit)?,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -305,6 +311,7 @@ private fun SortMenu(
             )
             HorizontalDivider()
             listOfNotNull(
+                onChooseBooks?.let { "Add or remove books" to it },
                 onBooksPerRow?.let { "Books per row" to it },
                 onPageSettings?.let { "Page settings" to it },
                 onEditStyle?.let { "Edit shelf style" to it },
