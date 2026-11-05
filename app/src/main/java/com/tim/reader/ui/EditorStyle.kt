@@ -80,7 +80,7 @@ fun EditorTheme(content: @Composable () -> Unit) {
         val bars = window?.let { WindowCompat.getInsetsController(it, view) }
         val before = bars?.isAppearanceLightStatusBars
         bars?.isAppearanceLightStatusBars = true
-        onDispose { if (before != null) bars.isAppearanceLightStatusBars = before }
+        onDispose { if (before != null) bars?.isAppearanceLightStatusBars = before }
     }
     val colors = lightColorScheme(
         primary = EditorColors.Accent,
