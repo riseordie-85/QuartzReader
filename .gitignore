@@ -1,0 +1,19 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+# Test books never go in the repo.
+*.cbz
+*.cbr
+*.cb7
+*.epub
+*.mobi
+*.azw
+*.azw3
+*.pdf
