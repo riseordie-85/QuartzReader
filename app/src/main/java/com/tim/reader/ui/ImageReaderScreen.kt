@@ -43,6 +43,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -58,11 +59,13 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -108,6 +111,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import kotlin.math.floor
 
 /** A page, or one slice of a very tall page, as a row in the vertical reader. */
 private data class ReaderRow(val page: Int, val top: Int = -1, val bottom: Int = -1)
@@ -156,8 +160,8 @@ private class ZoomState {
 }
 
 /** One finger stays with the pager until the page is zoomed, so swipes keep turning pages. */
-private fun Modifier.zoomGestures(zoom: ZoomState, width: Int, height: Int, panWhenZoomed: Boolean = true) =
-    pointerInput(zoom, width, height, panWhenZoomed) {
+private fun Modifier.zoomGestures(zoom: ZoomState, width: Int, height: Int, listScrolls: Boolean = false) =
+    pointerInput(zoom, width, height, listScrolls) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             var active = false
@@ -166,12 +170,15 @@ private fun Modifier.zoomGestures(zoom: ZoomState, width: Int, height: Int, panW
                 // The early pass lets a pinch claim the fingers before a list or pager can scroll.
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 val fingers = event.changes.count { it.pressed }
-                if (fingers >= 2 || (panWhenZoomed && zoom.scale > 1f)) {
+                if (fingers >= 2 || zoom.scale > 1f) {
                     if (!active) {
                         travel += event.calculatePan().getDistance()
                         active = fingers >= 2 || travel > viewConfiguration.touchSlop
                     }
-                    if (active) {
+                    if (active && fingers < 2 && listScrolls) {
+                        // The list keeps moving up and down, and the finger also slides the page sideways.
+                        zoom.change(1f, Offset(event.calculatePan().x, 0f), width, height)
+                    } else if (active) {
                         zoom.change(event.calculateZoom(), event.calculatePan(), width, height)
                         event.changes.forEach { if (it.positionChanged()) it.consume() }
                     }
@@ -208,12 +215,12 @@ private suspend fun PointerInputScope.detectReaderTaps(
     }
 }
 
-/** Two pages show on wide, nearly square windows: an unfolded Fold, or a tablet held sideways. */
+/** Two pages show when there's room in landscape, like a book held open. */
 private fun showsTwoPages(mode: TwoPageMode, direction: ReadDirection, widthDp: Float, heightDp: Float) = when {
     direction == ReadDirection.Vertical -> false
     mode == TwoPageMode.Never -> false
     mode == TwoPageMode.Always -> true
-    else -> widthDp >= 600f && widthDp / heightDp >= 0.7f
+    else -> widthDp >= 600f && widthDp > heightDp
 }
 
 @Composable
@@ -350,6 +357,7 @@ fun ImageReaderScreen(
                     look = look,
                     width = width,
                     height = height,
+                    widePages = if (twoPage) widePages else emptySet(),
                     nav = nav,
                     // Only a real page turn moves the position, not rearranging the same page into new spreads.
                     onSpread = { spread ->
@@ -547,6 +555,7 @@ private fun PagedReader(
     look: ReaderLook,
     width: Int,
     height: Int,
+    widePages: Set<Int>,
     nav: ReaderNav,
     onSpread: (Spread) -> Unit,
     onMenu: () -> Unit,
@@ -561,11 +570,24 @@ private fun PagedReader(
         else -> look.animation
     }
 
+    // A wide page is already two facing pages, so it can turn like any open spread.
+    val isOpenBook = { spread: Spread -> spread.pages.size == 2 || spread.pages.first() in widePages }
+    val turnsLikeBook = { lower: Int ->
+        animation == PageAnimation.Curl && curl != null &&
+            spreads.getOrNull(lower)?.let(isOpenBook) == true &&
+            spreads.getOrNull(lower + 1)?.let(isOpenBook) == true
+    }
+    val turningFrom by remember(pager) {
+        derivedStateOf {
+            if (pager.currentPageOffsetFraction == 0f) -1 else floor(pager.position()).toInt()
+        }
+    }
+
     suspend fun turnTo(index: Int) {
         if (index !in spreads.indices) return
         when (animation) {
             PageAnimation.None -> pager.scrollToPage(index)
-            PageAnimation.Curl -> pager.animateScrollToPage(index, animationSpec = tween(550))
+            PageAnimation.Curl -> pager.animateScrollToPage(index, animationSpec = tween(650))
             else -> pager.animateScrollToPage(index, animationSpec = tween(280))
         }
     }
@@ -601,6 +623,7 @@ private fun PagedReader(
             vertical = vertical,
             animation = animation,
             curl = curl,
+            turnsLikeBook = turnsLikeBook,
             look = look,
             width = width,
             height = height,
@@ -633,6 +656,97 @@ private fun PagedReader(
             userScrollEnabled = zoomedPage != pager.currentPage,
         ) { index -> pageContent(index) }
     }
+
+    val lower = turningFrom
+    if (curl != null && lower >= 0 && turnsLikeBook(lower)) {
+        BookTurn(source, loader, spreads[lower], spreads[lower + 1], lower, pager, rightToLeft, look, curl, width)
+    }
+}
+
+private fun PagerState.position() = currentPage + currentPageOffsetFraction
+
+/** Shows one half of whatever is drawn inside it. */
+private fun Modifier.halfOf(left: Boolean) = drawWithContent {
+    val middle = size.width / 2f
+    clipRect(left = if (left) 0f else middle, right = if (left) middle else size.width) {
+        this@drawWithContent.drawContent()
+    }
+}
+
+/**
+ * A two-page turn drawn over the pager, which carries on tracking the finger underneath. The leaf
+ * has the page being turned on its front and the page it lands as on its back. Below it are the
+ * page staying put and the page being uncovered.
+ */
+@Composable
+private fun BookTurn(
+    source: PageSource,
+    loader: PageLoader,
+    from: Spread,
+    to: Spread,
+    lower: Int,
+    pager: PagerState,
+    rightToLeft: Boolean,
+    look: ReaderLook,
+    curl: CurlEffect,
+    width: Int,
+) {
+    val paper = Color(look.background)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(paper),
+    ) {
+        SpreadFace(source, loader, from, rightToLeft, width, Modifier.halfOf(left = !rightToLeft))
+        SpreadFace(source, loader, to, rightToLeft, width, Modifier.halfOf(left = rightToLeft))
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val progress = (pager.position() - lower).coerceIn(0f, 1f)
+                    renderEffect = curl.book(size.width, size.height, progress, rightToLeft)
+                }
+                .background(paper),
+        ) {
+            SpreadFace(source, loader, to, rightToLeft, width, Modifier.halfOf(left = !rightToLeft))
+            SpreadFace(source, loader, from, rightToLeft, width, Modifier.halfOf(left = rightToLeft))
+        }
+    }
+}
+
+/** A spread as it looks at rest, for drawing during a turn. */
+@Composable
+private fun SpreadFace(
+    source: PageSource,
+    loader: PageLoader,
+    spread: Spread,
+    rightToLeft: Boolean,
+    width: Int,
+    modifier: Modifier,
+) {
+    val visualPages = if (rightToLeft) spread.pages.reversed() else spread.pages
+    Row(modifier.fillMaxSize()) {
+        visualPages.forEachIndexed { slot, page ->
+            PageImage(
+                source = source,
+                loader = loader,
+                page = page,
+                width = width / visualPages.size,
+                fit = FitMode.Screen,
+                alignment = slotAlignment(visualPages.size, slot),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** Two facing pages meet at the seam. */
+private fun slotAlignment(slots: Int, slot: Int) = when {
+    slots == 1 -> Alignment.Center
+    slot == 0 -> Alignment.CenterEnd
+    else -> Alignment.CenterStart
 }
 
 /** Pins fading and curling pages in place, so they turn over rather than slide away. */
@@ -643,11 +757,14 @@ private fun Modifier.pageTransition(
     vertical: Boolean,
     rightToLeft: Boolean,
     curl: CurlEffect?,
+    turnsLikeBook: (Int) -> Boolean,
 ) = graphicsLayer {
-    val distance = (index - pager.currentPage) - pager.currentPageOffsetFraction
+    val position = pager.position()
+    val distance = index - position
     val offset = distance.coerceIn(-1f, 1f)
     // Only pages mid-turn are pinned. A resting neighbor on screen would take the current page's touches.
-    val pinned = abs(distance) < 1f && (animation == PageAnimation.Fade || animation == PageAnimation.Curl)
+    val pinned = abs(distance) < 1f && !turnsLikeBook(floor(position).toInt()) &&
+        (animation == PageAnimation.Fade || animation == PageAnimation.Curl)
     if (pinned && vertical) translationY = -offset * size.height
     if (pinned && !vertical) translationX = -offset * size.width * if (rightToLeft) -1f else 1f
     if (pinned && animation == PageAnimation.Fade) alpha = if (offset < 0f) 1f + offset else 1f
@@ -671,6 +788,7 @@ private fun SpreadView(
     vertical: Boolean,
     animation: PageAnimation,
     curl: CurlEffect?,
+    turnsLikeBook: (Int) -> Boolean,
     look: ReaderLook,
     width: Int,
     height: Int,
@@ -704,7 +822,7 @@ private fun SpreadView(
         Modifier
             .fillMaxSize()
             .zIndex(-index.toFloat())
-            .pageTransition(pager, index, animation, vertical, rightToLeft, curl)
+            .pageTransition(pager, index, animation, vertical, rightToLeft, curl, turnsLikeBook)
             .background(Color(look.background))
             .zoomGestures(zoom, width, height)
             .pointerInput(spread, width, height, rightToLeft, look.fit) {
@@ -740,18 +858,13 @@ private fun SpreadView(
                 },
         ) {
             visualPages.forEachIndexed { slot, page ->
-                val alignment = when {
-                    visualPages.size == 1 -> Alignment.Center
-                    slot == 0 -> Alignment.CenterEnd
-                    else -> Alignment.CenterStart
-                }
                 PageImage(
                     source = source,
                     loader = loader,
                     page = page,
                     width = if (sharp) slotWidth * 2 else slotWidth,
                     fit = if (vertical || visualPages.size > 1) FitMode.Screen else look.fit,
-                    alignment = alignment,
+                    alignment = slotAlignment(visualPages.size, slot),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxSize(),
@@ -894,7 +1007,7 @@ private fun ContinuousReader(
     Box(
         Modifier
             .fillMaxSize()
-            .zoomGestures(zoom, width, height, panWhenZoomed = false)
+            .zoomGestures(zoom, width, height, listScrolls = true)
             .pointerInput(width, height) {
                 detectReaderTaps(
                     turnsPage = { at -> zoom.scale == 1f && at.y !in (height / 3f)..(height * 2f / 3f) },

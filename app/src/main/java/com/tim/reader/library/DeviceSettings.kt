@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 
 enum class TwoPageMode(val label: String) {
-    Auto("Automatic"),
+    Auto("In landscape"),
     Always("Always"),
     Never("Never"),
 }

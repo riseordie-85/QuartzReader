@@ -1,6 +1,7 @@
 package com.tim.reader
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.commitNow
 import androidx.lifecycle.lifecycleScope
@@ -20,6 +21,7 @@ import org.readium.r2.shared.util.AbsoluteUrl
 @OptIn(ExperimentalReadiumApi::class)
 class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var opened: Publication? = null
+    private var navigator: EpubNavigatorFragment? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -47,6 +49,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             }
         }
         val navigator = supportFragmentManager.findFragmentByTag(tag) as EpubNavigatorFragment
+        this.navigator = navigator
         navigator.addInputListener(DirectionalNavigationAdapter(navigator, animatedTransition = true))
 
         val bookId = OpenEpub.bookId
@@ -65,6 +68,20 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     }
 
     override fun onExternalLinkActivated(url: AbsoluteUrl) = Unit
+
+    /** Volume keys turn pages, as they do in the image reader. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isForward = when (event.keyCode) {
+            KeyEvent.KEYCODE_VOLUME_DOWN -> true
+            KeyEvent.KEYCODE_VOLUME_UP -> false
+            else -> return super.dispatchKeyEvent(event)
+        }
+        val current = navigator ?: return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (isForward) current.goForward(animated = true) else current.goBackward(animated = true)
+        }
+        return true
+    }
 
     override fun onDestroy() {
         super.onDestroy()
