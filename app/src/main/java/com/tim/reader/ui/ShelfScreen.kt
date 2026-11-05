@@ -26,12 +26,15 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -64,6 +67,7 @@ fun ShelfPager(
     startShelfId: String,
     header: HeaderActions,
     actions: BookActions,
+    onCurrentShelf: (String) -> Unit,
 ) {
     val shelves = state.shelves
     if (shelves.isEmpty()) return
@@ -75,6 +79,15 @@ fun ShelfPager(
         val total = if (count > 1) count * LOOPS else 1
         val start = shelves.indexOfFirst { it.id == startShelfId }.coerceAtLeast(0)
         val pager = rememberPagerState(initialPage = if (count > 1) count * (LOOPS / 2) + start else 0) { total }
+        val latestShelves by rememberUpdatedState(shelves)
+        val report by rememberUpdatedState(onCurrentShelf)
+
+        // Keeps the route on the visible shelf, so Back and Import use the right one.
+        LaunchedEffect(pager) {
+            snapshotFlow { pager.currentPage }.collect { page ->
+                latestShelves.getOrNull(page % latestShelves.size.coerceAtLeast(1))?.let { report(it.id) }
+            }
+        }
 
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
             val shelf = shelves[page % count]

@@ -34,8 +34,11 @@ class LibraryRepository private constructor(context: Context) {
 
     private val db get() = helper.writableDatabase
 
+    /** Every database job runs one at a time, in order, so a reload can't undo a newer save. */
+    private val serial = Dispatchers.IO.limitedParallelism(1)
+
     /** Loads the library. Called once at launch. */
-    suspend fun load() = withContext(Dispatchers.IO) {
+    suspend fun load() = withContext(serial) {
         seedShelves()
         reload()
     }
@@ -142,7 +145,7 @@ class LibraryRepository private constructor(context: Context) {
         return id
     }
 
-    private suspend fun write(block: () -> Unit) = withContext(Dispatchers.IO) {
+    private suspend fun write(block: () -> Unit) = withContext(serial) {
         db.beginTransaction()
         try {
             block()
@@ -160,7 +163,7 @@ class LibraryRepository private constructor(context: Context) {
     }
 
     suspend fun addShelf(name: String, theme: ShelfTheme) = write {
-        insertShelf(name, state.value.shelves.size, theme, null)
+        insertShelf(name, state.value.shelves.maxOfOrNull { it.order + 1 } ?: 0, theme, null)
     }
 
     suspend fun renameShelf(id: String, name: String) = write { updateShelfField(id) { put("name", name) } }
@@ -197,7 +200,7 @@ class LibraryRepository private constructor(context: Context) {
 
     suspend fun setHomeTheme(theme: ShelfTheme) = write { saveSetting(KEY_HOME_THEME, ThemeJson.write(theme)) }
 
-    suspend fun hasHash(hash: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun hasHash(hash: String): Boolean = withContext(serial) {
         db.rawQuery(Schema.SELECT_HASH, arrayOf(hash)).use { it.moveToFirst() }
     }
 
@@ -294,7 +297,7 @@ class LibraryRepository private constructor(context: Context) {
 
     /** Saves a reading position. Runs on every page turn, so it patches the snapshot directly. */
     suspend fun savePosition(id: String, position: Int, progress: Float, locator: String? = null) =
-        withContext(Dispatchers.IO) {
+        withContext(serial) {
             val time = now()
             val values = ContentValues().apply {
                 put("position", position)

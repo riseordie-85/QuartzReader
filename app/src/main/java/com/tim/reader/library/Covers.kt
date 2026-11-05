@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +27,9 @@ const val COVER_WIDTH = 480
 
 /** Cover thumbnails live in app storage, because they can always be rebuilt. */
 object Covers {
-    private val memory = LruCache<String, ImageBitmap>(256)
+    private val memory = object : LruCache<String, ImageBitmap>(64 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: ImageBitmap) = value.asAndroidBitmap().byteCount
+    }
 
     private fun file(context: Context, bookId: String): File {
         val folder = File(context.filesDir, "covers").apply { mkdirs() }
@@ -35,9 +38,15 @@ object Covers {
 
     fun save(context: Context, bookId: String, cover: Bitmap): String {
         val target = file(context, bookId)
-        val width = minOf(cover.width, COVER_WIDTH).coerceAtLeast(1)
-        val height = (cover.height.toLong() * width / cover.width).toInt().coerceAtLeast(1)
-        val scaled = if (width == cover.width) cover else Bitmap.createScaledBitmap(cover, width, height, true)
+        // Webtoon pages are very tall, so their cover is the top of the first page.
+        val framed = if (cover.height > cover.width * 3 / 2) {
+            Bitmap.createBitmap(cover, 0, 0, cover.width, cover.width * 3 / 2)
+        } else {
+            cover
+        }
+        val width = minOf(framed.width, COVER_WIDTH).coerceAtLeast(1)
+        val height = (framed.height.toLong() * width / framed.width).toInt().coerceAtLeast(1)
+        val scaled = if (width == framed.width) framed else Bitmap.createScaledBitmap(framed, width, height, true)
         target.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 88, it) }
         return target.path
     }

@@ -12,11 +12,14 @@ import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.util.DirectionalNavigationAdapter
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
+import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.util.AbsoluteUrl
 
 /** The bare text reader, with animated page turns. Phase 3 builds out its settings. */
 @OptIn(ExperimentalReadiumApi::class)
 class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
+    private var opened: Publication? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -28,6 +31,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             return
         }
 
+        opened = publication
         val start = OpenEpub.locator?.let { saved ->
             runCatching { Locator.fromJSON(JSONObject(saved)) }.getOrNull()
         }
@@ -49,8 +53,11 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         if (bookId != null) {
             val repository = LibraryRepository.get(this)
             lifecycleScope.launch {
+                val positions = publication.positions().size
                 navigator.currentLocator.collect { locator ->
-                    val progress = locator.locations.totalProgression?.toFloat() ?: 0f
+                    // Readium's last position reports just under 100%, so it counts as finished here.
+                    val atEnd = positions > 0 && (locator.locations.position ?: 0) >= positions
+                    val progress = if (atEnd) 1f else locator.locations.totalProgression?.toFloat() ?: 0f
                     repository.savePosition(bookId, 0, progress, locator.toJSON().toString())
                 }
             }
@@ -58,4 +65,13 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     }
 
     override fun onExternalLinkActivated(url: AbsoluteUrl) = Unit
+
+    override fun onDestroy() {
+        super.onDestroy()
+        val mine = opened
+        if (isFinishing && mine != null) {
+            if (OpenEpub.publication === mine) OpenEpub.publication = null
+            appScope.launch { mine.close() }
+        }
+    }
 }

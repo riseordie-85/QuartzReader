@@ -191,7 +191,7 @@ private fun ImportSummary(result: ImportResult, skipped: List<String>, onDone: (
     Text("Added ${result.imported}")
     if (result.duplicates > 0) Text("Already in your library: ${result.duplicates}")
     if (result.originalsKept > 0) Text("Originals Android wouldn't let me remove: ${result.originalsKept}")
-    if (skipped.isNotEmpty()) Text("Not a supported format: ${skipped.joinToString(", ")}")
+    if (skipped.isNotEmpty()) Text("Skipped: ${skipped.joinToString(", ")}")
     result.failed.forEach { Text("Failed: $it") }
     Button(onDone) { Text("Done") }
 }

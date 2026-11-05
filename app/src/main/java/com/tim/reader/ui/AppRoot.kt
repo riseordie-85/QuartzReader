@@ -52,7 +52,10 @@ import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.openBookSource
 import com.tim.reader.openEpub
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -149,9 +152,16 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         if (files.isEmpty() && folders.isEmpty()) return
         scanning = true
         scope.launch {
-            val (items, skipped) = Importer(context).scan(files, folders)
-            scanning = false
-            pending = PendingImport(items, skipped)
+            try {
+                val (items, skipped) = Importer(context).scan(files, folders)
+                pending = PendingImport(items, skipped)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Toast.makeText(context, "Couldn't read that: ${error.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                scanning = false
+            }
         }
     }
 
@@ -162,8 +172,10 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         if (uri != null) scan(emptyList(), listOf(uri))
     }
 
-    LaunchedEffect(incoming) {
-        if (incoming.isNotEmpty()) {
+    // A file shared while the sheet is open waits until it closes.
+    val sheetBusy = pending != null || scanning
+    LaunchedEffect(incoming, sheetBusy) {
+        if (incoming.isNotEmpty() && !sheetBusy) {
             scan(incoming, emptyList())
             onIncomingHandled()
         }
@@ -199,7 +211,12 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             onReadList = { push(Route.ReadList) },
             onShelf = { push(Route.ShelfPages(it)) },
         )
-        is Route.ShelfPages -> ShelfPager(state, route.shelfId, header, actions)
+        is Route.ShelfPages -> ShelfPager(state, route.shelfId, header, actions) { id ->
+            val index = stack.lastIndex
+            if (index >= 0 && stack[index] is Route.ShelfPages && stack[index] != Route.ShelfPages(id)) {
+                stack[index] = Route.ShelfPages(id)
+            }
+        }
         Route.RecentlyRead -> SystemList("Recently Read", state.recentlyRead, state, header, actions, keepOrder = true)
         Route.ReadList -> SystemList("Read List", state.readList, state, header, actions, keepOrder = true)
         Route.AllBooks -> SystemList("All Books", state.books, state, header, actions, keepOrder = false)
@@ -215,6 +232,8 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             val theme = state.homeTheme
             if (series != null && theme != null) {
                 SeriesScreen(series, state.books.filter { it.seriesId == series.id }, theme, header, actions)
+            } else {
+                LaunchedEffect(route) { stack.remove(route) }
             }
         }
         is Route.Details -> {
@@ -226,6 +245,8 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
                     onOpen = { scope.launch { openBook(context, book, ::push) } },
                     onGone = { stack.remove(route) },
                 )
+            } else {
+                LaunchedEffect(route) { stack.remove(route) }
             }
         }
         is Route.Reader -> BookReader(route.book, repository)
@@ -279,7 +300,14 @@ private fun SystemList(
 private fun BookReader(book: Book, repository: LibraryRepository) {
     val context = LocalContext.current
     val opened by produceState<Result<PageSource>?>(null, book.id) {
-        value = withContext(Dispatchers.IO) { runCatching { openBookSource(context, book) } }
+        // Opening carries on if Back is pressed meanwhile, so the finished book can still be closed.
+        val opening = appScope.async { runCatching { openBookSource(context, book) } }
+        try {
+            value = opening.await()
+        } catch (error: CancellationException) {
+            appScope.launch { opening.await().getOrNull()?.close() }
+            throw error
+        }
     }
     val result = opened
     val source = result?.getOrNull()
@@ -287,6 +315,13 @@ private fun BookReader(book: Book, repository: LibraryRepository) {
         result == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         source == null -> Text(
             "Couldn't open this book: ${result.exceptionOrNull()?.message}",
+            modifier = Modifier
+                .fillMaxWidth()
+                .safeDrawingPadding()
+                .padding(24.dp),
+        )
+        source.pageCount == 0 -> Text(
+            "This book has no readable pages",
             modifier = Modifier
                 .fillMaxWidth()
                 .safeDrawingPadding()
@@ -301,8 +336,12 @@ private fun BookReader(book: Book, repository: LibraryRepository) {
                 initialPage = book.position.coerceIn(0, (source.pageCount - 1).coerceAtLeast(0)),
                 initialDirection = book.direction,
                 onPage = { page ->
-                    val total = (source.pageCount - 1).coerceAtLeast(1)
-                    appScope.launch { repository.savePosition(book.id, page, page.toFloat() / total) }
+                    val last = source.pageCount - 1
+                    val progress = if (last <= 0) 1f else page.toFloat() / last
+                    // Starting right away keeps saves in page order.
+                    appScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        repository.savePosition(book.id, page, progress)
+                    }
                 },
             )
         }

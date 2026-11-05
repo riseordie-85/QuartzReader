@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import com.tim.reader.data.Book
 import com.tim.reader.data.BookType
 import com.tim.reader.data.LibraryRepository
+import com.tim.reader.data.ReadDirection
 import com.tim.reader.engine.ArchivePageSource
 import com.tim.reader.engine.FolderPageSource
 import com.tim.reader.engine.Kind
@@ -14,12 +15,15 @@ import com.tim.reader.engine.PageSource
 import com.tim.reader.engine.PdfPageSource
 import com.tim.reader.engine.sniff
 import com.tim.reader.openEpub
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.services.cover
 import java.util.UUID
 
 private val imageNames = Regex("""\.(jpe?g|png|webp|gif|bmp|avif|heic|jp2|j2k|jpx|jpf)$""", RegexOption.IGNORE_CASE)
+private val bookNames = Regex("""\.(epub|pdf|cbz|cbr|cb7|zip|rar|7z|mobi|azw3?|prc)$""", RegexOption.IGNORE_CASE)
 private val manhwaNames = Regex("""manhwa|webtoon""", RegexOption.IGNORE_CASE)
 private val mangaNames = Regex("""manga""", RegexOption.IGNORE_CASE)
 
@@ -60,6 +64,7 @@ private data class Details(
     val number: Double?,
     val pageCount: Int,
     val cover: android.graphics.Bitmap?,
+    val rightToLeft: Boolean = false,
 )
 
 class Importer(context: Context) {
@@ -83,8 +88,9 @@ class Importer(context: Context) {
     }
 
     private fun guessType(name: String, kind: Kind?): BookType = when {
-        kind == null || manhwaNames.containsMatchIn(name) -> BookType.Manhwa
+        manhwaNames.containsMatchIn(name) -> BookType.Manhwa
         mangaNames.containsMatchIn(name) -> BookType.Manga
+        kind == null -> BookType.Manhwa
         kind == Kind.EPUB || kind == Kind.MOBI || kind == Kind.PDF -> BookType.Book
         else -> BookType.Comic
     }
@@ -115,15 +121,18 @@ class Importer(context: Context) {
             uri = DocumentsContract.buildDocumentUriUsingTree(tree, documentId),
             name = name,
             kind = null,
-            guess = guessType(rootName, null),
+            guess = guessType("$rootName $name", null),
             folderTree = tree,
             folderDocumentId = documentId,
             seriesHint = series,
         )
 
         val children = folder.children(tree, rootId)
-        if (children.any { !it.isFolder && imageNames.containsMatchIn(it.name) }) {
-            // A folder of images is one book.
+        val files = children.filterNot { it.isFolder }
+        val hasPages = files.any { imageNames.containsMatchIn(it.name) }
+        val hasBooks = files.any { bookNames.containsMatchIn(it.name) }
+        if (hasPages && !hasBooks && children.none { it.isFolder }) {
+            // A folder of nothing but images is one book.
             items += folderItem(rootId, rootName, null)
             return
         }
@@ -132,7 +141,8 @@ class Importer(context: Context) {
             if (child.isFolder) {
                 val images = folder.children(tree, child.documentId).any { !it.isFolder && imageNames.containsMatchIn(it.name) }
                 if (images) items += folderItem(child.documentId, child.name, rootName) else skipped += child.name
-            } else {
+            } else if (!imageNames.containsMatchIn(child.name)) {
+                // Loose images beside the volumes, such as cover.jpg, aren't books.
                 addFile(DocumentsContract.buildDocumentUriUsingTree(tree, child.documentId), child.name, rootName, items, skipped)
             }
         }
@@ -145,6 +155,7 @@ class Importer(context: Context) {
             var originalsKept = 0
             val failed = ArrayList<String>()
             items.forEachIndexed { index, item ->
+                ensureActive()
                 onProgress(ImportProgress(index, items.size, item.name))
                 try {
                     val type = options.types[item] ?: item.guess
@@ -155,6 +166,8 @@ class Importer(context: Context) {
                     } else {
                         duplicates++
                     }
+                } catch (error: CancellationException) {
+                    throw error
                 } catch (error: Exception) {
                     failed += "${item.name}: ${error.message}"
                 }
@@ -163,8 +176,15 @@ class Importer(context: Context) {
             ImportResult(imported, duplicates, failed, originalsKept)
         }
 
+    /** Deletes only what was copied. A folder goes only once nothing is left in it. */
     private fun removeOriginal(item: ImportItem): Boolean = runCatching {
-        DocumentsContract.deleteDocument(appContext.contentResolver, item.uri)
+        val resolver = appContext.contentResolver
+        val tree = item.folderTree ?: return@runCatching DocumentsContract.deleteDocument(resolver, item.uri)
+        val children = folder.children(tree, item.folderDocumentId!!)
+        val filesGone = children.filterNot { it.isFolder }.all {
+            DocumentsContract.deleteDocument(resolver, DocumentsContract.buildDocumentUriUsingTree(tree, it.documentId))
+        }
+        filesGone && children.none { it.isFolder } && DocumentsContract.deleteDocument(resolver, item.uri)
     }.getOrDefault(false)
 
     private suspend fun importOne(item: ImportItem, type: BookType, options: ImportOptions): Boolean {
@@ -208,11 +228,13 @@ class Importer(context: Context) {
                 locator = null,
                 progress = 0f,
                 inReadList = options.addToReadList,
-                direction = type.direction,
+                direction = if (details.rightToLeft) ReadDirection.RightToLeft else type.direction,
             )
             val shelves = options.shelfId?.let { listOf(it) }
                 ?: repository.state.value.shelves.filter { it.defaultType == type }.map { it.id }
-            repository.addBook(book, details.series ?: item.seriesHint, shelves)
+            // Loose novels in a folder aren't assumed to be a series, but volumes of comics are.
+            val hint = item.seriesHint?.takeIf { item.isFolder || type != BookType.Book }
+            repository.addBook(book, details.series ?: hint, shelves)
         } catch (error: Exception) {
             runCatching { folder.delete(copy) }
             throw error
@@ -246,6 +268,7 @@ class Importer(context: Context) {
             Kind.PDF -> PdfPageSource(appContext, copy, item.name).use { fromName(it.pageCount, firstPage(it)) }
             Kind.ZIP, Kind.RAR4, Kind.RAR5, Kind.SEVEN_ZIP ->
                 ArchivePageSource(appContext, copy, item.name, item.kind ?: Kind.ZIP).use { source ->
+                    require(source.pageCount > 0) { "No readable pages" }
                     val info = source.comicInfo()?.let(::parseComicInfo)
                     Details(
                         title = info?.title ?: parsed.title,
@@ -254,11 +277,13 @@ class Importer(context: Context) {
                         number = info?.number ?: parsed.number,
                         pageCount = source.pageCount,
                         cover = firstPage(source),
+                        rightToLeft = info?.rightToLeft == true,
                     )
                 }
             null -> {
                 val documentId = DocumentsContract.getDocumentId(copy)
                 FolderPageSource(appContext, folder.treeUri!!, item.name, documentId).use { source ->
+                    require(source.pageCount > 0) { "No readable pages" }
                     fromName(source.pageCount, firstPage(source))
                 }
             }

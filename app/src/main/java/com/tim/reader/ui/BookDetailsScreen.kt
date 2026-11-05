@@ -45,7 +45,9 @@ import com.tim.reader.data.ReadDirection
 import com.tim.reader.library.Covers
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.library.rememberCover
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGone: () -> Unit) {
@@ -147,8 +149,10 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
                 TextButton({
                     confirmDelete = false
                     scope.launch {
-                        runCatching { LibraryFolder.get(context).delete(Uri.parse(book.documentUri)) }
-                        Covers.delete(context, book.id)
+                        withContext(Dispatchers.IO) {
+                            runCatching { LibraryFolder.get(context).delete(Uri.parse(book.documentUri)) }
+                            Covers.delete(context, book.id)
+                        }
                         repository.deleteBook(book.id)
                         onGone()
                     }

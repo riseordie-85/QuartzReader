@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ResultsLog.init(this)
-        incoming.value = urisFrom(intent)
+        if (savedInstanceState == null) incoming.value = urisFrom(intent)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(Modifier.fillMaxSize()) {
