@@ -28,7 +28,9 @@ import java.io.File
 import kotlin.math.max
 
 private const val CARD_WIDTH = 1080
-private const val BLUR_SCALE = 5
+private const val BLUR_WIDTH = 270
+private const val BLUR_RADIUS = 2
+private const val BLUR_PASSES = 3
 private const val MAX_TEXT_SIZE = 64
 private const val MIN_TEXT_SIZE = 30
 
@@ -61,6 +63,52 @@ private fun Canvas.drawCover(page: Bitmap, width: Int, height: Int, paint: Paint
     val left = (page.width - sourceWidth) / 2
     val top = (page.height - sourceHeight) / 2
     drawBitmap(page, Rect(left, top, left + sourceWidth, top + sourceHeight), Rect(0, 0, width, height), paint)
+}
+
+/**
+ * One box blur along each row of [source], written turned on its side so that a second call blurs
+ * the columns. Each channel keeps a running total, so the radius doesn't affect the speed.
+ */
+private fun blurRows(source: IntArray, target: IntArray, width: Int, height: Int) {
+    val window = BLUR_RADIUS * 2 + 1
+    for (y in 0 until height) {
+        val row = y * width
+        var red = 0
+        var green = 0
+        var blue = 0
+        for (offset in -BLUR_RADIUS..BLUR_RADIUS) {
+            val pixel = source[row + offset.coerceIn(0, width - 1)]
+            red += (pixel shr 16) and 0xFF
+            green += (pixel shr 8) and 0xFF
+            blue += pixel and 0xFF
+        }
+        for (x in 0 until width) {
+            target[x * height + y] = (0xFF shl 24) or ((red / window) shl 16) or ((green / window) shl 8) or (blue / window)
+            val leaving = source[row + (x - BLUR_RADIUS).coerceAtLeast(0)]
+            val entering = source[row + (x + BLUR_RADIUS + 1).coerceAtMost(width - 1)]
+            red += ((entering shr 16) and 0xFF) - ((leaving shr 16) and 0xFF)
+            green += ((entering shr 8) and 0xFF) - ((leaving shr 8) and 0xFF)
+            blue += (entering and 0xFF) - (leaving and 0xFF)
+        }
+    }
+}
+
+/** Shrinks the page in halves so text doesn't break into blocks, then blurs it properly. */
+private fun blurred(page: Bitmap): Bitmap {
+    var small = page
+    while (small.width >= BLUR_WIDTH * 2) {
+        small = Bitmap.createScaledBitmap(small, small.width / 2, max(small.height / 2, 1), true)
+    }
+    val width = small.width
+    val height = small.height
+    val pixels = IntArray(width * height)
+    val turned = IntArray(width * height)
+    small.getPixels(pixels, 0, width, 0, 0, width, height)
+    repeat(BLUR_PASSES) {
+        blurRows(pixels, turned, width, height)
+        blurRows(turned, pixels, height, width)
+    }
+    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
 }
 
 private fun tint(palette: SharePalette, width: Int, height: Int) = Paint().apply {
@@ -111,8 +159,7 @@ private fun Canvas.drawCaption(caption: String, centerX: Float, top: Float) {
 
 /** The page blurred under a color, with the passage sharp on a white card. */
 private fun renderFocus(canvas: Canvas, height: Int, page: Bitmap, palette: SharePalette, text: String, caption: String) {
-    val small = Bitmap.createScaledBitmap(page, max(page.width / BLUR_SCALE, 1), max(page.height / BLUR_SCALE, 1), true)
-    canvas.drawCover(small, CARD_WIDTH, height, Paint(Paint.FILTER_BITMAP_FLAG))
+    canvas.drawCover(blurred(page), CARD_WIDTH, height, Paint(Paint.FILTER_BITMAP_FLAG))
     canvas.drawRect(
         0f,
         0f,
