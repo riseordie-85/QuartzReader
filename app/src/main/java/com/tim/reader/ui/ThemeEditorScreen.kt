@@ -3,16 +3,20 @@ package com.tim.reader.ui
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -40,7 +44,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.ColorUtils
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
@@ -56,6 +63,9 @@ import com.tim.reader.theme.TextLook
 import com.tim.reader.theme.ThemeJson
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
+import com.tim.reader.theme.cornerShape
+import com.tim.reader.theme.themedFill
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,7 +97,81 @@ private fun lowContrast(text: Long, behind: Fill): Boolean {
 
 @Composable
 private fun ContrastWarning(text: Long, behind: Fill) {
-    if (lowContrast(text, behind)) Text("This may be hard to read.", color = Color(0xFFFFB74D))
+    if (lowContrast(text, behind)) ContrastNote()
+}
+
+/** A tiny shelf, so a style can be chosen by how it looks. */
+@Composable
+private fun StyleTile(name: String, style: ShelfTheme, modifier: Modifier, onPick: () -> Unit, onDelete: (() -> Unit)?) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ThemedBackground(
+            style.background,
+            Modifier
+                .fillMaxWidth()
+                .height(92.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, EditorColors.Border, RoundedCornerShape(14.dp))
+                .clickable(onClick = onPick),
+        ) {
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(8.dp)
+                    .fillMaxWidth()
+                    .height(16.dp)
+                    .themedFill(style.header.fill, cornerShape(style.header.cornerDp)),
+            )
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .themedFill(style.ledge.fill, cornerShape(style.ledge.cornerDp)),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (onDelete != null) TextButton(onDelete) { Text("Delete") }
+        }
+    }
+}
+
+@Composable
+private fun StylePicker(
+    state: LibraryState,
+    onPick: (ShelfTheme) -> Unit,
+    onDelete: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    val saved = state.userPresets.map { it.first }.toSet()
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = EditorColors.Card,
+        title = { Text("Preset Style") },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                (Presets.all + state.userPresets).chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { (label, style) ->
+                            StyleTile(
+                                label,
+                                style,
+                                Modifier.weight(1f),
+                                onPick = { onPick(style) },
+                                onDelete = if (label in saved) ({ onDelete(label) }) else null,
+                            )
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClose) { Text("Close") } },
+    )
 }
 
 /** A small working copy of a shelf, drawn with the real shelf parts. */
@@ -172,19 +256,34 @@ fun ThemeEditorScreen(
         }
     }
 
-    BoxWithConstraints(
+    EditorTheme {
+    Box(
         Modifier
             .fillMaxSize()
+            .background(EditorColors.Panel)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
         // The screen's size, not this box's, because the keyboard must not flip the layout.
         val screen = LocalConfiguration.current
         val sideBySide = screen.screenWidthDp > screen.screenHeightDp
         val controls: @Composable (Modifier) -> Unit = { modifier ->
-            Column(modifier.padding(16.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) {
-                        OutlinedButton({ showParts = true }, Modifier.fillMaxWidth()) { Text(part.label, maxLines = 1) }
+            Column(modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)) {
+                Text("Select item to edit:", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    Modifier.padding(top = 6.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.weight(1.25f)) {
+                        OutlinedButton(
+                            onClick = { showParts = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.5.dp, EditorColors.Border),
+                        ) {
+                            Text(part.label, color = EditorColors.Ink, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+                            ListArrow()
+                        }
                         DropdownMenu(expanded = showParts, onDismissRequest = { showParts = false }) {
                             parts.forEach { option ->
                                 DropdownMenuItem(
@@ -197,32 +296,9 @@ fun ThemeEditorScreen(
                             }
                         }
                     }
+                    EditorOutlineButton("Preset Style", Modifier.weight(1f)) { showStyles = true }
                     Box {
-                        OutlinedButton({ showStyles = true }) { Text("Styles") }
-                        DropdownMenu(expanded = showStyles, onDismissRequest = { showStyles = false }) {
-                            (Presets.all + state.userPresets).forEach { (label, preset) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        showStyles = false
-                                        theme = preset
-                                    },
-                                    trailingIcon = if (state.userPresets.any { it.first == label }) {
-                                        {
-                                            TextButton({
-                                                showStyles = false
-                                                scope.launch { repository.removeUserPreset(label) }
-                                            }) { Text("Delete") }
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    Box {
-                        OutlinedButton({ showMore = true }) { Text("More") }
+                        EditorOutlineButton("•••") { showMore = true }
                         DropdownMenu(expanded = showMore, onDismissRequest = { showMore = false }) {
                             DropdownMenuItem(text = { Text("Save as a style") }, onClick = {
                                 showMore = false
@@ -247,16 +323,18 @@ fun ThemeEditorScreen(
                 Column(
                     Modifier
                         .weight(1f)
-                        .padding(vertical = 8.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     PartEditor(part, theme) { theme = it }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClose, Modifier.weight(1f)) { Text("Cancel") }
-                    Button({ onSave(theme) }, Modifier.weight(1f)) { Text("Save") }
+                Row(
+                    Modifier.padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    EditorOutlineButton("Cancel", Modifier.weight(1f), onClose)
+                    EditorMainButton("Save", Modifier.weight(1f)) { onSave(theme) }
                 }
             }
         }
@@ -268,10 +346,22 @@ fun ThemeEditorScreen(
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                ThemePreview(theme, name, state, part == ThemePart.Button, Modifier.fillMaxWidth().weight(0.8f).clip(RoundedCornerShape(0.dp)))
+                ThemePreview(theme, name, state, part == ThemePart.Button, Modifier.fillMaxWidth().weight(0.72f).clip(RoundedCornerShape(0.dp)))
                 controls(Modifier.fillMaxWidth().weight(1f))
             }
         }
+    }
+
+    if (showStyles) {
+        StylePicker(
+            state = state,
+            onPick = { style ->
+                showStyles = false
+                theme = style
+            },
+            onDelete = { label -> scope.launch { repository.removeUserPreset(label) } },
+            onClose = { showStyles = false },
+        )
     }
 
     if (naming) {
@@ -319,81 +409,104 @@ fun ThemeEditorScreen(
             dismissButton = { TextButton({ copying = false }) { Text("Cancel") } },
         )
     }
+    }
 }
 
 @Composable
-private fun TextLookEditor(look: TextLook, onChange: (TextLook) -> Unit) {
-    EditorHeading("Font")
+private fun TextLookEditor(look: TextLook, behind: Fill, onChange: (TextLook) -> Unit) {
     FontEditor(look.font) { onChange(look.copy(font = it)) }
-    ThemeSlider("Size", look.sizeSp, 12f..60f, " sp") { onChange(look.copy(sizeSp = it)) }
-    ToggleRow("Bold", look.bold) { onChange(look.copy(bold = it)) }
-    ToggleRow("Italic", look.italic) { onChange(look.copy(italic = it)) }
-    ColorRow("Color", look.color) { onChange(look.copy(color = it)) }
+    EditorCard("Text") {
+        EditorSlider("Size", look.sizeSp, 12f..60f, { "${it.roundToInt()} sp" }) { onChange(look.copy(sizeSp = it)) }
+        EditorDivider()
+        EditorSwitchRow("Bold", look.bold) { onChange(look.copy(bold = it)) }
+        EditorDivider()
+        EditorSwitchRow("Italic", look.italic) { onChange(look.copy(italic = it)) }
+        EditorDivider()
+        ColorRow("Color", look.color) { onChange(look.copy(color = it)) }
+        ContrastWarning(look.color, behind)
+    }
     StrokeEditor(look.stroke) { onChange(look.copy(stroke = it)) }
     ShadowEditor(look.shadow) { onChange(look.copy(shadow = it)) }
 }
 
+private fun dpLabel(value: Float) = "${value.roundToInt()} dp"
+
 @Composable
-private fun ColumnScope.PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme) -> Unit) {
+private fun PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme) -> Unit) {
     when (part) {
-        ThemePart.Background -> FillEditor(theme.background) { onChange(theme.copy(background = it)) }
+        ThemePart.Background -> FillEditor("Fill Style", theme.background) { onChange(theme.copy(background = it)) }
         ThemePart.Header -> {
             val look = theme.header
-            EditorHeading("Fill")
-            FillEditor(look.fill) { onChange(theme.copy(header = look.copy(fill = it))) }
-            ThemeSlider("Corner", look.cornerDp, 0f..40f, " dp") { onChange(theme.copy(header = look.copy(cornerDp = it))) }
-            ColorRow("Text", look.textColor) { onChange(theme.copy(header = look.copy(textColor = it))) }
-            ContrastWarning(look.textColor, look.fill)
-            ColorRow("Icons", look.iconColor) { onChange(theme.copy(header = look.copy(iconColor = it))) }
+            FillEditor("Fill Style", look.fill) { onChange(theme.copy(header = look.copy(fill = it))) }
+            EditorCard("Text and Icons") {
+                ColorRow("Text", look.textColor) { onChange(theme.copy(header = look.copy(textColor = it))) }
+                ContrastWarning(look.textColor, look.fill)
+                EditorDivider()
+                ColorRow("Icons", look.iconColor) { onChange(theme.copy(header = look.copy(iconColor = it))) }
+            }
+            EditorCard("Shape") {
+                EditorSlider("Corners", look.cornerDp, 0f..40f, ::dpLabel) { onChange(theme.copy(header = look.copy(cornerDp = it))) }
+            }
             StrokeEditor(look.stroke) { onChange(theme.copy(header = look.copy(stroke = it))) }
             ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(header = look.copy(shadow = it))) }
         }
-        ThemePart.Title -> {
-            TextLookEditor(theme.title) { onChange(theme.copy(title = it)) }
-            ContrastWarning(theme.title.color, theme.background)
-        }
+        ThemePart.Title -> TextLookEditor(theme.title, theme.background) { onChange(theme.copy(title = it)) }
         ThemePart.Ledge -> {
             val look = theme.ledge
-            EditorHeading("Fill")
-            FillEditor(look.fill) { onChange(theme.copy(ledge = look.copy(fill = it))) }
-            ThemeSlider("Height", look.heightDp, 0f..60f, " dp") { onChange(theme.copy(ledge = look.copy(heightDp = it))) }
-            ThemeSlider("Width", look.widthFraction, 0.1f..1f) { onChange(theme.copy(ledge = look.copy(widthFraction = it))) }
-            if (look.widthFraction < 1f) {
-                ChipRow(LedgeAlign.entries.map { it.name }, look.align.ordinal) {
-                    onChange(theme.copy(ledge = look.copy(align = LedgeAlign.entries[it])))
+            FillEditor("Fill Style", look.fill) { onChange(theme.copy(ledge = look.copy(fill = it))) }
+            EditorCard("Size and Shape") {
+                EditorSlider("Height", look.heightDp, 0f..60f, ::dpLabel) { onChange(theme.copy(ledge = look.copy(heightDp = it))) }
+                EditorSlider("Width", look.widthFraction, 0.1f..1f, { "${(it * 100).roundToInt()}%" }) {
+                    onChange(theme.copy(ledge = look.copy(widthFraction = it)))
                 }
+                if (look.widthFraction < 1f) {
+                    EditorSegments(LedgeAlign.entries.map { it.name }, look.align.ordinal) {
+                        onChange(theme.copy(ledge = look.copy(align = LedgeAlign.entries[it])))
+                    }
+                }
+                EditorSlider("Corners", look.cornerDp, 0f..30f, ::dpLabel) { onChange(theme.copy(ledge = look.copy(cornerDp = it))) }
             }
-            ThemeSlider("Corner", look.cornerDp, 0f..30f, " dp") { onChange(theme.copy(ledge = look.copy(cornerDp = it))) }
             StrokeEditor(look.stroke) { onChange(theme.copy(ledge = look.copy(stroke = it))) }
             ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(ledge = look.copy(shadow = it))) }
         }
         ThemePart.Books -> {
             val look = theme.book
-            ThemeSlider("Spacing", look.spacingDp, 0f..40f, " dp") { onChange(theme.copy(book = look.copy(spacingDp = it))) }
-            ToggleRow("Highlight on covers", look.highlight) { onChange(theme.copy(book = look.copy(highlight = it))) }
+            EditorCard("Layout") {
+                EditorSlider("Space between books", look.spacingDp, 0f..40f, ::dpLabel) { onChange(theme.copy(book = look.copy(spacingDp = it))) }
+                EditorDivider()
+                EditorSwitchRow("Shine on covers", look.highlight) { onChange(theme.copy(book = look.copy(highlight = it))) }
+            }
             ShadowEditor(look.shadow) { onChange(theme.copy(book = look.copy(shadow = it))) }
         }
         ThemePart.Controls -> {
             val look = theme.controls
-            ColorRow("Color", look.color) { onChange(theme.copy(controls = look.copy(color = it))) }
-            ContrastWarning(look.color, theme.background)
+            EditorCard("Color") {
+                ColorRow("Icons and Sort By", look.color) { onChange(theme.copy(controls = look.copy(color = it))) }
+                ContrastWarning(look.color, theme.background)
+            }
             StrokeEditor(look.stroke) { onChange(theme.copy(controls = look.copy(stroke = it))) }
         }
         ThemePart.Bottom -> {
             val look = theme.bottom
-            ColorRow("Fade color", look.fadeColor) { onChange(theme.copy(bottom = look.copy(fadeColor = it))) }
-            ThemeSlider("Height", look.heightDp, 40f..240f, " dp") { onChange(theme.copy(bottom = look.copy(heightDp = it))) }
-            ColorRow("Label color", look.labelColor) { onChange(theme.copy(bottom = look.copy(labelColor = it))) }
-            ToggleRow("Shape behind labels", look.labelFill != null) { on ->
-                onChange(theme.copy(bottom = look.copy(labelFill = if (on) SolidFill(0x80000000) else null)))
+            EditorCard("Fade") {
+                ColorRow("Color", look.fadeColor) { onChange(theme.copy(bottom = look.copy(fadeColor = it))) }
+                EditorDivider()
+                EditorSlider("Height", look.heightDp, 40f..240f, ::dpLabel) { onChange(theme.copy(bottom = look.copy(heightDp = it))) }
+            }
+            EditorCard("Labels") {
+                ColorRow("Text", look.labelColor) { onChange(theme.copy(bottom = look.copy(labelColor = it))) }
+                EditorDivider()
+                EditorSwitchRow("Shape behind labels", look.labelFill != null) { on ->
+                    onChange(theme.copy(bottom = look.copy(labelFill = if (on) SolidFill(0x80000000) else null)))
+                }
             }
             look.labelFill?.let { fill ->
-                FillEditor(fill) { onChange(theme.copy(bottom = look.copy(labelFill = it))) }
+                FillEditor("Label Fill", fill) { onChange(theme.copy(bottom = look.copy(labelFill = it))) }
             }
         }
         ThemePart.Button -> {
             val look = theme.button
-            OutlinedButton({
+            EditorOutlineButton("Match this shelf's header", Modifier.fillMaxWidth()) {
                 onChange(
                     theme.copy(
                         button = look.copy(
@@ -405,16 +518,19 @@ private fun ColumnScope.PartEditor(part: ThemePart, theme: ShelfTheme, onChange:
                         ),
                     ),
                 )
-            }) { Text("Match this shelf's header") }
-            EditorHeading("Fill")
-            FillEditor(look.fill) { onChange(theme.copy(button = look.copy(fill = it))) }
-            ThemeSlider("Corner", look.cornerDp, 0f..40f, " dp") { onChange(theme.copy(button = look.copy(cornerDp = it))) }
-            EditorHeading("Font")
+            }
+            FillEditor("Fill Style", look.fill) { onChange(theme.copy(button = look.copy(fill = it))) }
             FontEditor(look.font) { onChange(theme.copy(button = look.copy(font = it))) }
-            ToggleRow("Bold", look.bold) { onChange(theme.copy(button = look.copy(bold = it))) }
-            ToggleRow("Italic", look.italic) { onChange(theme.copy(button = look.copy(italic = it))) }
-            ColorRow("Text", look.textColor) { onChange(theme.copy(button = look.copy(textColor = it))) }
-            ContrastWarning(look.textColor, look.fill)
+            EditorCard("Text and Shape") {
+                EditorSwitchRow("Bold", look.bold) { onChange(theme.copy(button = look.copy(bold = it))) }
+                EditorDivider()
+                EditorSwitchRow("Italic", look.italic) { onChange(theme.copy(button = look.copy(italic = it))) }
+                EditorDivider()
+                ColorRow("Text", look.textColor) { onChange(theme.copy(button = look.copy(textColor = it))) }
+                ContrastWarning(look.textColor, look.fill)
+                EditorDivider()
+                EditorSlider("Corners", look.cornerDp, 0f..40f, ::dpLabel) { onChange(theme.copy(button = look.copy(cornerDp = it))) }
+            }
             StrokeEditor(look.stroke) { onChange(theme.copy(button = look.copy(stroke = it))) }
             ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(button = look.copy(shadow = it))) }
         }
