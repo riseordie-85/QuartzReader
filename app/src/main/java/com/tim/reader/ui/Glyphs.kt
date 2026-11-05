@@ -1,7 +1,7 @@
 package com.tim.reader.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -10,13 +10,15 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class Glyph { Plus, Book, Gear, Grid }
+enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline }
 
 private fun DrawScope.drawPlus(color: Color) {
     val width = size.minDimension * 0.14f
@@ -68,19 +70,50 @@ private fun DrawScope.drawGrid(color: Color) {
     }
 }
 
+private fun DrawScope.drawList(color: Color) {
+    val unit = size.minDimension
+    listOf(0.2f, 0.5f, 0.8f).forEach { height ->
+        drawCircle(color, unit * 0.07f, Offset(unit * 0.12f, unit * height))
+        drawLine(color, Offset(unit * 0.32f, unit * height), Offset(unit * 0.94f, unit * height), unit * 0.11f, StrokeCap.Round)
+    }
+}
+
+private fun DrawScope.ribbon(): Path {
+    val unit = size.minDimension
+    return Path().apply {
+        moveTo(unit * 0.2f, unit * 0.06f)
+        lineTo(unit * 0.8f, unit * 0.06f)
+        lineTo(unit * 0.8f, unit * 0.94f)
+        lineTo(unit * 0.5f, unit * 0.72f)
+        lineTo(unit * 0.2f, unit * 0.94f)
+        close()
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun GlyphButton(glyph: Glyph, color: Color, description: String, onClick: () -> Unit) {
+fun GlyphButton(
+    glyph: Glyph,
+    color: Color,
+    description: String,
+    iconSize: Dp = 26.dp,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Canvas(
         Modifier
-            .clickable(onClickLabel = description, onClick = onClick)
+            .combinedClickable(onClickLabel = description, onLongClick = onLongClick, onClick = onClick)
             .padding(8.dp)
-            .size(26.dp),
+            .size(iconSize),
     ) {
         when (glyph) {
             Glyph.Plus -> drawPlus(color)
             Glyph.Book -> drawBook(color)
             Glyph.Gear -> drawGear(color)
             Glyph.Grid -> drawGrid(color)
+            Glyph.List -> drawList(color)
+            Glyph.Bookmark -> drawPath(ribbon(), color)
+            Glyph.BookmarkOutline -> drawPath(ribbon(), color, style = Stroke(size.minDimension * 0.09f))
         }
     }
 }

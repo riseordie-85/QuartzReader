@@ -14,7 +14,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,8 +33,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -249,11 +245,8 @@ fun ImageReaderScreen(
     var currentPage by remember {
         mutableStateOf((book?.position ?: 0).coerceIn(0, (source.pageCount - 1).coerceAtLeast(0)))
     }
-    var scrubPage by remember { mutableStateOf<Float?>(null) }
     var controls by remember { mutableStateOf(alwaysShowControls) }
-    var panel by remember { mutableStateOf(false) }
-    var showChapters by remember { mutableStateOf(false) }
-    var showBookmarks by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf<ReaderSheet?>(null) }
     var settingScope by remember { mutableStateOf(SettingScope.ThisBook) }
     var rotationLocked by remember { mutableStateOf(false) }
     var testShift by remember { mutableStateOf(false) }
@@ -261,13 +254,13 @@ fun ImageReaderScreen(
     var widePages by remember(source) { mutableStateOf(loader.savedWidePages().orEmpty()) }
     val shift = liveBook?.spreadShift ?: testShift
 
-    ReaderWindow(controls || panel, rotationLocked)
+    ReaderWindow(controls || sheet != null, rotationLocked)
     LaunchedEffect(currentPage) { onPage(currentPage) }
-    // Keys go to this screen, and a closed panel or dialog can leave them with nowhere to go.
-    LaunchedEffect(panel, showChapters, showBookmarks) {
-        if (!panel && !showChapters && !showBookmarks) focus.requestFocus()
+    // Keys go to this screen, and a closed sheet can leave them with nowhere to go.
+    LaunchedEffect(sheet) {
+        if (sheet == null) focus.requestFocus()
     }
-    BackHandler(enabled = panel) { panel = false }
+    BackHandler(enabled = sheet != null) { sheet = null }
 
     fun changeLook(change: (ReaderPrefs) -> ReaderPrefs) {
         val current = liveBook
@@ -375,118 +368,94 @@ fun ImageReaderScreen(
         }
 
         if (controls) {
-            Column(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .background(Color(0xCC000000))
-                    .safeDrawingPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    "${currentPage + 1} / ${source.pageCount}   ${book?.title ?: source.label(currentPage)}",
-                    color = Color.White,
-                    maxLines = 1,
-                )
-            }
-            Column(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color(0xCC000000))
-                    .safeDrawingPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                if (source.pageCount > 1) {
-                    Slider(
-                        value = scrubPage ?: currentPage.toFloat(),
-                        onValueChange = { scrubPage = it },
-                        onValueChangeFinished = {
-                            val target = scrubPage?.toInt() ?: currentPage
-                            scrubPage = null
-                            scope.launch { nav.goTo(target) }
-                        },
-                        valueRange = 0f..(source.pageCount - 1).toFloat(),
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton({ panel = true }) { Text("Settings", color = Color.White) }
-                    if (source.chapters.isNotEmpty()) {
-                        OutlinedButton({ showChapters = true }) { Text("Chapters", color = Color.White) }
+            val bookmarks = liveBook?.let { library.bookmarks[it.id].orEmpty() }
+            val pageBookmark = bookmarks?.firstOrNull { it.page == currentPage }
+            ReaderChrome(
+                title = book?.title ?: source.label(currentPage),
+                page = currentPage,
+                pageCount = source.pageCount,
+                isBookmarked = bookmarks?.let { pageBookmark != null },
+                hasChapters = source.chapters.isNotEmpty(),
+                sheet = sheet,
+                onSheet = { sheet = it },
+                onBookmark = {
+                    if (liveBook != null) {
+                        scope.launch {
+                            if (pageBookmark != null) {
+                                repository.removeBookmark(pageBookmark.id)
+                            } else {
+                                repository.addBookmark(liveBook.id, currentPage, "Page ${currentPage + 1}")
+                            }
+                        }
                     }
-                    if (book != null) {
-                        OutlinedButton({ showBookmarks = true }) { Text("Bookmarks", color = Color.White) }
-                    }
-                    if (alwaysShowControls) {
-                        Button(
-                            onClick = {
-                                running = true
-                                scope.launch {
-                                    runSpeedTest(source, width)
-                                    running = false
+                },
+                onSeek = { target -> scope.launch { nav.goTo(target) } },
+            ) { open ->
+                when (open) {
+                    ReaderSheet.Settings -> ReaderSettings(
+                        direction = direction,
+                        look = look,
+                        type = liveBook?.type,
+                        scope = settingScope,
+                        shift = shift,
+                        showingTwoPages = twoPage,
+                        rotationLocked = rotationLocked,
+                        actions = ReaderPanelActions(
+                            onDirection = { option ->
+                                direction = option
+                                liveBook?.let { current -> scope.launch { repository.setDirection(current.id, option) } }
+                            },
+                            onFit = { option -> changeLook { it.copy(fit = option) } },
+                            onAnimation = { option -> changeLook { it.copy(animation = option) } },
+                            onBackground = { option -> changeLook { it.copy(background = option) } },
+                            onShift = { option ->
+                                if (liveBook != null) {
+                                    scope.launch { repository.setSpreadShift(liveBook.id, option) }
+                                } else {
+                                    testShift = option
                                 }
                             },
-                            enabled = !running,
-                        ) { Text(if (running) "Testing" else "Speed test") }
-                    }
+                            onScope = { settingScope = it },
+                            onRotationLock = { rotationLocked = it },
+                            onClose = { sheet = null },
+                        ),
+                    )
+                    ReaderSheet.Bookmarks -> BookmarkSheet(
+                        bookmarks = bookmarks.orEmpty(),
+                        onChoose = { page ->
+                            sheet = null
+                            scope.launch { nav.goTo(page) }
+                        },
+                        onRemove = { id -> scope.launch { repository.removeBookmark(id) } },
+                        onDone = { sheet = null },
+                    )
+                    ReaderSheet.Chapters -> ChapterSheet(
+                        chapters = source.chapters,
+                        onChoose = { page ->
+                            sheet = null
+                            scope.launch { nav.goTo(page) }
+                        },
+                        onDone = { sheet = null },
+                    )
                 }
             }
         }
 
-        if (panel) {
-            ReaderPanel(
-                direction = direction,
-                look = look,
-                type = liveBook?.type,
-                scope = settingScope,
-                shift = shift,
-                showingTwoPages = twoPage,
-                rotationLocked = rotationLocked,
-                actions = ReaderPanelActions(
-                    onDirection = { option ->
-                        direction = option
-                        liveBook?.let { current -> scope.launch { repository.setDirection(current.id, option) } }
-                    },
-                    onFit = { option -> changeLook { it.copy(fit = option) } },
-                    onAnimation = { option -> changeLook { it.copy(animation = option) } },
-                    onBackground = { option -> changeLook { it.copy(background = option) } },
-                    onShift = { option ->
-                        if (liveBook != null) {
-                            scope.launch { repository.setSpreadShift(liveBook.id, option) }
-                        } else {
-                            testShift = option
-                        }
-                    },
-                    onScope = { settingScope = it },
-                    onRotationLock = { rotationLocked = it },
-                    onClose = { panel = false },
-                ),
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+        if (alwaysShowControls) {
+            Button(
+                onClick = {
+                    running = true
+                    scope.launch {
+                        runSpeedTest(source, width)
+                        running = false
+                    }
+                },
+                enabled = !running,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 96.dp),
+            ) { Text(if (running) "Testing" else "Speed test") }
         }
-    }
-
-    if (showChapters) {
-        ChapterDialog(
-            chapters = source.chapters,
-            onChoose = { page ->
-                showChapters = false
-                scope.launch { nav.goTo(page) }
-            },
-            onClose = { showChapters = false },
-        )
-    }
-    if (showBookmarks && liveBook != null) {
-        BookmarkDialog(
-            bookmarks = library.bookmarks[liveBook.id].orEmpty(),
-            onChoose = { page ->
-                showBookmarks = false
-                scope.launch { nav.goTo(page) }
-            },
-            onAdd = { scope.launch { repository.addBookmark(liveBook.id, currentPage, "Page ${currentPage + 1}") } },
-            onRemove = { id -> scope.launch { repository.removeBookmark(id) } },
-            onClose = { showBookmarks = false },
-        )
     }
 }
 
