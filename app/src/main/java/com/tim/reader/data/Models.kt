@@ -61,6 +61,23 @@ data class ReaderPrefs(
     val scrolling: Boolean? = null,
     val bookLayout: Boolean? = null,
 ) {
+    /** These settings with every field that's set in [other] replaced by its value. */
+    fun overlaidWith(other: ReaderPrefs) = ReaderPrefs(
+        fit = other.fit ?: fit,
+        animation = other.animation ?: animation,
+        background = other.background ?: background,
+        pageBackground = other.pageBackground ?: pageBackground,
+        textColor = other.textColor ?: textColor,
+        fontFamily = other.fontFamily ?: fontFamily,
+        fontSize = other.fontSize ?: fontSize,
+        lineHeight = other.lineHeight ?: lineHeight,
+        paragraphSpacing = other.paragraphSpacing ?: paragraphSpacing,
+        pageMargins = other.pageMargins ?: pageMargins,
+        alignment = other.alignment ?: alignment,
+        scrolling = other.scrolling ?: scrolling,
+        bookLayout = other.bookLayout ?: bookLayout,
+    )
+
     /** These settings with any field set in [changed] cleared, so that wider setting takes effect. */
     fun clearFieldsSetIn(changed: ReaderPrefs) = ReaderPrefs(
         fit = fit.takeIf { changed.fit == null },
@@ -184,6 +201,9 @@ data class Shelf(
     val groupSeries: Boolean,
     val defaultType: BookType?,
     val updatedAt: Long,
+    /** Applied to books as they're added to this shelf. */
+    val readerPrefs: ReaderPrefs = ReaderPrefs(),
+    val defaultDirection: ReadDirection? = null,
 )
 
 /** Everything on screen comes from this one snapshot of the database. */
@@ -198,6 +218,7 @@ data class LibraryState(
     val bookmarks: Map<String, List<Bookmark>> = emptyMap(),
     val colorSets: List<ColorSet> = emptyList(),
     val highlights: Map<String, List<Highlight>> = emptyMap(),
+    val userPresets: List<Pair<String, ShelfTheme>> = emptyList(),
 ) {
     fun readerLook(book: Book): ReaderLook =
         resolveLook(book.readerPrefs, typePrefs[book.type] ?: ReaderPrefs(), globalPrefs)

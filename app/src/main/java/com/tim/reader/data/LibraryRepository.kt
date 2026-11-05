@@ -25,6 +25,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
         Schema.CREATE_ALL.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
+        Schema.UPGRADE_TO_4.forEach { db.execSQL(it) }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -33,6 +34,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
             separateSeriesByType(db)
         }
         if (oldVersion < 3) Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
+        if (oldVersion < 4) Schema.UPGRADE_TO_4.forEach { db.execSQL(it) }
     }
 
     /** Series used to be shared by every book with the same name, whatever its type. */
@@ -144,6 +146,7 @@ class LibraryRepository private constructor(context: Context) {
             typePrefs = BookType.entries.associateWith { readPrefs(setting(KEY_PREFS_TYPE + it.name)) },
             colorSets = readColorSets(setting(KEY_COLOR_SETS)),
             highlights = highlights.groupBy { it.bookId },
+            userPresets = readPresets(setting(KEY_USER_PRESETS)),
             bookmarks = bookmarks.groupBy { it.bookId },
         )
     }
@@ -215,6 +218,16 @@ class LibraryRepository private constructor(context: Context) {
         prefs.bookLayout?.let { put("bookLayout", it) }
     }.toString()
 
+    private fun readPresets(json: String?): List<Pair<String, ShelfTheme>> = try {
+        val rows = JSONArray(json ?: "[]")
+        List(rows.length()) { index ->
+            val row = rows.getJSONObject(index)
+            row.getString("name") to ThemeJson.read(row.getString("theme"))
+        }
+    } catch (_: JSONException) {
+        emptyList()
+    }
+
     private fun readColorSets(json: String?): List<ColorSet> = try {
         val rows = JSONArray(json ?: "[]")
         List(rows.length()) { index ->
@@ -235,6 +248,8 @@ class LibraryRepository private constructor(context: Context) {
         groupSeries = getInt(6) != 0,
         defaultType = if (isNull(7)) null else enumOr(getString(7), BookType.Book),
         updatedAt = getLong(8),
+        readerPrefs = readPrefs(if (isNull(9)) null else getString(9)),
+        defaultDirection = if (isNull(10)) null else enumOr(getString(10), ReadDirection.LeftToRight),
     )
 
     private inline fun <reified T : Enum<T>> enumOr(name: String, fallback: T): T =
@@ -422,6 +437,42 @@ class LibraryRepository private constructor(context: Context) {
     private fun saveBookPrefs(id: String, prefs: ReaderPrefs) =
         updateBookField(id) { put("reader_prefs", writePrefs(prefs)) }
 
+    /** Saves a style by name, replacing any saved style with the same name. */
+    suspend fun saveUserPreset(name: String, theme: ShelfTheme) =
+        saveUserPresets { presets -> presets.filter { it.first != name } + (name to theme) }
+
+    suspend fun removeUserPreset(name: String) = saveUserPresets { presets -> presets.filter { it.first != name } }
+
+    private suspend fun saveUserPresets(change: (List<Pair<String, ShelfTheme>>) -> List<Pair<String, ShelfTheme>>) = write {
+        val rows = JSONArray()
+        change(state.value.userPresets).forEach { (name, theme) ->
+            rows.put(JSONObject().apply {
+                put("name", name)
+                put("theme", ThemeJson.write(theme))
+            })
+        }
+        saveSetting(KEY_USER_PRESETS, rows.toString())
+    }
+
+    /** Puts settings on many books in one save, leaving anything not set in [prefs] as it was. */
+    suspend fun applyToBooks(ids: List<String>, prefs: ReaderPrefs, direction: ReadDirection?) = write {
+        val current = state.value
+        ids.forEach { id ->
+            val book = current.book(id) ?: return@forEach
+            updateBookField(id) {
+                put("reader_prefs", writePrefs(book.readerPrefs.overlaidWith(prefs)))
+                direction?.let { put("direction", it.name) }
+            }
+        }
+    }
+
+    suspend fun setShelfDefaults(id: String, prefs: ReaderPrefs, direction: ReadDirection?) = write {
+        updateShelfField(id) {
+            put("reader_prefs", writePrefs(prefs))
+            put("default_direction", direction?.name)
+        }
+    }
+
     suspend fun addColorSet(set: ColorSet) = saveColorSets { it + set }
 
     suspend fun removeColorSet(set: ColorSet) = saveColorSets { it - set }
@@ -519,6 +570,9 @@ class LibraryRepository private constructor(context: Context) {
 
     suspend fun addBook(book: Book, seriesTitle: String?, shelfIds: Collection<String>) = write {
         val seriesId = seriesTitle?.takeIf { it.isNotBlank() }?.let { seriesIdFor(it.trim(), book.type) }
+        val shelves = shelfIds.mapNotNull { state.value.shelf(it) }
+        val prefs = shelves.fold(book.readerPrefs) { merged, shelf -> merged.overlaidWith(shelf.readerPrefs) }
+        val direction = shelves.firstNotNullOfOrNull { it.defaultDirection } ?: book.direction
         val values = ContentValues().apply {
             put("id", book.id)
             put("hash", book.hash)
@@ -535,7 +589,8 @@ class LibraryRepository private constructor(context: Context) {
             put("added_at", book.addedAt)
             put("updated_at", book.updatedAt)
             put("in_read_list", if (book.inReadList) 1 else 0)
-            put("direction", book.direction.name)
+            put("direction", direction.name)
+            put("reader_prefs", writePrefs(prefs))
         }
         db.insertOrThrow("books", null, values)
         shelfIds.forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, book.id, now())) }
@@ -578,6 +633,17 @@ class LibraryRepository private constructor(context: Context) {
         val current = state.value.shelfBooks.filterValues { bookId in it }.keys
         (current - shelfIds).forEach { db.execSQL(Schema.REMOVE_SHELF_BOOK, arrayOf<Any>(time, time, it, bookId)) }
         (shelfIds - current).forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, bookId, time)) }
+        state.value.book(bookId)?.let { book ->
+            val added = (shelfIds - current).mapNotNull { state.value.shelf(it) }
+            if (added.isNotEmpty()) {
+                val prefs = added.fold(book.readerPrefs) { merged, shelf -> merged.overlaidWith(shelf.readerPrefs) }
+                val direction = added.firstNotNullOfOrNull { it.defaultDirection } ?: book.direction
+                updateBookField(bookId) {
+                    put("reader_prefs", writePrefs(prefs))
+                    put("direction", direction.name)
+                }
+            }
+        }
     }
 
     /** Marks a book deleted. The marker stays so that sync can pass the deletion to other devices. */
@@ -629,6 +695,7 @@ class LibraryRepository private constructor(context: Context) {
         private const val KEY_PREFS_GLOBAL = "reader_prefs"
         private const val KEY_PREFS_TYPE = "reader_prefs:"
         private const val KEY_COLOR_SETS = "color_sets"
+        private const val KEY_USER_PRESETS = "user_presets"
 
         @Volatile
         private var instance: LibraryRepository? = null

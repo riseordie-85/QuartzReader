@@ -27,15 +27,23 @@ object ThemeImages {
     fun cached(name: String): ImageBitmap? = memory.get(name)
 
     suspend fun load(context: Context, name: String): ImageBitmap? = memory.get(name) ?: withContext(Dispatchers.IO) {
-        val resource = placeholders[name] ?: return@withContext null
         val screenWidth = maxOf(context.resources.displayMetrics.widthPixels, context.resources.displayMetrics.heightPixels)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeResource(context.resources, resource, bounds)
+        val file = if (ThemeFiles.isImported(name)) ThemeFiles.imageFile(name) ?: return@withContext null else null
+        val resource = placeholders[name]
+        if (file == null && resource == null) return@withContext null
+
+        fun decode(options: BitmapFactory.Options) =
+            if (file != null) BitmapFactory.decodeFile(file.path, options) else BitmapFactory.decodeResource(context.resources, resource!!, options)
+
+        decode(bounds)
         var sample = 1
         while (bounds.outWidth / (sample * 2) >= screenWidth) sample *= 2
-        val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        BitmapFactory.decodeResource(context.resources, resource, options)?.asImageBitmap()?.also { memory.put(name, it) }
+        decode(BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()?.also { memory.put(name, it) }
     }
+
+    /** The wallpapers that come with the app, with names to show for them. */
+    val builtIn = listOf("wood" to "Wood", "speed" to "Speed lines", "kawaii" to "Kawaii", "burst" to "Burst")
 }
 
 @Composable

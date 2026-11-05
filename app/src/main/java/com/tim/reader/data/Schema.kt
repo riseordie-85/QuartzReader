@@ -5,7 +5,7 @@ package com.tim.reader.data
  * to this schema rather than replace it.
  */
 object Schema {
-    const val VERSION = 3
+    const val VERSION = 4
 
     const val CREATE_BOOKS = """
         CREATE TABLE books (
@@ -90,6 +90,9 @@ object Schema {
             deleted_at INTEGER
         )"""
 
+    const val ADD_SHELF_READER_PREFS = "ALTER TABLE shelves ADD COLUMN reader_prefs TEXT"
+    const val ADD_SHELF_DIRECTION = "ALTER TABLE shelves ADD COLUMN default_direction TEXT"
+
     const val CREATE_HIGHLIGHTS = """
         CREATE TABLE highlights (
             id TEXT PRIMARY KEY NOT NULL,
@@ -105,6 +108,7 @@ object Schema {
     /** Each list brings a database from the version before it up to its version. */
     val UPGRADE_TO_2 = listOf(ADD_BOOK_READER_PREFS, ADD_BOOK_SPREAD_SHIFT, CREATE_BOOKMARKS)
     val UPGRADE_TO_3 = listOf(CREATE_HIGHLIGHTS)
+    val UPGRADE_TO_4 = listOf(ADD_SHELF_READER_PREFS, ADD_SHELF_DIRECTION)
 
     val CREATE_ALL = listOf(
         CREATE_BOOKS,
@@ -123,7 +127,7 @@ object Schema {
     const val SELECT_BOOKS = "SELECT $BOOK_COLUMNS FROM books WHERE deleted_at IS NULL"
     const val SELECT_SERIES = "SELECT id, title, updated_at FROM series WHERE deleted_at IS NULL"
     const val SELECT_SHELVES = "SELECT id, name, sort_position, theme, view_mode, sort_order, group_series, " +
-        "default_type, updated_at FROM shelves WHERE deleted_at IS NULL ORDER BY sort_position"
+        "default_type, updated_at, reader_prefs, default_direction FROM shelves WHERE deleted_at IS NULL ORDER BY sort_position"
     const val SELECT_SHELF_BOOKS = "SELECT shelf_id, book_id FROM shelf_books WHERE deleted_at IS NULL"
     const val SELECT_SETTING = "SELECT value FROM settings WHERE key = ?"
     const val SELECT_BOOKMARKS = "SELECT id, book_id, page, label, created_at FROM bookmarks " +

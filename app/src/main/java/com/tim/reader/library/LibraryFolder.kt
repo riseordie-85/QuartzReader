@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import androidx.core.content.edit
 import com.tim.reader.data.BookType
+import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
 
@@ -69,6 +70,32 @@ class LibraryFolder private constructor(context: Context) {
                 }
             }
         }.orEmpty()
+    }
+
+    private fun themeFolder(tree: Uri) =
+        findOrCreateFolder(tree, DocumentsContract.getTreeDocumentId(tree), THEME_FOLDER)
+
+    /** Keeps a copy of a theme's image or font with the library, so a reinstall doesn't lose it. */
+    fun saveThemeFile(file: File) {
+        val tree = requireTree()
+        val parent = themeFolder(tree)
+        if (children(tree, parent).any { it.name == file.name }) return
+        val target = DocumentsContract.createDocument(resolver, documentUri(parent), BINARY, file.name)
+            ?: error("Android couldn't create ${file.name}")
+        (resolver.openOutputStream(target) ?: error("Android couldn't write ${file.name}")).use { output ->
+            file.inputStream().use { it.copyTo(output, BUFFER) }
+        }
+    }
+
+    /** Brings a theme file back from the library folder. Returns false if it isn't there. */
+    fun restoreThemeFile(target: File): Boolean {
+        val tree = treeUri ?: return false
+        val found = children(tree, themeFolder(tree)).firstOrNull { it.name == target.name } ?: return false
+        val document = DocumentsContract.buildDocumentUriUsingTree(tree, found.documentId)
+        (resolver.openInputStream(document) ?: return false).use { input ->
+            target.outputStream().use { input.copyTo(it, BUFFER) }
+        }
+        return true
     }
 
     /** Copies one file into a library folder and returns the new document. */
@@ -172,6 +199,7 @@ class LibraryFolder private constructor(context: Context) {
     companion object {
         private const val KEY_TREE = "tree"
         private const val BUFFER = 256 * 1024
+private const val THEME_FOLDER = "Theme Files"
 
         @Volatile
         private var instance: LibraryFolder? = null

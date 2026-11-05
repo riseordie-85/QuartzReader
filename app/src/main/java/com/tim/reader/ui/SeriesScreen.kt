@@ -16,13 +16,20 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tim.reader.data.Book
 import com.tim.reader.data.Series
 import com.tim.reader.data.ShelfItem
+import com.tim.reader.data.ViewMode
 import com.tim.reader.data.nextVolume
 import com.tim.reader.data.volumeOrder
+import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -34,9 +41,14 @@ fun SeriesScreen(
     theme: ShelfTheme,
     header: HeaderActions,
     actions: BookActions,
+    onPageSettings: () -> Unit,
     onEdit: () -> Unit,
 ) {
     val ordered = volumes.sortedWith(volumeOrder)
+    val rowKey = booksPerRowKey("series", ViewMode.Shelf)
+    var choosingRow by remember { mutableStateOf(false) }
+    var automatic by remember { mutableStateOf(1) }
+    if (choosingRow) BooksPerRowDialog(rowKey, automatic) { choosingRow = false }
     CoverSplit(ordered.map { ShelfItem.Single(it) }, theme, actions, series.id) { pageModifier ->
     ThemedBackground(theme.background, pageModifier) {
         Column(
@@ -55,9 +67,13 @@ fun SeriesScreen(
                     Button(onClick = { actions.onOpen(nextVolume(ordered)) }) { Text("Continue") }
                 }
                 Button(onClick = onEdit) { Text("Edit series") }
+                Button(onClick = onPageSettings) { Text("Page settings") }
+                Button(onClick = { choosingRow = true }) { Text("Books per row") }
             }
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                val columns = columnsFor(maxWidth.value)
+                val auto = columnsFor(maxWidth.value)
+                val columns = DeviceSettings.booksPerRow(rowKey) ?: auto
+                SideEffect { automatic = auto }
                 val items = ordered.map { ShelfItem.Single(it) }
                 val list = rememberLazyListState()
                 FollowSelection(

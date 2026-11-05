@@ -30,6 +30,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -54,7 +55,7 @@ import com.tim.reader.data.ShelfItem
 import com.tim.reader.data.SortOrder
 import com.tim.reader.data.ViewMode
 import com.tim.reader.data.shelfItems
-import com.tim.reader.theme.Presets
+import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -71,6 +72,8 @@ fun ShelfPager(
     startShelfId: String,
     header: HeaderActions,
     actions: BookActions,
+    onEditStyle: (String) -> Unit,
+    onPageSettings: (String) -> Unit,
     onCurrentShelf: (String) -> Unit,
 ) {
     val shelves = state.shelves
@@ -113,6 +116,7 @@ fun ShelfPager(
                 null
             }
             ShelfContent(
+                place = "shelf:${shelf.id}",
                 title = shelf.name,
                 theme = shelf.theme,
                 items = shelfItems(state.booksOn(shelf.id), shelf.sort, shelf.groupSeries, state),
@@ -125,7 +129,8 @@ fun ShelfPager(
                 onViewMode = { mode -> scope.launch { repository.setShelfView(shelf.id, mode) } },
                 onSort = { order -> scope.launch { repository.setShelfSort(shelf.id, order) } },
                 onGroupSeries = { group -> scope.launch { repository.setShelfGrouping(shelf.id, group) } },
-                onStyle = { style -> scope.launch { repository.setShelfTheme(shelf.id, style) } },
+                onEditStyle = { onEditStyle(shelf.id) },
+                onPageSettings = { onPageSettings(shelf.id) },
             )
         }
         }
@@ -156,7 +161,8 @@ fun ListPage(
             onViewMode = { viewMode = it },
             onSort = {},
             onGroupSeries = {},
-            onStyle = {},
+            onEditStyle = null,
+            onPageSettings = null,
             modifier = pageModifier,
         )
     }
@@ -164,6 +170,7 @@ fun ListPage(
 
 @Composable
 private fun ShelfContent(
+    place: String,
     title: String,
     theme: ShelfTheme,
     items: List<ShelfItem>,
@@ -176,10 +183,14 @@ private fun ShelfContent(
     onViewMode: (ViewMode) -> Unit,
     onSort: (SortOrder) -> Unit,
     onGroupSeries: (Boolean) -> Unit,
-    onStyle: (ShelfTheme) -> Unit,
+    onEditStyle: (() -> Unit)?,
+    onPageSettings: (() -> Unit)?,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     val controls = Color(theme.controls.color)
+    val rowKey = booksPerRowKey(place, viewMode)
+    var choosingRow by remember { mutableStateOf(false) }
+    var automatic by remember { mutableStateOf(1) }
     val bottomSpace = if (neighbors != null) theme.bottom.heightDp.dp else 24.dp
 
     ThemedBackground(theme.background, modifier) {
@@ -201,7 +212,18 @@ private fun ShelfContent(
                     onViewMode(ViewMode.entries[(viewMode.ordinal + 1) % ViewMode.entries.size])
                 }
                 if (sort != null) {
-                    SortMenu(controls, sort, groupSeries, onSort, onGroupSeries, onStyle)
+                    SortMenu(
+                        color = controls,
+                        sort = sort,
+                        groupSeries = groupSeries,
+                        onSort = onSort,
+                        onGroupSeries = onGroupSeries,
+                        onBooksPerRow = if (viewMode == ViewMode.List) null else ({ choosingRow = true }),
+                        onEditStyle = onEditStyle,
+                        onPageSettings = onPageSettings,
+                    )
+                } else if (viewMode != ViewMode.List) {
+                    PillButton("Books per row", controls) { choosingRow = true }
                 }
             }
             BoxWithConstraints(
@@ -209,7 +231,9 @@ private fun ShelfContent(
                     .fillMaxWidth()
                     .weight(1f),
             ) {
-                val columns = columnsFor(maxWidth.value)
+                val autoColumns = columnsFor(maxWidth.value) + if (viewMode == ViewMode.Grid) 1 else 0
+                val columns = DeviceSettings.booksPerRow(rowKey) ?: autoColumns
+                SideEffect { automatic = autoColumns }
                 when {
                     items.isEmpty() -> Text(
                         text = "Nothing here yet",
@@ -232,7 +256,7 @@ private fun ShelfContent(
                             shelfRows(items, columns, theme, actions)
                         }
                     }
-                    viewMode == ViewMode.Grid -> GridView(items, columns + 1, theme, actions, bottomSpace)
+                    viewMode == ViewMode.Grid -> GridView(items, columns, theme, actions, bottomSpace)
                     else -> ListView(items, theme, actions, bottomSpace)
                 }
             }
@@ -241,6 +265,7 @@ private fun ShelfContent(
             BottomBar(neighbors, theme, Modifier.align(Alignment.BottomCenter))
         }
     }
+    if (choosingRow) BooksPerRowDialog(rowKey, automatic) { choosingRow = false }
 }
 
 @Composable
@@ -250,7 +275,9 @@ private fun SortMenu(
     groupSeries: Boolean,
     onSort: (SortOrder) -> Unit,
     onGroupSeries: (Boolean) -> Unit,
-    onStyle: (ShelfTheme) -> Unit,
+    onBooksPerRow: (() -> Unit)?,
+    onEditStyle: (() -> Unit)?,
+    onPageSettings: (() -> Unit)?,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -273,12 +300,16 @@ private fun SortMenu(
                 },
             )
             HorizontalDivider()
-            Presets.all.forEach { (name, style) ->
+            listOfNotNull(
+                onBooksPerRow?.let { "Books per row" to it },
+                onPageSettings?.let { "Page settings" to it },
+                onEditStyle?.let { "Edit shelf style" to it },
+            ).forEach { (label, action) ->
                 DropdownMenuItem(
-                    text = { Text("Style: $name") },
+                    text = { Text(label) },
                     onClick = {
                         open = false
-                        onStyle(style)
+                        action()
                     },
                 )
             }
@@ -357,7 +388,7 @@ private fun ListView(items: List<ShelfItem>, theme: ShelfTheme, actions: BookAct
 }
 
 @Composable
-private fun BottomBar(neighbors: ShelfNeighbors, theme: ShelfTheme, modifier: Modifier) {
+fun BottomBar(neighbors: ShelfNeighbors, theme: ShelfTheme, modifier: Modifier) {
     val look = theme.bottom
     val font = theme.title.copy(sizeSp = 20f, color = look.labelColor, stroke = null, shadow = null)
     Box(

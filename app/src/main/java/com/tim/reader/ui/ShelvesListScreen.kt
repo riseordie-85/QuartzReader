@@ -40,7 +40,12 @@ import com.tim.reader.theme.Presets
 import kotlinx.coroutines.launch
 
 @Composable
-fun ShelvesListScreen(state: LibraryState, onAllBooks: () -> Unit, onShelf: (String) -> Unit) {
+fun ShelvesListScreen(
+    state: LibraryState,
+    onAllBooks: () -> Unit,
+    onShelf: (String) -> Unit,
+    onEditStyle: (String) -> Unit,
+) {
     val context = LocalContext.current
     val repository = LibraryRepository.get(context)
     val scope = rememberCoroutineScope()
@@ -79,10 +84,7 @@ fun ShelvesListScreen(state: LibraryState, onAllBooks: () -> Unit, onShelf: (Str
                     onMove = { delta -> scope.launch { repository.moveShelf(shelf.id, delta) } },
                     onRename = { renaming = shelf },
                     onDelete = { deleting = shelf },
-                    onStyle = { name ->
-                        val preset = Presets.all.first { it.first == name }.second
-                        scope.launch { repository.setShelfTheme(shelf.id, preset) }
-                    },
+                    onStyle = { onEditStyle(shelf.id) },
                 )
                 HorizontalDivider()
             }
@@ -125,7 +127,7 @@ private fun ShelfRowEditor(
     onMove: (Int) -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    onStyle: (String) -> Unit,
+    onStyle: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -153,12 +155,10 @@ private fun ShelfRowEditor(
                     menu = false
                     onRename()
                 })
-                Presets.all.forEach { (name, _) ->
-                    DropdownMenuItem(text = { Text("Style: $name") }, onClick = {
-                        menu = false
-                        onStyle(name)
-                    })
-                }
+                DropdownMenuItem(text = { Text("Edit style") }, onClick = {
+                    menu = false
+                    onStyle()
+                })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = {
                     menu = false
                     onDelete()

@@ -1,5 +1,6 @@
 package com.tim.reader.theme
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -34,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -41,7 +45,8 @@ fun fontFamily(name: String): FontFamily = when (name) {
     "serif" -> FontFamily.Serif
     "mono" -> FontFamily.Monospace
     "cursive" -> FontFamily.Cursive
-    else -> FontFamily.SansSerif
+    "sans" -> FontFamily.SansSerif
+    else -> if (ThemeFiles.isImported(name)) ThemeFiles.fontFamily(name) else FontFamily.SansSerif
 }
 
 private fun Fill.imageName() = (this as? ImageFill)?.name
@@ -60,11 +65,21 @@ private fun fillBrush(fill: Fill, image: ImageBitmap?): Brush? = when (fill) {
     is ImageFill -> image?.let { ShaderBrush(ImageShader(it, TileMode.Repeated, TileMode.Repeated)) }
 }
 
+/** Resizes a tile by drawing it again, because an image shader can't be scaled on its own. */
+private fun scaledTile(image: ImageBitmap, scale: Float): ImageBitmap {
+    if (abs(scale - 1f) < 0.01f) return image
+    val width = (image.width * scale).toInt().coerceAtLeast(8)
+    val height = (image.height * scale).toInt().coerceAtLeast(8)
+    return Bitmap.createScaledBitmap(image.asAndroidBitmap(), width, height, true).asImageBitmap()
+}
+
 /** Paints a fill behind content, in the given shape. */
 @Composable
 fun Modifier.themedFill(fill: Fill, shape: Shape): Modifier {
     val image by rememberThemeImage(fill.imageName())
-    val brush = remember(fill, image) { fillBrush(fill, image) }
+    val scale = (fill as? ImageFill)?.tileScale ?: 1f
+    val tile = remember(image, scale) { image?.let { scaledTile(it, scale) } }
+    val brush = remember(fill, tile) { fillBrush(fill, tile) }
     val tint = (fill as? ImageFill)?.tint
     var result = this
     if (brush != null) result = result.background(brush, shape)

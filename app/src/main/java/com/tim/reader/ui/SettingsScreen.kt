@@ -21,24 +21,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.tim.reader.appScope
 import com.tim.reader.data.LibraryRepository
+import com.tim.reader.data.ViewMode
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.library.LibraryOrganizer
-import com.tim.reader.theme.Presets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun SettingsScreen(onTestTools: () -> Unit) {
+fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit) {
     val context = LocalContext.current
     val repository = LibraryRepository.get(context)
     val scope = rememberCoroutineScope()
     var organizing by remember { mutableStateOf(false) }
+    var choosingRow by remember { mutableStateOf(false) }
+    val homeRowKey = booksPerRowKey("home", ViewMode.Shelf)
+    val screenWidth = LocalConfiguration.current.screenWidthDp.toFloat()
+    if (choosingRow) BooksPerRowDialog(homeRowKey, columnsFor(screenWidth)) { choosingRow = false }
     Column(
         Modifier
             .fillMaxSize()
@@ -65,13 +70,9 @@ fun SettingsScreen(onTestTools: () -> Unit) {
             enabled = !organizing,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (organizing) "Organizing" else "Organize library folder") }
-        Text("Home style", style = MaterialTheme.typography.titleMedium)
-        Presets.all.forEach { (name, theme) ->
-            OutlinedButton(
-                onClick = { scope.launch { repository.setHomeTheme(theme) } },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(name) }
-        }
+        Text("Home", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton(onHomeStyle, Modifier.fillMaxWidth()) { Text("Edit Home style") }
+        OutlinedButton({ choosingRow = true }, Modifier.fillMaxWidth()) { Text("Books per row on Home") }
         Text("Display", style = MaterialTheme.typography.titleMedium)
         ToggleRow("Split view on large screens", DeviceSettings.splitView) { DeviceSettings.updateSplitView(it) }
         Text("Testing", style = MaterialTheme.typography.titleMedium)

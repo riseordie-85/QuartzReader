@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.Shelf
 import com.tim.reader.data.ShelfItem
+import com.tim.reader.data.ViewMode
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
@@ -63,6 +64,7 @@ fun HomeScreen(
     onShelf: (String) -> Unit,
 ) {
     val theme = state.homeTheme ?: return
+    val chosenColumns = DeviceSettings.booksPerRow(booksPerRowKey("home", ViewMode.Shelf))
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
         BoxWithConstraints(
             Modifier
@@ -79,7 +81,7 @@ fun HomeScreen(
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
                         CompositionLocalProvider(LocalCoverSelection provides selection) {
-                            HomeList(state, theme, columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf)
+                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf)
                         }
                     }
                     Box(Modifier.weight(1f)) {
@@ -87,7 +89,7 @@ fun HomeScreen(
                     }
                 }
             } else {
-                HomeList(state, theme, columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf)
+                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf)
             }
         }
     }

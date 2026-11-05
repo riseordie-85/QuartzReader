@@ -52,6 +52,7 @@ import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.openBookSource
 import com.tim.reader.openEpub
+import com.tim.reader.theme.Presets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +71,9 @@ private sealed interface Route {
     data object Tools : Route
     data class SeriesPage(val seriesId: String, val shelfId: String?) : Route
     data class SeriesEditor(val seriesId: String) : Route
+    /** Styles a shelf, or Home when there's no shelf. */
+    data class ThemeEditor(val shelfId: String?) : Route
+    data class PageSettings(val shelfId: String?, val seriesId: String?) : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -214,7 +218,14 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             onReadList = { push(Route.ReadList) },
             onShelf = { push(Route.ShelfPages(it)) },
         )
-        is Route.ShelfPages -> ShelfPager(state, route.shelfId, header, actions) { id ->
+        is Route.ShelfPages -> ShelfPager(
+            state,
+            route.shelfId,
+            header,
+            actions,
+            onEditStyle = { push(Route.ThemeEditor(it)) },
+            onPageSettings = { push(Route.PageSettings(it, null)) },
+        ) { id ->
             val index = stack.lastIndex
             if (index >= 0 && stack[index] is Route.ShelfPages && stack[index] != Route.ShelfPages(id)) {
                 stack[index] = Route.ShelfPages(id)
@@ -227,14 +238,55 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             state = state,
             onAllBooks = { push(Route.AllBooks) },
             onShelf = { push(Route.ShelfPages(it)) },
+            onEditStyle = { push(Route.ThemeEditor(it)) },
         )
-        Route.Settings -> SettingsScreen(onTestTools = { push(Route.Tools) })
+        Route.Settings -> SettingsScreen(
+            onHomeStyle = { push(Route.ThemeEditor(null)) },
+            onTestTools = { push(Route.Tools) },
+        )
+        is Route.ThemeEditor -> {
+            val shelf = route.shelfId?.let { state.shelf(it) }
+            val start = shelf?.theme ?: state.homeTheme ?: Presets.silverGloss
+            ThemeEditorScreen(
+                name = shelf?.name ?: "Home",
+                start = start,
+                isHome = shelf == null,
+                state = state,
+                onSave = { theme ->
+                    stack.remove(route)
+                    appScope.launch {
+                        if (shelf != null) repository.setShelfTheme(shelf.id, theme) else repository.setHomeTheme(theme)
+                    }
+                },
+                onClose = { stack.remove(route) },
+            )
+        }
+        is Route.PageSettings -> {
+            val shelf = route.shelfId?.let { state.shelf(it) }
+            val series = route.seriesId?.let { state.seriesFor(it) }
+            when {
+                shelf != null -> PageSettingsScreen(shelf.name, state.booksOn(shelf.id), shelf) { stack.remove(route) }
+                series != null -> PageSettingsScreen(
+                    series.title,
+                    state.books.filter { it.seriesId == series.id },
+                    null,
+                ) { stack.remove(route) }
+                else -> LaunchedEffect(route) { stack.remove(route) }
+            }
+        }
         Route.Tools -> TestToolsScreen(onExit = { stack.removeAt(stack.lastIndex) })
         is Route.SeriesPage -> {
             val series = state.seriesFor(route.seriesId)
             val theme = route.shelfId?.let { state.shelf(it)?.theme } ?: state.homeTheme
             if (series != null && theme != null) {
-                SeriesScreen(series, state.books.filter { it.seriesId == series.id }, theme, header, actions) {
+                SeriesScreen(
+                    series,
+                    state.books.filter { it.seriesId == series.id },
+                    theme,
+                    header,
+                    actions,
+                    onPageSettings = { push(Route.PageSettings(null, series.id)) },
+                ) {
                     push(Route.SeriesEditor(series.id))
                 }
             } else {
