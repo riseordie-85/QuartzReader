@@ -22,11 +22,9 @@ import com.tim.reader.data.FitMode
 import com.tim.reader.data.PageAnimation
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
+import com.tim.reader.data.SettingScope
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.TwoPageMode
-
-/** Where a change to fit, animation, or background is saved. */
-enum class SettingScope { ThisBook, ThisType, AllBooks }
 
 private val BACKGROUNDS = listOf(
     0xFF000000,
@@ -116,6 +114,6 @@ fun ColumnScope.ReaderSettings(
 }
 
 @Composable
-private fun PanelHeading(text: String) {
+fun PanelHeading(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp))
 }

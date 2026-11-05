@@ -83,13 +83,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.tim.reader.ResultsLog
 import com.tim.reader.data.Book
-import com.tim.reader.data.BookType
 import com.tim.reader.data.FitMode
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.PageAnimation
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
 import com.tim.reader.data.ReaderPrefs
+import com.tim.reader.data.SettingScope
 import com.tim.reader.engine.ImageDecode
 import com.tim.reader.engine.PageLink
 import com.tim.reader.engine.PageSize
@@ -216,7 +216,7 @@ private suspend fun PointerInputScope.detectReaderTaps(
 }
 
 /** Two pages show when there's room in landscape, like a book held open. */
-private fun showsTwoPages(mode: TwoPageMode, direction: ReadDirection, widthDp: Float, heightDp: Float) = when {
+fun showsTwoPages(mode: TwoPageMode, direction: ReadDirection, widthDp: Float, heightDp: Float) = when {
     direction == ReadDirection.Vertical -> false
     mode == TwoPageMode.Never -> false
     mode == TwoPageMode.Always -> true
@@ -264,33 +264,16 @@ fun ImageReaderScreen(
 
     fun changeLook(change: (ReaderPrefs) -> ReaderPrefs) {
         val current = liveBook
-        if (current == null) {
-            val updated = change(ReaderPrefs(testLook.fit, testLook.animation, testLook.background))
-            testLook = ReaderLook(
-                updated.fit ?: testLook.fit,
-                updated.animation ?: testLook.animation,
-                updated.background ?: testLook.background,
-            )
+        if (current != null) {
+            scope.launch { repository.changePrefs(current, settingScope, change) }
             return
         }
-        scope.launch {
-            when (settingScope) {
-                SettingScope.ThisBook -> repository.setBookPrefs(current.id, change(current.readerPrefs))
-                SettingScope.ThisType -> {
-                    val prefs = library.typePrefs[current.type] ?: ReaderPrefs()
-                    // A setting saved on the book would hide the wider one, so that field is cleared.
-                    repository.setTypePrefs(current.type, change(prefs))
-                    repository.setBookPrefs(current.id, clearChanged(current.readerPrefs, change))
-                }
-                SettingScope.AllBooks -> {
-                    repository.setGlobalPrefs(change(library.globalPrefs))
-                    BookType.entries.forEach { type ->
-                        library.typePrefs[type]?.let { repository.setTypePrefs(type, clearChanged(it, change)) }
-                    }
-                    repository.setBookPrefs(current.id, clearChanged(current.readerPrefs, change))
-                }
-            }
-        }
+        val updated = change(ReaderPrefs(testLook.fit, testLook.animation, testLook.background))
+        testLook = ReaderLook(
+            updated.fit ?: testLook.fit,
+            updated.animation ?: testLook.animation,
+            updated.background ?: testLook.background,
+        )
     }
 
     BoxWithConstraints(
@@ -429,6 +412,7 @@ fun ImageReaderScreen(
                         onRemove = { id -> scope.launch { repository.removeBookmark(id) } },
                         onDone = { sheet = null },
                     )
+                    ReaderSheet.Search -> Unit
                     ReaderSheet.Chapters -> ChapterSheet(
                         chapters = source.chapters,
                         onChoose = { page ->
@@ -459,19 +443,9 @@ fun ImageReaderScreen(
     }
 }
 
-/** Clears whichever field a change sets, so the book follows the wider setting. */
-private fun clearChanged(prefs: ReaderPrefs, change: (ReaderPrefs) -> ReaderPrefs): ReaderPrefs {
-    val probe = change(ReaderPrefs())
-    return ReaderPrefs(
-        fit = prefs.fit.takeIf { probe.fit == null },
-        animation = prefs.animation.takeIf { probe.animation == null },
-        background = prefs.background.takeIf { probe.background == null },
-    )
-}
-
 /** Full screen while reading, with the system bars back when the controls show. */
 @Composable
-private fun ReaderWindow(showBars: Boolean, rotationLocked: Boolean) {
+fun ReaderWindow(showBars: Boolean, rotationLocked: Boolean) {
     val activity = LocalActivity.current
     val view = LocalView.current
     val keepOn = DeviceSettings.keepScreenOn

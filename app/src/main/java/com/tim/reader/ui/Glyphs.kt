@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline }
+enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search }
 
 private fun DrawScope.drawPlus(color: Color) {
     val width = size.minDimension * 0.14f
@@ -78,6 +78,12 @@ private fun DrawScope.drawList(color: Color) {
     }
 }
 
+private fun DrawScope.drawSearch(color: Color) {
+    val unit = size.minDimension
+    drawCircle(color, unit * 0.3f, Offset(unit * 0.42f, unit * 0.42f), style = Stroke(unit * 0.11f))
+    drawLine(color, Offset(unit * 0.64f, unit * 0.64f), Offset(unit * 0.92f, unit * 0.92f), unit * 0.13f, StrokeCap.Round)
+}
+
 private fun DrawScope.ribbon(): Path {
     val unit = size.minDimension
     return Path().apply {
@@ -112,6 +118,7 @@ fun GlyphButton(
             Glyph.Gear -> drawGear(color)
             Glyph.Grid -> drawGrid(color)
             Glyph.List -> drawList(color)
+            Glyph.Search -> drawSearch(color)
             Glyph.Bookmark -> drawPath(ribbon(), color)
             Glyph.BookmarkOutline -> drawPath(ribbon(), color, style = Stroke(size.minDimension * 0.09f))
         }

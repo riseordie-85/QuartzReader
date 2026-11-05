@@ -42,6 +42,7 @@
 
         <activity
             android:name=".EpubActivity"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:exported="false" />
     </application>

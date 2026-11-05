@@ -31,19 +31,88 @@ enum class PageAnimation(val label: String) {
     None("None"),
 }
 
+enum class TextAlignment(val label: String) {
+    Start("Left"),
+    Justify("Justified"),
+    Center("Centered"),
+}
+
+/** Where a settings change is saved. */
+enum class SettingScope { ThisBook, ThisType, AllBooks }
+
+/** The font value meaning "whatever the book asks for". */
+const val BOOK_FONT = "book"
+
 /** Reader settings at one level. A null value falls back to the level above it. */
 data class ReaderPrefs(
     val fit: FitMode? = null,
     val animation: PageAnimation? = null,
     val background: Long? = null,
-)
+    val pageBackground: Long? = null,
+    val textColor: Long? = null,
+    val fontFamily: String? = null,
+    val fontSize: Double? = null,
+    val lineHeight: Double? = null,
+    val paragraphSpacing: Double? = null,
+    val pageMargins: Double? = null,
+    val alignment: TextAlignment? = null,
+    val scrolling: Boolean? = null,
+) {
+    /** These settings with any field set in [changed] cleared, so that wider setting takes effect. */
+    fun clearFieldsSetIn(changed: ReaderPrefs) = ReaderPrefs(
+        fit = fit.takeIf { changed.fit == null },
+        animation = animation.takeIf { changed.animation == null },
+        background = background.takeIf { changed.background == null },
+        pageBackground = pageBackground.takeIf { changed.pageBackground == null },
+        textColor = textColor.takeIf { changed.textColor == null },
+        fontFamily = fontFamily.takeIf { changed.fontFamily == null },
+        fontSize = fontSize.takeIf { changed.fontSize == null },
+        lineHeight = lineHeight.takeIf { changed.lineHeight == null },
+        paragraphSpacing = paragraphSpacing.takeIf { changed.paragraphSpacing == null },
+        pageMargins = pageMargins.takeIf { changed.pageMargins == null },
+        alignment = alignment.takeIf { changed.alignment == null },
+        scrolling = scrolling.takeIf { changed.scrolling == null },
+    )
+}
 
-/** The settings a book actually reads with, after Book, then Type, then Global. */
+/** The settings a book actually reads with. Layout values stay null until someone sets them. */
 data class ReaderLook(
     val fit: FitMode = FitMode.Screen,
     val animation: PageAnimation = PageAnimation.Slide,
     val background: Long = 0xFF000000,
+    val pageBackground: Long = 0xFFFFFFFF,
+    val textColor: Long = 0xFF1A1A1A,
+    val fontFamily: String = BOOK_FONT,
+    val fontSize: Double = 1.0,
+    val lineHeight: Double? = null,
+    val paragraphSpacing: Double? = null,
+    val pageMargins: Double? = null,
+    val alignment: TextAlignment? = null,
+    val scrolling: Boolean? = null,
 )
+
+/** Works out the look from settings levels, most specific first. */
+fun resolveLook(vararg levels: ReaderPrefs): ReaderLook {
+    fun <T : Any> first(field: (ReaderPrefs) -> T?): T? = levels.firstNotNullOfOrNull(field)
+    val defaults = ReaderLook()
+    return ReaderLook(
+        fit = first { it.fit } ?: defaults.fit,
+        animation = first { it.animation } ?: defaults.animation,
+        background = first { it.background } ?: defaults.background,
+        pageBackground = first { it.pageBackground } ?: defaults.pageBackground,
+        textColor = first { it.textColor } ?: defaults.textColor,
+        fontFamily = first { it.fontFamily } ?: defaults.fontFamily,
+        fontSize = first { it.fontSize } ?: defaults.fontSize,
+        lineHeight = first { it.lineHeight },
+        paragraphSpacing = first { it.paragraphSpacing },
+        pageMargins = first { it.pageMargins },
+        alignment = first { it.alignment },
+        scrolling = first { it.scrolling },
+    )
+}
+
+/** A page background and text color saved together. */
+data class ColorSet(val background: Long, val text: Long)
 
 data class Bookmark(val id: String, val bookId: String, val page: Int, val label: String, val createdAt: Long)
 
@@ -111,16 +180,10 @@ data class LibraryState(
     val globalPrefs: ReaderPrefs = ReaderPrefs(),
     val typePrefs: Map<BookType, ReaderPrefs> = emptyMap(),
     val bookmarks: Map<String, List<Bookmark>> = emptyMap(),
+    val colorSets: List<ColorSet> = emptyList(),
 ) {
-    fun readerLook(book: Book): ReaderLook {
-        val type = typePrefs[book.type] ?: ReaderPrefs()
-        val defaults = ReaderLook()
-        return ReaderLook(
-            fit = book.readerPrefs.fit ?: type.fit ?: globalPrefs.fit ?: defaults.fit,
-            animation = book.readerPrefs.animation ?: type.animation ?: globalPrefs.animation ?: defaults.animation,
-            background = book.readerPrefs.background ?: type.background ?: globalPrefs.background ?: defaults.background,
-        )
-    }
+    fun readerLook(book: Book): ReaderLook =
+        resolveLook(book.readerPrefs, typePrefs[book.type] ?: ReaderPrefs(), globalPrefs)
 
     private val booksById by lazy { books.associateBy { it.id } }
     private val seriesById by lazy { series.associateBy { it.id } }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.UUID
@@ -123,6 +124,7 @@ class LibraryRepository private constructor(context: Context) {
             homeTheme = home,
             globalPrefs = readPrefs(setting(KEY_PREFS_GLOBAL)),
             typePrefs = BookType.entries.associateWith { readPrefs(setting(KEY_PREFS_TYPE + it.name)) },
+            colorSets = readColorSets(setting(KEY_COLOR_SETS)),
             bookmarks = bookmarks.groupBy { it.bookId },
         )
     }
@@ -158,17 +160,49 @@ class LibraryRepository private constructor(context: Context) {
         ReaderPrefs(
             fit = root.optString("fit").takeIf { it.isNotEmpty() }?.let { enumOr(it, FitMode.Screen) },
             animation = root.optString("animation").takeIf { it.isNotEmpty() }?.let { enumOr(it, PageAnimation.Slide) },
-            background = if (root.has("background")) root.getLong("background") else null,
+            background = root.longOrNull("background"),
+            pageBackground = root.longOrNull("pageBackground"),
+            textColor = root.longOrNull("textColor"),
+            fontFamily = root.optString("fontFamily").takeIf { it.isNotEmpty() },
+            fontSize = root.doubleOrNull("fontSize"),
+            lineHeight = root.doubleOrNull("lineHeight"),
+            paragraphSpacing = root.doubleOrNull("paragraphSpacing"),
+            pageMargins = root.doubleOrNull("pageMargins"),
+            alignment = root.optString("alignment").takeIf { it.isNotEmpty() }?.let { enumOr(it, TextAlignment.Start) },
+            scrolling = if (root.has("scrolling")) root.getBoolean("scrolling") else null,
         )
     } catch (_: JSONException) {
         ReaderPrefs()
     }
 
+    private fun JSONObject.longOrNull(key: String) = if (has(key)) getLong(key) else null
+
+    private fun JSONObject.doubleOrNull(key: String) = if (has(key)) getDouble(key) else null
+
     private fun writePrefs(prefs: ReaderPrefs): String = JSONObject().apply {
         prefs.fit?.let { put("fit", it.name) }
         prefs.animation?.let { put("animation", it.name) }
         prefs.background?.let { put("background", it) }
+        prefs.pageBackground?.let { put("pageBackground", it) }
+        prefs.textColor?.let { put("textColor", it) }
+        prefs.fontFamily?.let { put("fontFamily", it) }
+        prefs.fontSize?.let { put("fontSize", it) }
+        prefs.lineHeight?.let { put("lineHeight", it) }
+        prefs.paragraphSpacing?.let { put("paragraphSpacing", it) }
+        prefs.pageMargins?.let { put("pageMargins", it) }
+        prefs.alignment?.let { put("alignment", it.name) }
+        prefs.scrolling?.let { put("scrolling", it) }
     }.toString()
+
+    private fun readColorSets(json: String?): List<ColorSet> = try {
+        val rows = JSONArray(json ?: "[]")
+        List(rows.length()) { index ->
+            val row = rows.getJSONObject(index)
+            ColorSet(row.getLong("background"), row.getLong("text"))
+        }
+    } catch (_: JSONException) {
+        emptyList()
+    }
 
     private fun Cursor.toShelf() = Shelf(
         id = getString(0),
@@ -342,6 +376,42 @@ class LibraryRepository private constructor(context: Context) {
         db.update("books", values, "id = ?", arrayOf(id))
     }
 
+    /** Saves a change at the chosen level, clearing narrower levels that would hide it. */
+    suspend fun changePrefs(book: Book, scope: SettingScope, change: (ReaderPrefs) -> ReaderPrefs) {
+        val current = state.value
+        val bookPrefs = current.book(book.id)?.readerPrefs ?: book.readerPrefs
+        val changed = change(ReaderPrefs())
+        when (scope) {
+            SettingScope.ThisBook -> setBookPrefs(book.id, change(bookPrefs))
+            SettingScope.ThisType -> {
+                setTypePrefs(book.type, change(current.typePrefs[book.type] ?: ReaderPrefs()))
+                setBookPrefs(book.id, bookPrefs.clearFieldsSetIn(changed))
+            }
+            SettingScope.AllBooks -> {
+                setGlobalPrefs(change(current.globalPrefs))
+                BookType.entries.forEach { type ->
+                    current.typePrefs[type]?.let { setTypePrefs(type, it.clearFieldsSetIn(changed)) }
+                }
+                setBookPrefs(book.id, bookPrefs.clearFieldsSetIn(changed))
+            }
+        }
+    }
+
+    suspend fun addColorSet(set: ColorSet) = saveColorSets(state.value.colorSets + set)
+
+    suspend fun removeColorSet(set: ColorSet) = saveColorSets(state.value.colorSets - set)
+
+    private suspend fun saveColorSets(sets: List<ColorSet>) = write {
+        val rows = JSONArray()
+        sets.distinct().forEach { set ->
+            rows.put(JSONObject().apply {
+                put("background", set.background)
+                put("text", set.text)
+            })
+        }
+        saveSetting(KEY_COLOR_SETS, rows.toString())
+    }
+
     suspend fun setBookPrefs(id: String, prefs: ReaderPrefs) =
         write { updateBookField(id) { put("reader_prefs", writePrefs(prefs)) } }
 
@@ -506,6 +576,7 @@ class LibraryRepository private constructor(context: Context) {
         private const val KEY_HOME_THEME = "home_theme"
         private const val KEY_PREFS_GLOBAL = "reader_prefs"
         private const val KEY_PREFS_TYPE = "reader_prefs:"
+        private const val KEY_COLOR_SETS = "color_sets"
 
         @Volatile
         private var instance: LibraryRepository? = null

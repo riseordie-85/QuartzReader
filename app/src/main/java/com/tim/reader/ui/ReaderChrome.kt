@@ -48,7 +48,7 @@ private val PILL_SHAPE = RoundedCornerShape(50)
 private val SHEET_SHAPE = RoundedCornerShape(28.dp)
 
 /** What opens between the bars. */
-enum class ReaderSheet { Settings, Bookmarks, Chapters }
+enum class ReaderSheet { Settings, Bookmarks, Chapters, Search }
 
 /** Keeps touches on a panel from reaching the page behind it. */
 private fun Modifier.blocksTouches() = pointerInput(Unit) { }
@@ -64,6 +64,7 @@ fun ReaderChrome(
     pageCount: Int,
     isBookmarked: Boolean?,
     hasChapters: Boolean,
+    hasSearch: Boolean = false,
     sheet: ReaderSheet?,
     onSheet: (ReaderSheet?) -> Unit,
     onBookmark: () -> Unit,
@@ -94,6 +95,11 @@ fun ReaderChrome(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (hasSearch) {
+                    GlyphButton(Glyph.Search, Color.White, "Search", iconSize = 30.dp) {
+                        onSheet(if (sheet == ReaderSheet.Search) null else ReaderSheet.Search)
+                    }
+                }
                 if (hasChapters) {
                     GlyphButton(Glyph.List, Color.White, "Chapters", iconSize = 30.dp) {
                         onSheet(if (sheet == ReaderSheet.Chapters) null else ReaderSheet.Chapters)
