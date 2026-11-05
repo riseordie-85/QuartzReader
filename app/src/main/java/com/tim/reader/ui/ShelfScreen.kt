@@ -24,6 +24,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +52,7 @@ import com.tim.reader.data.ShelfItem
 import com.tim.reader.data.SortOrder
 import com.tim.reader.data.ViewMode
 import com.tim.reader.data.shelfItems
+import com.tim.reader.theme.Presets
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -114,6 +116,7 @@ fun ShelfPager(
                 onViewMode = { mode -> scope.launch { repository.setShelfView(shelf.id, mode) } },
                 onSort = { order -> scope.launch { repository.setShelfSort(shelf.id, order) } },
                 onGroupSeries = { group -> scope.launch { repository.setShelfGrouping(shelf.id, group) } },
+                onStyle = { style -> scope.launch { repository.setShelfTheme(shelf.id, style) } },
             )
         }
     }
@@ -142,6 +145,7 @@ fun ListPage(
         onViewMode = { viewMode = it },
         onSort = {},
         onGroupSeries = {},
+        onStyle = {},
     )
 }
 
@@ -159,6 +163,7 @@ private fun ShelfContent(
     onViewMode: (ViewMode) -> Unit,
     onSort: (SortOrder) -> Unit,
     onGroupSeries: (Boolean) -> Unit,
+    onStyle: (ShelfTheme) -> Unit,
 ) {
     val controls = Color(theme.controls.color)
     val bottomSpace = if (neighbors != null) theme.bottom.heightDp.dp else 24.dp
@@ -182,7 +187,7 @@ private fun ShelfContent(
                     onViewMode(ViewMode.entries[(viewMode.ordinal + 1) % ViewMode.entries.size])
                 }
                 if (sort != null) {
-                    SortMenu(controls, sort, groupSeries, onSort, onGroupSeries)
+                    SortMenu(controls, sort, groupSeries, onSort, onGroupSeries, onStyle)
                 }
             }
             BoxWithConstraints(
@@ -221,6 +226,7 @@ private fun SortMenu(
     groupSeries: Boolean,
     onSort: (SortOrder) -> Unit,
     onGroupSeries: (Boolean) -> Unit,
+    onStyle: (ShelfTheme) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -242,6 +248,16 @@ private fun SortMenu(
                     onGroupSeries(!groupSeries)
                 },
             )
+            HorizontalDivider()
+            Presets.all.forEach { (name, style) ->
+                DropdownMenuItem(
+                    text = { Text("Style: $name") },
+                    onClick = {
+                        open = false
+                        onStyle(style)
+                    },
+                )
+            }
         }
     }
 }

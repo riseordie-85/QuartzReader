@@ -97,7 +97,6 @@ object Schema {
     const val SELECT_SHELF_BOOKS = "SELECT shelf_id, book_id FROM shelf_books WHERE deleted_at IS NULL"
     const val SELECT_SETTING = "SELECT value FROM settings WHERE key = ?"
     const val SELECT_SERIES_BY_KEY = "SELECT id FROM series WHERE match_key = ? AND deleted_at IS NULL LIMIT 1"
-    const val SELECT_HASH = "SELECT 1 FROM books WHERE hash = ? AND deleted_at IS NULL LIMIT 1"
     const val DELETE_EMPTY_SERIES = "UPDATE series SET deleted_at = ?, updated_at = ? WHERE deleted_at IS NULL " +
         "AND id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL AND deleted_at IS NULL)"
     const val UPSERT_SETTING = "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) " +

@@ -1,5 +1,6 @@
 package com.tim.reader.data
 
+import com.tim.reader.engine.NaturalOrder
 import com.tim.reader.theme.ShelfTheme
 
 enum class BookType(val label: String, val folderName: String, val direction: ReadDirection) {
@@ -102,14 +103,16 @@ sealed interface ShelfItem {
     }
 }
 
+/** Volume order: by number, then by title with Vol. 2 before Vol. 10. */
+val volumeOrder: Comparator<Book> =
+    compareBy<Book> { it.seriesNumber ?: Double.MAX_VALUE }.thenBy(NaturalOrder) { it.title }
+
 fun sortBooks(books: List<Book>, sort: SortOrder, state: LibraryState): List<Book> {
     fun seriesTitle(book: Book) = state.seriesFor(book.seriesId)?.title ?: book.title
     return when (sort) {
-        SortOrder.Title -> books.sortedBy { it.title.lowercase() }
+        SortOrder.Title -> books.sortedWith(compareBy(NaturalOrder) { it.title })
         SortOrder.Author -> books.sortedWith(compareBy({ it.author.lowercase() }, { it.title.lowercase() }))
-        SortOrder.Series -> books.sortedWith(
-            compareBy({ seriesTitle(it).lowercase() }, { it.seriesNumber ?: Double.MAX_VALUE }, { it.title.lowercase() }),
-        )
+        SortOrder.Series -> books.sortedWith(compareBy<Book> { seriesTitle(it).lowercase() }.then(volumeOrder))
         SortOrder.RecentlyAdded -> books.sortedByDescending { it.addedAt }
         SortOrder.RecentlyRead -> books.sortedByDescending { it.lastReadAt ?: 0L }
         SortOrder.Progress -> books.sortedByDescending { it.progress }
@@ -130,7 +133,7 @@ fun shelfItems(books: List<Book>, sort: SortOrder, group: Boolean, state: Librar
         if (seriesId == null || volumes == null || volumes.size < 2 || series == null) {
             items += ShelfItem.Single(book)
         } else if (placed.add(seriesId)) {
-            items += ShelfItem.Stack(series, volumes.sortedWith(compareBy({ it.seriesNumber ?: Double.MAX_VALUE }, { it.title })))
+            items += ShelfItem.Stack(series, volumes.sortedWith(volumeOrder))
         }
     }
     return items

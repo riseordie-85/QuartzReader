@@ -20,6 +20,7 @@ import com.tim.reader.data.Book
 import com.tim.reader.data.Series
 import com.tim.reader.data.ShelfItem
 import com.tim.reader.data.nextVolume
+import com.tim.reader.data.volumeOrder
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -32,7 +33,7 @@ fun SeriesScreen(
     header: HeaderActions,
     actions: BookActions,
 ) {
-    val ordered = volumes.sortedWith(compareBy({ it.seriesNumber ?: Double.MAX_VALUE }, { it.title }))
+    val ordered = volumes.sortedWith(volumeOrder)
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
         Column(
             Modifier

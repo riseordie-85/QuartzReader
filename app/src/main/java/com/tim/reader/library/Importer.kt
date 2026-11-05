@@ -193,7 +193,17 @@ class Importer(context: Context) {
         } else {
             folder.hashFile(item.uri)
         }
-        if (repository.hasHash(hash)) return false
+        val existing = repository.state.value.books.firstOrNull { it.hash == hash }
+        if (existing != null) {
+            // The same file arriving with its series tells us where a book imported alone belongs.
+            val parsed = parseName(item.name, allowTrailingNumber = type != BookType.Book)
+            val hint = item.seriesHint?.takeIf { item.isFolder || type != BookType.Book }
+            val series = parsed.series ?: hint
+            if (existing.seriesId == null && series != null) {
+                repository.assignSeries(existing.id, series, parsed.number ?: existing.seriesNumber)
+            }
+            return false
+        }
 
         val parent = folder.typeFolder(type)
         val copy = if (item.isFolder) {

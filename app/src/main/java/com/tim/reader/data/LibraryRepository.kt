@@ -200,8 +200,14 @@ class LibraryRepository private constructor(context: Context) {
 
     suspend fun setHomeTheme(theme: ShelfTheme) = write { saveSetting(KEY_HOME_THEME, ThemeJson.write(theme)) }
 
-    suspend fun hasHash(hash: String): Boolean = withContext(serial) {
-        db.rawQuery(Schema.SELECT_HASH, arrayOf(hash)).use { it.moveToFirst() }
+    /** Puts a book in a series, for when a later import shows which series it belongs to. */
+    suspend fun assignSeries(id: String, seriesTitle: String, number: Double?) = write {
+        val values = ContentValues().apply {
+            put("series_id", seriesIdFor(seriesTitle.trim()))
+            put("series_number", number)
+            put("updated_at", now())
+        }
+        db.update("books", values, "id = ?", arrayOf(id))
     }
 
     private fun seriesIdFor(title: String): String {

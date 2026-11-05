@@ -34,8 +34,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tim.reader.data.Book
 import com.tim.reader.data.BookType
@@ -65,6 +67,7 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
         mutableStateListOf(*state.shelfBooks.filterValues { book.id in it }.keys.toTypedArray())
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    var seriesFocused by remember { mutableStateOf(false) }
     val cover by rememberCover(book.displayCover)
 
     Column(
@@ -88,7 +91,32 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") })
         OutlinedTextField(author, { author = it }, Modifier.fillMaxWidth(), label = { Text("Author") })
-        OutlinedTextField(series, { series = it }, Modifier.fillMaxWidth(), label = { Text("Series") })
+        OutlinedTextField(
+            series,
+            { series = it },
+            Modifier
+                .fillMaxWidth()
+                .onFocusChanged { seriesFocused = it.isFocused },
+            label = { Text("Series") },
+            singleLine = true,
+        )
+        if (seriesFocused) {
+            state.series
+                .filter { it.title.contains(series.trim(), ignoreCase = true) && !it.title.equals(series.trim(), ignoreCase = true) }
+                .sortedBy { it.title.lowercase() }
+                .take(6)
+                .forEach { option ->
+                    Text(
+                        option.title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { series = option.title }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
+        }
         OutlinedTextField(
             number,
             { number = it },

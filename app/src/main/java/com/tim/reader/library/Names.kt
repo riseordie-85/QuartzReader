@@ -28,7 +28,8 @@ fun parseName(fileName: String, allowTrailingNumber: Boolean = true): ParsedName
         ?: volumeMarker.find(clean)
         ?: if (allowTrailingNumber) trailingNumber.find(clean) else null
     val series = match?.groupValues?.get(1)?.let(::tidy)?.takeIf { it.isNotBlank() }
-    val number = if (series != null) match?.groupValues?.get(2)?.toDoubleOrNull() else null
+    // A file named only "Vol. 12" has no series name, but its number still orders the series.
+    val number = match?.groupValues?.get(2)?.toDoubleOrNull()
     return ParsedName(title, series, number)
 }
 
