@@ -126,13 +126,17 @@ fun StrokeEditor(stroke: StrokeLook?, onChange: (StrokeLook?) -> Unit) {
 }
 
 @Composable
-fun ShadowEditor(shadow: ShadowLook?, onChange: (ShadowLook?) -> Unit) {
+fun ShadowEditor(shadow: ShadowLook?, showDirection: Boolean = true, onChange: (ShadowLook?) -> Unit) {
     ToggleRow("Shadow", shadow != null) { on -> onChange(if (on) ShadowLook() else null) }
     if (shadow != null) {
         ColorRow("Shadow color", shadow.color) { onChange(shadow.copy(color = it)) }
-        ThemeSlider("Angle", shadow.angle, 0f..360f, "°") { onChange(shadow.copy(angle = it)) }
+        if (showDirection) {
+            ThemeSlider("Angle", shadow.angle, 0f..360f, "°") { onChange(shadow.copy(angle = it)) }
+        }
         ThemeSlider("Distance", shadow.distanceDp, 0f..32f, " dp") { onChange(shadow.copy(distanceDp = it)) }
-        ThemeSlider("Blur", shadow.blurDp, 0f..32f, " dp") { onChange(shadow.copy(blurDp = it)) }
+        if (showDirection) {
+            ThemeSlider("Blur", shadow.blurDp, 0f..32f, " dp") { onChange(shadow.copy(blurDp = it)) }
+        }
         ThemeSlider("Opacity", shadow.opacity, 0f..1f) { onChange(shadow.copy(opacity = it)) }
     }
 }
@@ -170,7 +174,7 @@ fun FillEditor(fill: Fill, onChange: (Fill) -> Unit) {
     ChipRow(listOf("Color", "Gradient", "Image"), kind) { index ->
         when (index) {
             0 -> onChange(SolidFill(firstColor))
-            1 -> onChange(GradientFill(listOf(firstColor, 0xFF000000)))
+            1 -> if (fill !is GradientFill) onChange(GradientFill(listOf(firstColor, 0xFF000000)))
             else -> if (fill !is ImageFill) onChange(ImageFill(ThemeImages.builtIn.first().first))
         }
     }
@@ -180,8 +184,12 @@ fun FillEditor(fill: Fill, onChange: (Fill) -> Unit) {
         is GradientFill -> {
             val start = fill.colors.firstOrNull() ?: 0xFFFFFFFF
             val end = fill.colors.lastOrNull() ?: 0xFF000000
-            ColorRow("First color", start) { onChange(fill.copy(colors = listOf(it, end))) }
-            ColorRow("Second color", end) { onChange(fill.copy(colors = listOf(start, it))) }
+            ColorRow("First color", start) { picked ->
+                onChange(fill.copy(colors = if (fill.colors.size < 2) listOf(picked, end) else listOf(picked) + fill.colors.drop(1)))
+            }
+            ColorRow("Last color", end) { picked ->
+                onChange(fill.copy(colors = if (fill.colors.size < 2) listOf(start, picked) else fill.colors.dropLast(1) + picked))
+            }
             ChipRow(GradientDirection.entries.map { it.name }, fill.direction.ordinal) {
                 onChange(fill.copy(direction = GradientDirection.entries[it]))
             }

@@ -47,6 +47,7 @@ import com.tim.reader.theme.BookLook
 import com.tim.reader.theme.LedgeAlign
 import com.tim.reader.theme.LedgeLook
 import com.tim.reader.theme.ShelfTheme
+import com.tim.reader.theme.StrokeLook
 import com.tim.reader.theme.cornerShape
 import com.tim.reader.theme.themedFill
 import com.tim.reader.theme.themedShadow
@@ -57,6 +58,9 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val COVER_ASPECT = 2f / 3f
+
+/** The gap between covers, kept small enough that lots of columns still leave room for books. */
+fun bookSpacing(look: BookLook, columns: Int) = minOf(look.spacingDp, 144f / columns).dp
 
 /** How many books fit across at this width. */
 fun columnsFor(widthDp: Float) = (widthDp / 90f).toInt().coerceIn(3, 8)
@@ -285,7 +289,7 @@ fun ShelfRow(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, actions: B
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(theme.book.spacingDp.dp),
+            horizontalArrangement = Arrangement.spacedBy(bookSpacing(theme.book, columns)),
             verticalAlignment = Alignment.Bottom,
         ) {
             repeat(columns) { index ->
@@ -310,7 +314,7 @@ fun LazyListScope.shelfRows(items: List<ShelfItem>, columns: Int, theme: ShelfTh
 
 /** The small outlined pill used for View All and Sort by. */
 @Composable
-fun PillButton(text: String, color: Color, onClick: () -> Unit) {
+fun PillButton(text: String, color: Color, stroke: StrokeLook? = null, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Text(
         text = text,
@@ -320,7 +324,7 @@ fun PillButton(text: String, color: Color, onClick: () -> Unit) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .border(1.5.dp, color, shape)
+            .border(stroke?.widthDp?.dp ?: 1.5.dp, stroke?.let { Color(it.color) } ?: color, shape)
             .padding(horizontal = 16.dp, vertical = 5.dp),
     )
 }

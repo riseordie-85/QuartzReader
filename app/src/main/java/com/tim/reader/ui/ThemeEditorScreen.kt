@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
@@ -91,7 +92,7 @@ private fun ContrastWarning(text: Long, behind: Fill) {
 
 /** A small working copy of a shelf, drawn with the real shelf parts. */
 @Composable
-private fun ThemePreview(theme: ShelfTheme, name: String, state: LibraryState, modifier: Modifier) {
+private fun ThemePreview(theme: ShelfTheme, name: String, state: LibraryState, showButton: Boolean, modifier: Modifier) {
     val books = remember(state.books) { state.books.take(4).map { ShelfItem.Single(it) } }
     val noHeader = remember { HeaderActions({}, {}, {}, {}) }
     val noBooks = remember { BookActions({}, {}, {}, {}) }
@@ -108,9 +109,12 @@ private fun ThemePreview(theme: ShelfTheme, name: String, state: LibraryState, m
             ) {
                 ThemedText(name, theme.title, Modifier.weight(1f))
                 GlyphButton(Glyph.Grid, Color(theme.controls.color), "View") {}
-                PillButton("Sort by", Color(theme.controls.color)) {}
+                PillButton("Sort by", Color(theme.controls.color), theme.controls.stroke) {}
             }
             ShelfRow(books, 4, theme, noBooks)
+            if (showButton) {
+                ShelfButton(name, theme.button, Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()) {}
+            }
         }
         BottomBar(neighbors, theme, Modifier.align(Alignment.BottomCenter))
     }
@@ -158,10 +162,11 @@ fun ThemeEditorScreen(
                         context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
                     }.getOrNull()
                 }
-                if (text == null) {
-                    Toast.makeText(context, "Couldn't read that file", Toast.LENGTH_SHORT).show()
+                val parsed = text?.let { runCatching { ThemeJson.parse(it) }.getOrNull() }
+                if (parsed == null) {
+                    Toast.makeText(context, "That file isn't a Quartz Reader style", Toast.LENGTH_SHORT).show()
                 } else {
-                    theme = ThemeJson.read(text)
+                    theme = parsed
                 }
             }
         }
@@ -172,7 +177,9 @@ fun ThemeEditorScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        val sideBySide = maxWidth > maxHeight
+        // The screen's size, not this box's, because the keyboard must not flip the layout.
+        val screen = LocalConfiguration.current
+        val sideBySide = screen.screenWidthDp > screen.screenHeightDp
         val controls: @Composable (Modifier) -> Unit = { modifier ->
             Column(modifier.padding(16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -256,12 +263,12 @@ fun ThemeEditorScreen(
 
         if (sideBySide) {
             Row(Modifier.fillMaxSize()) {
-                ThemePreview(theme, name, state, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(0.dp)))
+                ThemePreview(theme, name, state, part == ThemePart.Button, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(0.dp)))
                 controls(Modifier.weight(1f).fillMaxHeight())
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                ThemePreview(theme, name, state, Modifier.fillMaxWidth().weight(0.8f).clip(RoundedCornerShape(0.dp)))
+                ThemePreview(theme, name, state, part == ThemePart.Button, Modifier.fillMaxWidth().weight(0.8f).clip(RoundedCornerShape(0.dp)))
                 controls(Modifier.fillMaxWidth().weight(1f))
             }
         }
@@ -339,7 +346,7 @@ private fun ColumnScope.PartEditor(part: ThemePart, theme: ShelfTheme, onChange:
             ContrastWarning(look.textColor, look.fill)
             ColorRow("Icons", look.iconColor) { onChange(theme.copy(header = look.copy(iconColor = it))) }
             StrokeEditor(look.stroke) { onChange(theme.copy(header = look.copy(stroke = it))) }
-            ShadowEditor(look.shadow) { onChange(theme.copy(header = look.copy(shadow = it))) }
+            ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(header = look.copy(shadow = it))) }
         }
         ThemePart.Title -> {
             TextLookEditor(theme.title) { onChange(theme.copy(title = it)) }
@@ -358,7 +365,7 @@ private fun ColumnScope.PartEditor(part: ThemePart, theme: ShelfTheme, onChange:
             }
             ThemeSlider("Corner", look.cornerDp, 0f..30f, " dp") { onChange(theme.copy(ledge = look.copy(cornerDp = it))) }
             StrokeEditor(look.stroke) { onChange(theme.copy(ledge = look.copy(stroke = it))) }
-            ShadowEditor(look.shadow) { onChange(theme.copy(ledge = look.copy(shadow = it))) }
+            ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(ledge = look.copy(shadow = it))) }
         }
         ThemePart.Books -> {
             val look = theme.book
@@ -409,7 +416,7 @@ private fun ColumnScope.PartEditor(part: ThemePart, theme: ShelfTheme, onChange:
             ColorRow("Text", look.textColor) { onChange(theme.copy(button = look.copy(textColor = it))) }
             ContrastWarning(look.textColor, look.fill)
             StrokeEditor(look.stroke) { onChange(theme.copy(button = look.copy(stroke = it))) }
-            ShadowEditor(look.shadow) { onChange(theme.copy(button = look.copy(shadow = it))) }
+            ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(button = look.copy(shadow = it))) }
         }
     }
 }

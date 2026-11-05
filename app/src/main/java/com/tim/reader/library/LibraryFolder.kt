@@ -92,10 +92,11 @@ class LibraryFolder private constructor(context: Context) {
         val tree = treeUri ?: return false
         val found = children(tree, themeFolder(tree)).firstOrNull { it.name == target.name } ?: return false
         val document = DocumentsContract.buildDocumentUriUsingTree(tree, found.documentId)
+        val partial = File(target.path + ".tmp")
         (resolver.openInputStream(document) ?: return false).use { input ->
-            target.outputStream().use { input.copyTo(it, BUFFER) }
+            partial.outputStream().use { input.copyTo(it, BUFFER) }
         }
-        return true
+        return partial.renameTo(target)
     }
 
     /** Copies one file into a library folder and returns the new document. */

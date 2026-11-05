@@ -7,15 +7,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import com.tim.reader.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val MEMORY_BYTES = 192 * 1024 * 1024
+private const val MAX_PIXELS = 16_000_000L
+
 /** Theme artwork, sized to the screen once and then shared. */
 object ThemeImages {
-    private val memory = LruCache<String, ImageBitmap>(12)
+    private val memory = object : LruCache<String, ImageBitmap>(MEMORY_BYTES) {
+        override fun sizeOf(key: String, value: ImageBitmap) = value.asAndroidBitmap().byteCount
+    }
 
     private val placeholders = mapOf(
         "wood" to R.drawable.wall_wood,
@@ -37,8 +43,15 @@ object ThemeImages {
             if (file != null) BitmapFactory.decodeFile(file.path, options) else BitmapFactory.decodeResource(context.resources, resource!!, options)
 
         decode(bounds)
+        // Android refuses to draw a huge bitmap, so size and pixel count both have to stay in check.
+        val longest = maxOf(bounds.outWidth, bounds.outHeight)
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= screenWidth) sample *= 2
+        while (
+            longest / (sample * 2) >= screenWidth ||
+            bounds.outWidth.toLong() * bounds.outHeight / (sample * sample) > MAX_PIXELS
+        ) {
+            sample *= 2
+        }
         decode(BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()?.also { memory.put(name, it) }
     }
 

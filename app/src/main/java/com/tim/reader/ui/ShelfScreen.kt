@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -57,8 +58,10 @@ import com.tim.reader.data.ViewMode
 import com.tim.reader.data.shelfItems
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ShelfTheme
+import com.tim.reader.theme.StrokeLook
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
+import com.tim.reader.theme.themedFill
 import kotlinx.coroutines.launch
 
 /** Shelves repeat this many times each way, so swiping feels endless. */
@@ -149,6 +152,7 @@ fun ListPage(
     var viewMode by remember(title) { mutableStateOf(ViewMode.Shelf) }
     CoverSplit(items, theme, actions, title) { pageModifier ->
         ShelfContent(
+            place = "list:$title",
             title = title,
             theme = theme,
             items = items,
@@ -214,6 +218,7 @@ private fun ShelfContent(
                 if (sort != null) {
                     SortMenu(
                         color = controls,
+                        stroke = theme.controls.stroke,
                         sort = sort,
                         groupSeries = groupSeries,
                         onSort = onSort,
@@ -223,7 +228,7 @@ private fun ShelfContent(
                         onPageSettings = onPageSettings,
                     )
                 } else if (viewMode != ViewMode.List) {
-                    PillButton("Books per row", controls) { choosingRow = true }
+                    PillButton("Books per row", controls, theme.controls.stroke) { choosingRow = true }
                 }
             }
             BoxWithConstraints(
@@ -271,6 +276,7 @@ private fun ShelfContent(
 @Composable
 private fun SortMenu(
     color: Color,
+    stroke: StrokeLook?,
     sort: SortOrder,
     groupSeries: Boolean,
     onSort: (SortOrder) -> Unit,
@@ -281,7 +287,7 @@ private fun SortMenu(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        PillButton("Sort by", color) { open = true }
+        PillButton("Sort by", color, stroke) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             SortOrder.entries.forEach { option ->
                 DropdownMenuItem(
@@ -331,7 +337,7 @@ private fun GridView(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, ac
         modifier = Modifier.fillMaxSize(),
         state = grid,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottom),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(bookSpacing(theme.book, columns)),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         items(items, key = { it.key }) { item ->
@@ -391,6 +397,11 @@ private fun ListView(items: List<ShelfItem>, theme: ShelfTheme, actions: BookAct
 fun BottomBar(neighbors: ShelfNeighbors, theme: ShelfTheme, modifier: Modifier) {
     val look = theme.bottom
     val font = theme.title.copy(sizeSp = 20f, color = look.labelColor, stroke = null, shadow = null)
+    val labelBack = look.labelFill?.let {
+        Modifier
+            .themedFill(it, RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    } ?: Modifier
     Box(
         modifier
             .fillMaxWidth()
@@ -405,8 +416,8 @@ fun BottomBar(neighbors: ShelfNeighbors, theme: ShelfTheme, modifier: Modifier) 
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            ThemedText(neighbors.previous, font, Modifier.clickable(onClickLabel = "Previous shelf", onClick = neighbors.onPrevious))
-            ThemedText(neighbors.next, font, Modifier.clickable(onClickLabel = "Next shelf", onClick = neighbors.onNext))
+            ThemedText(neighbors.previous, font, labelBack.clickable(onClickLabel = "Previous shelf", onClick = neighbors.onPrevious))
+            ThemedText(neighbors.next, font, labelBack.clickable(onClickLabel = "Next shelf", onClick = neighbors.onNext))
         }
     }
 }

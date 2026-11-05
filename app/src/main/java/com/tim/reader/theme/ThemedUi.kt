@@ -1,6 +1,6 @@
 package com.tim.reader.theme
 
-import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -16,17 +16,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -51,6 +50,29 @@ fun fontFamily(name: String): FontFamily = when (name) {
 
 private fun Fill.imageName() = (this as? ImageFill)?.name
 
+/** Repeats an image at the chosen size. */
+private fun tileBrush(image: ImageBitmap, scale: Float) = object : ShaderBrush() {
+    override fun createShader(size: Size): Shader =
+        ImageShader(image, TileMode.Repeated, TileMode.Repeated).apply {
+            setLocalMatrix(Matrix().apply { setScale(scale, scale) })
+        }
+}
+
+/** Fills a shape with an image, cut to fit and centered. */
+private fun coverBrush(image: ImageBitmap) = object : ShaderBrush() {
+    override fun createShader(size: Size): Shader {
+        val scale = maxOf(size.width / image.width, size.height / image.height)
+        return ImageShader(image, TileMode.Clamp, TileMode.Clamp).apply {
+            setLocalMatrix(
+                Matrix().apply {
+                    setScale(scale, scale)
+                    postTranslate((size.width - image.width * scale) / 2, (size.height - image.height * scale) / 2)
+                },
+            )
+        }
+    }
+}
+
 private fun fillBrush(fill: Fill, image: ImageBitmap?): Brush? = when (fill) {
     is SolidFill -> SolidColor(Color(fill.color))
     is GradientFill -> {
@@ -62,24 +84,14 @@ private fun fillBrush(fill: Fill, image: ImageBitmap?): Brush? = when (fill) {
             else -> Brush.linearGradient(colors)
         }
     }
-    is ImageFill -> image?.let { ShaderBrush(ImageShader(it, TileMode.Repeated, TileMode.Repeated)) }
-}
-
-/** Resizes a tile by drawing it again, because an image shader can't be scaled on its own. */
-private fun scaledTile(image: ImageBitmap, scale: Float): ImageBitmap {
-    if (abs(scale - 1f) < 0.01f) return image
-    val width = (image.width * scale).toInt().coerceAtLeast(8)
-    val height = (image.height * scale).toInt().coerceAtLeast(8)
-    return Bitmap.createScaledBitmap(image.asAndroidBitmap(), width, height, true).asImageBitmap()
+    is ImageFill -> image?.let { if (fill.mode == ImageMode.Tile) tileBrush(it, fill.tileScale) else coverBrush(it) }
 }
 
 /** Paints a fill behind content, in the given shape. */
 @Composable
 fun Modifier.themedFill(fill: Fill, shape: Shape): Modifier {
     val image by rememberThemeImage(fill.imageName())
-    val scale = (fill as? ImageFill)?.tileScale ?: 1f
-    val tile = remember(image, scale) { image?.let { scaledTile(it, scale) } }
-    val brush = remember(fill, tile) { fillBrush(fill, tile) }
+    val brush = remember(fill, image) { fillBrush(fill, image) }
     val tint = (fill as? ImageFill)?.tint
     var result = this
     if (brush != null) result = result.background(brush, shape)
@@ -91,7 +103,12 @@ fun Modifier.themedStroke(stroke: StrokeLook?, shape: Shape): Modifier =
     if (stroke == null) this else border(BorderStroke(stroke.widthDp.dp, Color(stroke.color)), shape)
 
 fun Modifier.themedShadow(look: ShadowLook?, shape: Shape): Modifier =
-    if (look == null) this else this.shadow(look.distanceDp.dp, shape, clip = false)
+    if (look == null) {
+        this
+    } else {
+        val color = Color(look.color).copy(alpha = look.opacity)
+        this.shadow(look.distanceDp.dp, shape, clip = false, ambientColor = color, spotColor = color)
+    }
 
 fun cornerShape(cornerDp: Float) = RoundedCornerShape(cornerDp.dp)
 
@@ -110,6 +127,7 @@ fun ThemedBackground(fill: Fill, modifier: Modifier = Modifier, content: @Compos
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+            crop?.tint?.let { Box(Modifier.fillMaxSize().background(Color(it))) }
         }
         content()
     }

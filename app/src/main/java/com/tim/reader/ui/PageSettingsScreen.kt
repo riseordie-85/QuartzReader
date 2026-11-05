@@ -67,8 +67,9 @@ fun PageSettingsScreen(title: String, books: List<Book>, shelf: Shelf?, onDone: 
     var applyToBooks by remember { mutableStateOf(true) }
     var forNewBooks by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
-    val hasText = books.isEmpty() || books.any { it.format.equals("epub", ignoreCase = true) }
-    val hasPages = books.isEmpty() || books.any { !it.format.equals("epub", ignoreCase = true) }
+    // A shelf shows everything, because books added to it later could be of either kind.
+    val hasText = shelf != null || books.isEmpty() || books.any { it.format.equals("epub", ignoreCase = true) }
+    val hasPages = shelf != null || books.isEmpty() || books.any { !it.format.equals("epub", ignoreCase = true) }
 
     Column(
         Modifier
@@ -103,10 +104,12 @@ fun PageSettingsScreen(title: String, books: List<Book>, shelf: Shelf?, onDone: 
             KeepChoice("Font", TEXT_FONTS, prefs.fontFamily) { prefs = prefs.copy(fontFamily = it) }
             KeepChoice("Text size", TEXT_SIZES, prefs.fontSize) { prefs = prefs.copy(fontSize = it) }
             KeepChoice("Spacing", SPACINGS, prefs.lineHeight) {
-                prefs = prefs.copy(lineHeight = it, bookLayout = if (it == null) prefs.bookLayout else false)
+                val keep = it == null && prefs.pageMargins == null
+                prefs = prefs.copy(lineHeight = it, bookLayout = if (keep) shelf?.readerPrefs?.bookLayout else false)
             }
             KeepChoice("Margin", MARGINS, prefs.pageMargins) {
-                prefs = prefs.copy(pageMargins = it, bookLayout = if (it == null) prefs.bookLayout else false)
+                val keep = it == null && prefs.lineHeight == null
+                prefs = prefs.copy(pageMargins = it, bookLayout = if (keep) shelf?.readerPrefs?.bookLayout else false)
             }
             KeepChoice("Layout", listOf("Turn pages" to false, "Scroll" to true), prefs.scrolling) {
                 prefs = prefs.copy(scrolling = it)
@@ -132,10 +135,7 @@ fun PageSettingsScreen(title: String, books: List<Book>, shelf: Shelf?, onDone: 
                     // This finishes even if the screen closes, because it can touch many books.
                     appScope.launch {
                         if (applyToBooks) repository.applyToBooks(books.map { it.id }, prefs, direction)
-                        if (shelf != null) {
-                            val defaults = if (forNewBooks) prefs else ReaderPrefs()
-                            repository.setShelfDefaults(shelf.id, defaults, direction.takeIf { forNewBooks })
-                        }
+                        if (shelf != null && forNewBooks) repository.setShelfDefaults(shelf.id, prefs, direction)
                         withContext(Dispatchers.Main) { onDone() }
                     }
                 },

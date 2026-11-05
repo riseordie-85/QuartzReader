@@ -374,7 +374,10 @@ class LibraryRepository private constructor(context: Context) {
             match
         }
 
-        val bookIds = state.value.books.filter { it.seriesId == seriesId }.map { it.id }
+        val volumes = state.value.books.filter { it.seriesId == seriesId }
+        val bookIds = volumes.map { it.id }
+        // These run first, so a direction chosen in this same edit still wins.
+        volumes.forEach { applyShelfDefaults(it, edit.addShelves) }
         val values = ContentValues().apply {
             put("series_id", targetId)
             put("updated_at", time)
@@ -463,6 +466,18 @@ class LibraryRepository private constructor(context: Context) {
                 put("reader_prefs", writePrefs(book.readerPrefs.overlaidWith(prefs)))
                 direction?.let { put("direction", it.name) }
             }
+        }
+    }
+
+    /** Gives a book what the shelves it just joined set for new books. */
+    private fun applyShelfDefaults(book: Book, shelfIds: Collection<String>) {
+        val shelves = shelfIds.mapNotNull { state.value.shelf(it) }
+        if (shelves.isEmpty()) return
+        val prefs = shelves.fold(book.readerPrefs) { merged, shelf -> merged.overlaidWith(shelf.readerPrefs) }
+        val direction = shelves.mapNotNull { it.defaultDirection }.lastOrNull() ?: book.direction
+        updateBookField(book.id) {
+            put("reader_prefs", writePrefs(prefs))
+            put("direction", direction.name)
         }
     }
 
@@ -572,7 +587,7 @@ class LibraryRepository private constructor(context: Context) {
         val seriesId = seriesTitle?.takeIf { it.isNotBlank() }?.let { seriesIdFor(it.trim(), book.type) }
         val shelves = shelfIds.mapNotNull { state.value.shelf(it) }
         val prefs = shelves.fold(book.readerPrefs) { merged, shelf -> merged.overlaidWith(shelf.readerPrefs) }
-        val direction = shelves.firstNotNullOfOrNull { it.defaultDirection } ?: book.direction
+        val direction = shelves.mapNotNull { it.defaultDirection }.lastOrNull() ?: book.direction
         val values = ContentValues().apply {
             put("id", book.id)
             put("hash", book.hash)
@@ -633,17 +648,7 @@ class LibraryRepository private constructor(context: Context) {
         val current = state.value.shelfBooks.filterValues { bookId in it }.keys
         (current - shelfIds).forEach { db.execSQL(Schema.REMOVE_SHELF_BOOK, arrayOf<Any>(time, time, it, bookId)) }
         (shelfIds - current).forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, bookId, time)) }
-        state.value.book(bookId)?.let { book ->
-            val added = (shelfIds - current).mapNotNull { state.value.shelf(it) }
-            if (added.isNotEmpty()) {
-                val prefs = added.fold(book.readerPrefs) { merged, shelf -> merged.overlaidWith(shelf.readerPrefs) }
-                val direction = added.firstNotNullOfOrNull { it.defaultDirection } ?: book.direction
-                updateBookField(bookId) {
-                    put("reader_prefs", writePrefs(prefs))
-                    put("direction", direction.name)
-                }
-            }
-        }
+        state.value.book(bookId)?.let { applyShelfDefaults(it, shelfIds - current) }
     }
 
     /** Marks a book deleted. The marker stays so that sync can pass the deletion to other devices. */

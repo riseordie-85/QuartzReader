@@ -43,7 +43,8 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit) {
     var choosingRow by remember { mutableStateOf(false) }
     val homeRowKey = booksPerRowKey("home", ViewMode.Shelf)
     val screenWidth = LocalConfiguration.current.screenWidthDp.toFloat()
-    if (choosingRow) BooksPerRowDialog(homeRowKey, columnsFor(screenWidth)) { choosingRow = false }
+    val homeWidth = if (screenWidth >= 700f && DeviceSettings.splitView) screenWidth / 2 else screenWidth
+    if (choosingRow) BooksPerRowDialog(homeRowKey, columnsFor(homeWidth)) { choosingRow = false }
     Column(
         Modifier
             .fillMaxSize()

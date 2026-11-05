@@ -50,7 +50,12 @@ object ThemeFiles {
     private fun copyIn(context: Context, source: Uri, kind: String, displayName: String): File? {
         val target = File(folder(kind) ?: return null, "${UUID.randomUUID().toString().take(8)}_$displayName")
         val input = context.contentResolver.openInputStream(source) ?: return null
-        input.use { reading -> target.outputStream().use { reading.copyTo(it) } }
+        try {
+            input.use { reading -> target.outputStream().use { reading.copyTo(it) } }
+        } catch (error: java.io.IOException) {
+            target.delete()
+            throw error
+        }
         return target
     }
 
@@ -80,7 +85,11 @@ object ThemeFiles {
 
     fun fontFamily(name: String): FontFamily = synchronized(fontFamilies) {
         fontFamilies.getOrPut(name) {
-            find("fonts", name)?.let { FontFamily(Font(it)) } ?: FontFamily.SansSerif
+            // A damaged font would crash text drawing, so it's checked before Compose sees it.
+            find("fonts", name)
+                ?.takeIf { runCatching { Typeface.Builder(it).build() }.getOrNull() != null }
+                ?.let { FontFamily(Font(it)) }
+                ?: FontFamily.SansSerif
         }
     }
 }

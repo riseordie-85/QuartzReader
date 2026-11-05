@@ -40,6 +40,7 @@ import com.tim.reader.data.Shelf
 import com.tim.reader.data.ShelfItem
 import com.tim.reader.data.ViewMode
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.theme.ButtonLook
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
@@ -151,7 +152,7 @@ private fun HomeList(
             }
         }
         item {
-            SectionTitle("Read List", theme) { PillButton("View All", controls, onReadList) }
+            SectionTitle("Read List", theme) { PillButton("View All", controls, theme.controls.stroke, onReadList) }
         }
         item {
             if (readList.isEmpty()) {
@@ -167,7 +168,7 @@ private fun HomeList(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                row.forEach { shelf -> ShelfButton(shelf, Modifier.weight(1f)) { onShelf(shelf.id) } }
+                row.forEach { shelf -> ShelfButton(shelf.name, shelf.theme.button, Modifier.weight(1f)) { onShelf(shelf.id) } }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
@@ -175,8 +176,7 @@ private fun HomeList(
 }
 
 @Composable
-private fun ShelfButton(shelf: Shelf, modifier: Modifier, onClick: () -> Unit) {
-    val look = shelf.theme.button
+fun ShelfButton(name: String, look: ButtonLook, modifier: Modifier, onClick: () -> Unit) {
     val shape = cornerShape(look.cornerDp)
     Box(
         modifier
@@ -184,11 +184,11 @@ private fun ShelfButton(shelf: Shelf, modifier: Modifier, onClick: () -> Unit) {
             .themedShadow(look.shadow, shape)
             .themedFill(look.fill, shape)
             .themedStroke(look.stroke, shape)
-            .clickable(onClickLabel = shelf.name, onClick = onClick),
+            .clickable(onClickLabel = name, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = shelf.name,
+            text = name,
             color = Color(look.textColor),
             fontFamily = fontFamily(look.font),
             fontSize = 26.sp,

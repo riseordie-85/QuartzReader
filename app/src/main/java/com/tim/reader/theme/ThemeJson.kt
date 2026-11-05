@@ -52,8 +52,8 @@ object ThemeJson {
         })
     }.toString()
 
-    /** A theme that can't be read falls back to Silver Gloss rather than breaking the shelf. */
-    fun read(json: String): ShelfTheme = try {
+    /** Reads a theme, and throws if the text isn't one. */
+    fun parse(json: String): ShelfTheme {
         val root = JSONObject(json)
         val header = root.getJSONObject("header")
         val ledge = root.getJSONObject("ledge")
@@ -61,7 +61,7 @@ object ThemeJson {
         val controls = root.getJSONObject("controls")
         val bottom = root.getJSONObject("bottom")
         val button = root.getJSONObject("button")
-        ShelfTheme(
+        return ShelfTheme(
             background = fill(root.getJSONObject("background")),
             header = BarLook(
                 fill = fill(header.getJSONObject("fill")),
@@ -104,6 +104,11 @@ object ThemeJson {
                 shadow = shadow(button.optJSONObject("shadow")),
             ),
         )
+    }
+
+    /** A theme that can't be read falls back to Silver Gloss rather than breaking the shelf. */
+    fun read(json: String): ShelfTheme = try {
+        parse(json)
     } catch (_: Exception) {
         Presets.silverGloss
     }

@@ -1,5 +1,6 @@
 package com.tim.reader.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
@@ -60,7 +62,9 @@ fun SeriesScreen(
             LibraryHeader(theme.header, header)
             ThemedText(series.title, theme.title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             Row(
-                Modifier.padding(horizontal = 24.dp),
+                Modifier
+                    .padding(horizontal = 24.dp)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (ordered.isNotEmpty()) {
