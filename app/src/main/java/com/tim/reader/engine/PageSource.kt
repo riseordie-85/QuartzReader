@@ -3,10 +3,12 @@ package com.tim.reader.engine
 import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.system.ErrnoException
@@ -20,11 +22,23 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 
+/** A tappable area of a page that jumps to another page. Edges are fractions of the page. */
+data class PageLink(val left: Float, val top: Float, val right: Float, val bottom: Float, val target: Int)
+
 /** Every fixed-page format looks like this to the reader. */
 interface PageSource : Closeable {
     val title: String
     val pageCount: Int
     val canSlice: Boolean
+
+    /** True when pages are drawn rather than stored, so they can be redrawn sharper when zoomed. */
+    val isVector: Boolean get() = false
+    val chapters: List<Chapter> get() = emptyList()
+
+    fun links(page: Int): List<PageLink> = emptyList()
+
+    /** The whole page in memory, for tall formats that are slow to read from the middle. */
+    fun fullForSlicing(page: Int): Bitmap? = null
     fun label(page: Int): String
     fun size(page: Int): PageSize?
     fun render(page: Int, targetWidth: Int): Bitmap?
@@ -40,6 +54,15 @@ abstract class ImagePageSource : PageSource {
     protected abstract fun bytes(page: Int): ByteArray
 
     override val canSlice get() = true
+
+    /** JPEG reads quickly from any depth, so only other formats are worth decoding whole. */
+    override fun fullForSlicing(page: Int): Bitmap? {
+        val data = bytes(page)
+        val isJpeg = data.size > 2 && data[0] == 0xFF.toByte() && data[1] == 0xD8.toByte()
+        if (isJpeg) return null
+        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+        return BitmapFactory.decodeByteArray(data, 0, data.size, options)
+    }
 
     override fun size(page: Int): PageSize? =
         sizes[page] ?: ImageDecode.size(bytes(page))?.also { sizes[page] = it }
@@ -226,6 +249,8 @@ class ArchivePageSource(
 
     private val pageOrdinals by lazy { listing.pages.mapTo(HashSet()) { it.ordinal } }
 
+    override val chapters get() = chaptersOf(listing.pages)
+
     val chapterCount get() = listing.pages.map { it.chapter }.distinct().size
     val duplicateNested get() = listing.duplicateNested
     val unreadNested get() = listing.unreadNested
@@ -320,6 +345,8 @@ class FolderPageSource(
 
     override val pageCount get() = listing.pages.size
 
+    override val chapters get() = chaptersOf(listing.pages)
+
     override fun label(page: Int) = listing.pages[page].path.substringAfterLast('/')
 
     override fun bytes(page: Int): ByteArray {
@@ -343,6 +370,24 @@ class PdfPageSource(context: Context, uri: Uri, override val title: String) : Pa
     override val pageCount get() = renderer.pageCount
 
     override val canSlice get() = false
+
+    override val isVector get() = true
+
+    /** Internal links. Older Android versions can't read them, so those PDFs simply have none. */
+    override fun links(page: Int): List<PageLink> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return emptyList()
+        return synchronized(renderer) {
+            renderer.openPage(page).use { pdfPage ->
+                val width = pdfPage.width.toFloat()
+                val height = pdfPage.height.toFloat()
+                pdfPage.gotoLinks.flatMap { link ->
+                    link.bounds.map { box ->
+                        PageLink(box.left / width, box.top / height, box.right / width, box.bottom / height, link.destination.pageNumber)
+                    }
+                }
+            }
+        }
+    }
 
     override fun label(page: Int) = "Page ${page + 1}"
 

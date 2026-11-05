@@ -1,5 +1,19 @@
 package com.tim.reader.engine
 
+/** A jump target in the reader's chapter list. */
+data class Chapter(val title: String, val firstPage: Int)
+
+/** Chapters come from the folders inside an archive. One folder means there's nothing to list. */
+fun chaptersOf(pages: List<Page>): List<Chapter> {
+    val chapters = ArrayList<Chapter>()
+    pages.forEachIndexed { index, page ->
+        if (chapters.isEmpty() || pages[index - 1].chapter != page.chapter) {
+            chapters += Chapter(page.chapter.substringAfterLast('/').ifBlank { "Start" }, index)
+        }
+    }
+    return if (chapters.size > 1) chapters else emptyList()
+}
+
 /** Puts page 10 after page 9, ignoring case. */
 object NaturalOrder : Comparator<String> {
     override fun compare(a: String, b: String): Int {

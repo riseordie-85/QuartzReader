@@ -14,7 +14,38 @@ enum class ReadDirection(val label: String) {
     LeftToRight("Left to right"),
     RightToLeft("Right to left"),
     Vertical("Vertical"),
+    VerticalPaged("Top to bottom, by page"),
 }
+
+/** How a page fits the screen. */
+enum class FitMode(val label: String) {
+    Screen("Whole page"),
+    Width("Fit width"),
+    Height("Fit height"),
+}
+
+enum class PageAnimation(val label: String) {
+    Slide("Slide"),
+    Curl("Page curl"),
+    Fade("Fade"),
+    None("None"),
+}
+
+/** Reader settings at one level. A null value falls back to the level above it. */
+data class ReaderPrefs(
+    val fit: FitMode? = null,
+    val animation: PageAnimation? = null,
+    val background: Long? = null,
+)
+
+/** The settings a book actually reads with, after Book, then Type, then Global. */
+data class ReaderLook(
+    val fit: FitMode = FitMode.Screen,
+    val animation: PageAnimation = PageAnimation.Slide,
+    val background: Long = 0xFF000000,
+)
+
+data class Bookmark(val id: String, val bookId: String, val page: Int, val label: String, val createdAt: Long)
 
 /** The three views the grid icon cycles through. */
 enum class ViewMode { Shelf, Grid, List }
@@ -50,6 +81,8 @@ data class Book(
     val progress: Float,
     val inReadList: Boolean,
     val direction: ReadDirection,
+    val readerPrefs: ReaderPrefs = ReaderPrefs(),
+    val spreadShift: Boolean = false,
 ) {
     val displayCover get() = customCoverPath ?: coverPath
 }
@@ -75,7 +108,20 @@ data class LibraryState(
     val shelves: List<Shelf> = emptyList(),
     val shelfBooks: Map<String, Set<String>> = emptyMap(),
     val homeTheme: ShelfTheme? = null,
+    val globalPrefs: ReaderPrefs = ReaderPrefs(),
+    val typePrefs: Map<BookType, ReaderPrefs> = emptyMap(),
+    val bookmarks: Map<String, List<Bookmark>> = emptyMap(),
 ) {
+    fun readerLook(book: Book): ReaderLook {
+        val type = typePrefs[book.type] ?: ReaderPrefs()
+        val defaults = ReaderLook()
+        return ReaderLook(
+            fit = book.readerPrefs.fit ?: type.fit ?: globalPrefs.fit ?: defaults.fit,
+            animation = book.readerPrefs.animation ?: type.animation ?: globalPrefs.animation ?: defaults.animation,
+            background = book.readerPrefs.background ?: type.background ?: globalPrefs.background ?: defaults.background,
+        )
+    }
+
     private val booksById by lazy { books.associateBy { it.id } }
     private val seriesById by lazy { series.associateBy { it.id } }
 

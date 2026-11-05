@@ -5,7 +5,7 @@ package com.tim.reader.data
  * to this schema rather than replace it.
  */
 object Schema {
-    const val VERSION = 1
+    const val VERSION = 2
 
     const val CREATE_BOOKS = """
         CREATE TABLE books (
@@ -76,6 +76,23 @@ object Schema {
             updated_at INTEGER NOT NULL
         )"""
 
+    const val ADD_BOOK_READER_PREFS = "ALTER TABLE books ADD COLUMN reader_prefs TEXT"
+    const val ADD_BOOK_SPREAD_SHIFT = "ALTER TABLE books ADD COLUMN spread_shift INTEGER NOT NULL DEFAULT 0"
+
+    const val CREATE_BOOKMARKS = """
+        CREATE TABLE bookmarks (
+            id TEXT PRIMARY KEY NOT NULL,
+            book_id TEXT NOT NULL,
+            page INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            deleted_at INTEGER
+        )"""
+
+    /** Each list brings a database from the version before it up to its version. */
+    val UPGRADE_TO_2 = listOf(ADD_BOOK_READER_PREFS, ADD_BOOK_SPREAD_SHIFT, CREATE_BOOKMARKS)
+
     val CREATE_ALL = listOf(
         CREATE_BOOKS,
         CREATE_BOOKS_HASH_INDEX,
@@ -88,7 +105,7 @@ object Schema {
 
     const val BOOK_COLUMNS = "id, hash, type, format, title, author, series_id, series_number, document_uri, " +
         "is_folder, page_count, cover_path, custom_cover_path, added_at, updated_at, last_read_at, position, " +
-        "locator, progress, in_read_list, direction"
+        "locator, progress, in_read_list, direction, reader_prefs, spread_shift"
 
     const val SELECT_BOOKS = "SELECT $BOOK_COLUMNS FROM books WHERE deleted_at IS NULL"
     const val SELECT_SERIES = "SELECT id, title, updated_at FROM series WHERE deleted_at IS NULL"
@@ -96,6 +113,9 @@ object Schema {
         "default_type, updated_at FROM shelves WHERE deleted_at IS NULL ORDER BY sort_position"
     const val SELECT_SHELF_BOOKS = "SELECT shelf_id, book_id FROM shelf_books WHERE deleted_at IS NULL"
     const val SELECT_SETTING = "SELECT value FROM settings WHERE key = ?"
+    const val SELECT_BOOKMARKS = "SELECT id, book_id, page, label, created_at FROM bookmarks " +
+        "WHERE deleted_at IS NULL ORDER BY page"
+    const val REMOVE_BOOKMARK = "UPDATE bookmarks SET deleted_at = ?, updated_at = ? WHERE id = ?"
     const val SELECT_SERIES_BY_KEY = "SELECT id FROM series WHERE match_key = ? AND deleted_at IS NULL LIMIT 1"
     const val DELETE_EMPTY_SERIES = "UPDATE series SET deleted_at = ?, updated_at = ? WHERE deleted_at IS NULL " +
         "AND id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL AND deleted_at IS NULL)"

@@ -15,14 +15,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import org.json.JSONException
+import org.json.JSONObject
 import java.util.UUID
 
 private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "library.db", null, Schema.VERSION) {
     override fun onCreate(db: SQLiteDatabase) {
         Schema.CREATE_ALL.forEach { db.execSQL(it) }
+        Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
+    }
 }
 
 private fun now() = System.currentTimeMillis()
@@ -60,7 +65,23 @@ class LibraryRepository private constructor(context: Context) {
             }
         }
         val home = setting(KEY_HOME_THEME)?.let { ThemeJson.read(it) } ?: Presets.silverGloss
-        mutableState.value = LibraryState(books, series, shelves, membership, home)
+        val bookmarks = db.rawQuery(Schema.SELECT_BOOKMARKS, null).use { rows ->
+            buildList {
+                while (rows.moveToNext()) {
+                    add(Bookmark(rows.getString(0), rows.getString(1), rows.getInt(2), rows.getString(3), rows.getLong(4)))
+                }
+            }
+        }
+        mutableState.value = LibraryState(
+            books = books,
+            series = series,
+            shelves = shelves,
+            shelfBooks = membership,
+            homeTheme = home,
+            globalPrefs = readPrefs(setting(KEY_PREFS_GLOBAL)),
+            typePrefs = BookType.entries.associateWith { readPrefs(setting(KEY_PREFS_TYPE + it.name)) },
+            bookmarks = bookmarks.groupBy { it.bookId },
+        )
     }
 
     private fun Cursor.toBook() = Book(
@@ -85,7 +106,26 @@ class LibraryRepository private constructor(context: Context) {
         progress = getFloat(18),
         inReadList = getInt(19) != 0,
         direction = enumOr(getString(20), ReadDirection.LeftToRight),
+        readerPrefs = readPrefs(getString(21)),
+        spreadShift = getInt(22) != 0,
     )
+
+    private fun readPrefs(json: String?): ReaderPrefs = try {
+        val root = JSONObject(json ?: "{}")
+        ReaderPrefs(
+            fit = root.optString("fit").takeIf { it.isNotEmpty() }?.let { enumOr(it, FitMode.Screen) },
+            animation = root.optString("animation").takeIf { it.isNotEmpty() }?.let { enumOr(it, PageAnimation.Slide) },
+            background = if (root.has("background")) root.getLong("background") else null,
+        )
+    } catch (_: JSONException) {
+        ReaderPrefs()
+    }
+
+    private fun writePrefs(prefs: ReaderPrefs): String = JSONObject().apply {
+        prefs.fit?.let { put("fit", it.name) }
+        prefs.animation?.let { put("animation", it.name) }
+        prefs.background?.let { put("background", it) }
+    }.toString()
 
     private fun Cursor.toShelf() = Shelf(
         id = getString(0),
@@ -247,6 +287,43 @@ class LibraryRepository private constructor(context: Context) {
         }
     }
 
+    suspend fun setGlobalPrefs(prefs: ReaderPrefs) = write { saveSetting(KEY_PREFS_GLOBAL, writePrefs(prefs)) }
+
+    suspend fun setTypePrefs(type: BookType, prefs: ReaderPrefs) =
+        write { saveSetting(KEY_PREFS_TYPE + type.name, writePrefs(prefs)) }
+
+    private fun updateBookField(id: String, build: ContentValues.() -> Unit) {
+        val values = ContentValues().apply(build)
+        values.put("updated_at", now())
+        db.update("books", values, "id = ?", arrayOf(id))
+    }
+
+    suspend fun setBookPrefs(id: String, prefs: ReaderPrefs) =
+        write { updateBookField(id) { put("reader_prefs", writePrefs(prefs)) } }
+
+    suspend fun setSpreadShift(id: String, shift: Boolean) =
+        write { updateBookField(id) { put("spread_shift", if (shift) 1 else 0) } }
+
+    suspend fun setDirection(id: String, direction: ReadDirection) =
+        write { updateBookField(id) { put("direction", direction.name) } }
+
+    suspend fun addBookmark(bookId: String, page: Int, label: String) = write {
+        val values = ContentValues().apply {
+            put("id", UUID.randomUUID().toString())
+            put("book_id", bookId)
+            put("page", page)
+            put("label", label)
+            put("created_at", now())
+            put("updated_at", now())
+        }
+        db.insertOrThrow("bookmarks", null, values)
+    }
+
+    suspend fun removeBookmark(id: String) = write {
+        val time = now()
+        db.execSQL(Schema.REMOVE_BOOKMARK, arrayOf<Any>(time, time, id))
+    }
+
     /** Puts a book in a series, for when a later import shows which series it belongs to. */
     suspend fun assignSeries(id: String, seriesTitle: String, number: Double?) = write {
         val values = ContentValues().apply {
@@ -382,6 +459,8 @@ class LibraryRepository private constructor(context: Context) {
     companion object {
         private const val KEY_SEEDED = "seeded"
         private const val KEY_HOME_THEME = "home_theme"
+        private const val KEY_PREFS_GLOBAL = "reader_prefs"
+        private const val KEY_PREFS_TYPE = "reader_prefs:"
 
         @Volatile
         private var instance: LibraryRepository? = null

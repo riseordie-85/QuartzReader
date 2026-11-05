@@ -348,8 +348,7 @@ private fun BookReader(book: Book, repository: LibraryRepository) {
             }
             ImageReaderScreen(
                 source = source,
-                initialPage = book.position.coerceIn(0, (source.pageCount - 1).coerceAtLeast(0)),
-                initialDirection = book.direction,
+                book = book,
                 onPage = { page ->
                     val last = source.pageCount - 1
                     val progress = if (last <= 0) 1f else page.toFloat() / last
