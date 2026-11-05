@@ -1,6 +1,7 @@
 package com.tim.reader.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tim.reader.data.Book
@@ -38,6 +40,7 @@ import com.tim.reader.data.resolveLook
 import com.tim.reader.engine.Chapter
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.reader.epubPreferences
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -50,9 +53,27 @@ import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.publication.services.search.isSearchable
 import org.readium.r2.shared.publication.services.search.search
 import androidx.compose.ui.graphics.Color
+import kotlin.math.roundToInt
 
 private const val MAX_RESULTS = 300
 private const val SEARCH_GROUP = "search"
+
+/** Kept while the book is open, so reopening search shows the last results. */
+private class SearchState {
+    var query by mutableStateOf("")
+    var searching by mutableStateOf(false)
+    var searched by mutableStateOf(false)
+    val results = mutableStateListOf<Locator>()
+    val scroll = ScrollState(0)
+}
+
+/** Matches the side padding Readium's stylesheet picks for a screen this wide. */
+private fun pageGutter(widthDp: Int) = when {
+    widthDp >= 1200 -> 50
+    widthDp >= 720 -> 40
+    widthDp >= 560 -> 30
+    else -> 20
+}
 
 private fun flatten(links: List<Link>, depth: Int = 0): List<Pair<String, Link>> = links.flatMap { link ->
     val title = "    ".repeat(depth) + (link.title ?: "Untitled")
@@ -69,6 +90,7 @@ fun EpubControls(
     showControls: Boolean,
     onAnimatedTurns: (Boolean) -> Unit,
     onPageColor: (Int) -> Unit,
+    onPagePadding: (outerMargin: Int, cameraGap: Int) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = remember { LibraryRepository.get(context) }
@@ -96,9 +118,19 @@ fun EpubControls(
         epubPreferences(look, direction, twoColumns, fixedLayout)
     }
     LaunchedEffect(preferences) { navigator.submitPreferences(preferences) }
+    // Two pages share one margin in the middle, so each outer edge takes half of its own here.
+    val density = LocalDensity.current.density
+    val scrolling = look.scrolling ?: (direction == ReadDirection.Vertical)
+    val outerMargin = if (twoColumns && !fixedLayout && !scrolling) {
+        (pageGutter(screen.screenWidthDp) * (look.pageMargins ?: 1.0) / 2 * density).roundToInt()
+    } else {
+        0
+    }
+    val cameraGap = (DeviceSettings.cameraGap * density).roundToInt()
     SideEffect {
         onAnimatedTurns(look.animation != PageAnimation.None)
         onPageColor(Color(look.pageBackground).toArgb())
+        onPagePadding(outerMargin, cameraGap)
     }
 
     ReaderWindow(showControls || sheet != null, rotationLocked)
@@ -109,6 +141,7 @@ fun EpubControls(
     val locator by navigator.currentLocator.collectAsState()
     val page = ((locator.locations.position ?: 1) - 1).coerceAtLeast(0)
     val pageCount = positions.size.coerceAtLeast(1)
+    val search = remember(publication) { SearchState() }
 
     if (!showControls) return
 
@@ -191,6 +224,8 @@ fun EpubControls(
                 onDone = { sheet = null },
             )
             ReaderSheet.Search -> SearchSheet(
+                state = search,
+                scope = scope,
                 publication = publication,
                 navigator = navigator,
                 onMatch = { result ->
@@ -206,7 +241,10 @@ fun EpubControls(
                         navigator.applyDecorations(listOf(match), SEARCH_GROUP)
                     }
                 },
-                onDone = { sheet = null },
+                onDone = {
+                    sheet = null
+                    scope.launch { navigator.applyDecorations(emptyList(), SEARCH_GROUP) }
+                },
             )
         }
     }
@@ -216,54 +254,50 @@ fun EpubControls(
 @OptIn(ExperimentalReadiumApi::class)
 @Composable
 private fun ColumnScope.SearchSheet(
+    state: SearchState,
+    scope: CoroutineScope,
     publication: Publication,
     navigator: EpubNavigatorFragment,
     onMatch: (Locator) -> Unit,
     onDone: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
-    var query by remember { mutableStateOf("") }
-    var searching by remember { mutableStateOf(false) }
-    var searched by remember { mutableStateOf(false) }
-    val results = remember { mutableStateListOf<Locator>() }
-
-    LaunchedEffect(Unit) { navigator.applyDecorations(emptyList(), SEARCH_GROUP) }
-
     fun runSearch() {
-        val text = query.trim()
-        if (text.isEmpty() || searching) return
-        searching = true
-        searched = true
-        results.clear()
+        val text = state.query.trim()
+        if (text.isEmpty() || state.searching) return
+        state.searching = true
+        state.searched = true
+        state.results.clear()
         scope.launch {
+            navigator.applyDecorations(emptyList(), SEARCH_GROUP)
+            state.scroll.scrollTo(0)
             val found = publication.search(text)
             try {
-                while (found != null && results.size < MAX_RESULTS) {
+                while (found != null && state.results.size < MAX_RESULTS) {
                     val page = found.next().getOrNull() ?: break
-                    results += page.locators
+                    state.results += page.locators
                 }
             } finally {
                 found?.close()
-                searching = false
+                state.searching = false
             }
         }
     }
 
-    ReaderSheetCard("Search", onDone) {
+    ReaderSheetCard("Search", onDone, state.scroll) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
+                value = state.query,
+                onValueChange = { state.query = it },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             TextButton(::runSearch) { Text("Find") }
         }
-        if (searching) CircularProgressIndicator(Modifier.padding(8.dp))
-        if (searched && !searching && results.isEmpty()) {
+        if (state.searching) CircularProgressIndicator(Modifier.padding(8.dp))
+        if (state.searched && !state.searching && state.results.isEmpty()) {
             Text("Nothing found", modifier = Modifier.padding(vertical = 10.dp))
         }
-        results.forEach { result ->
+        state.results.forEach { result ->
             val before = result.text.before.orEmpty().takeLast(30)
             val after = result.text.after.orEmpty().take(30)
             Text(

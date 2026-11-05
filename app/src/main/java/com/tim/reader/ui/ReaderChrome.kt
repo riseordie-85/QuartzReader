@@ -1,6 +1,7 @@
 package com.tim.reader.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -178,7 +179,12 @@ private fun ReaderTimeline(page: Int, pageCount: Int, onSeek: (Int) -> Unit) {
 
 /** A panel filling the space under the title bar. */
 @Composable
-fun ColumnScope.ReaderSheetCard(title: String, onDone: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun ColumnScope.ReaderSheetCard(
+    title: String,
+    onDone: () -> Unit,
+    scrollState: ScrollState = rememberScrollState(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         Modifier
             .weight(1f)
@@ -194,7 +200,7 @@ fun ColumnScope.ReaderSheetCard(title: String, onDone: () -> Unit, content: @Com
         Column(
             Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(top = 4.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             content = content,

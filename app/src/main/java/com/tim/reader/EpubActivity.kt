@@ -1,5 +1,6 @@
 package com.tim.reader
 
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.ViewGroup
@@ -10,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -45,6 +47,10 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var navigator: EpubNavigatorFragment? = null
     private var controls by mutableStateOf(false)
     private var animatedTurns = true
+    private var pageContainer: FragmentContainerView? = null
+    private var cutout = Insets.NONE
+    private var outerMargin = 0
+    private var cameraGap = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -83,10 +89,15 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
 
         // The bars come and go, but text should stay clear of a camera cutout.
         val container = findViewById<FragmentContainerView>(R.id.navigator_container)
+        pageContainer = container
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        ViewCompat.setOnApplyWindowInsetsListener(container) { view, insets ->
-            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
-            view.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom)
+        ViewCompat.setOnApplyWindowInsetsListener(container) { _, insets ->
+            val found = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            if (found != cutout) {
+                cutout = found
+                ResultsLog.add("Screen cutout: $found, shapes ${insets.displayCutout?.boundingRects}")
+            }
+            updatePagePadding()
             insets
         }
 
@@ -126,6 +137,11 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                             showControls = controls,
                             onAnimatedTurns = { animatedTurns = it },
                             onPageColor = container::setBackgroundColor,
+                            onPagePadding = { outer, gap ->
+                                outerMargin = outer
+                                cameraGap = gap
+                                updatePagePadding()
+                            },
                         )
                     }
                 }
@@ -148,6 +164,15 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     }
 
     override fun onExternalLinkActivated(url: AbsoluteUrl) = Unit
+
+    /** Both sides match even when only one has a camera, so the spine stays in the middle. */
+    private fun updatePagePadding() {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val sideGap = if (isLandscape) cameraGap else 0
+        val endGap = if (isLandscape) 0 else cameraGap
+        val side = maxOf(cutout.left, cutout.right) + outerMargin + sideGap
+        pageContainer?.setPadding(side, cutout.top + endGap, side, cutout.bottom + endGap)
+    }
 
     /** Volume keys turn pages, as they do in the image reader. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

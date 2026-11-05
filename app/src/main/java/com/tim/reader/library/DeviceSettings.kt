@@ -18,6 +18,7 @@ object DeviceSettings {
     private const val KEY_SPLIT_VIEW = "split_view"
     private const val KEY_TWO_PAGE = "two_page"
     private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+    private const val KEY_CAMERA_GAP = "camera_gap"
     private var preferences: SharedPreferences? = null
 
     var splitView by mutableStateOf(true)
@@ -29,12 +30,22 @@ object DeviceSettings {
     var keepScreenOn by mutableStateOf(true)
         private set
 
+    /** Extra space in dp, for a camera in the screen that Android doesn't report. */
+    var cameraGap by mutableStateOf(0)
+        private set
+
     fun load(context: Context) {
         val saved = context.applicationContext.getSharedPreferences("device", Context.MODE_PRIVATE)
         preferences = saved
         splitView = saved.getBoolean(KEY_SPLIT_VIEW, true)
         twoPage = TwoPageMode.entries.firstOrNull { it.name == saved.getString(KEY_TWO_PAGE, null) } ?: TwoPageMode.Auto
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)
+        cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
+    }
+
+    fun updateCameraGap(dp: Int) {
+        cameraGap = dp
+        preferences?.edit { putInt(KEY_CAMERA_GAP, dp) }
     }
 
     fun updateTwoPage(mode: TwoPageMode) {

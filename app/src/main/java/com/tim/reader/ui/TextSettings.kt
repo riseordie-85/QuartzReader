@@ -38,11 +38,12 @@ private fun SettingSlider(
     label: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
+    display: (Float) -> String = { "${(it * 100).roundToInt()}%" },
     onDone: (Float) -> Unit,
 ) {
     var dragging by remember(value) { mutableStateOf<Float?>(null) }
     val shown = dragging ?: value
-    Text("$label: ${(shown * 100).roundToInt()}%")
+    Text("$label: ${display(shown)}")
     Slider(
         value = shown,
         onValueChange = { dragging = it },
@@ -135,5 +136,11 @@ fun ColumnScope.TextSettings(
         PanelHeading("This device")
         ToggleRow("Keep screen on", DeviceSettings.keepScreenOn) { DeviceSettings.updateKeepScreenOn(it) }
         ToggleRow("Lock rotation", rotationLocked, actions.onRotationLock)
+        SettingSlider(
+            label = "Camera gap",
+            value = DeviceSettings.cameraGap.toFloat(),
+            range = 0f..96f,
+            display = { "${it.roundToInt()} dp" },
+        ) { DeviceSettings.updateCameraGap(it.roundToInt()) }
     }
 }
