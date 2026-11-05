@@ -33,6 +33,8 @@ object ThemeJson {
         put("controls", JSONObject().apply {
             put("color", theme.controls.color)
             putOpt("stroke", stroke(theme.controls.stroke))
+            theme.controls.fill?.let { put("fill", fill(it)) }
+            theme.controls.textColor?.let { put("textColor", it) }
         })
         put("bottom", JSONObject().apply {
             put("fade", theme.bottom.fadeColor)
@@ -86,7 +88,12 @@ object ThemeJson {
                 highlight = book.optBoolean("highlight"),
                 spacingDp = book.getDouble("spacing").toFloat(),
             ),
-            controls = ControlsLook(controls.getLong("color"), stroke(controls.optJSONObject("stroke"))),
+            controls = ControlsLook(
+                color = controls.getLong("color"),
+                stroke = stroke(controls.optJSONObject("stroke")),
+                fill = controls.optJSONObject("fill")?.let { fill(it) },
+                textColor = if (controls.has("textColor")) controls.getLong("textColor") else null,
+            ),
             bottom = BottomLook(
                 fadeColor = bottom.getLong("fade"),
                 heightDp = bottom.getDouble("height").toFloat(),

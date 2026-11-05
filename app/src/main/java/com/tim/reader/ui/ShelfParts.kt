@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -47,7 +48,7 @@ import com.tim.reader.theme.BookLook
 import com.tim.reader.theme.LedgeAlign
 import com.tim.reader.theme.LedgeLook
 import com.tim.reader.theme.ShelfTheme
-import com.tim.reader.theme.StrokeLook
+import com.tim.reader.theme.ControlsLook
 import com.tim.reader.theme.cornerShape
 import com.tim.reader.theme.themedFill
 import com.tim.reader.theme.themedShadow
@@ -314,17 +315,21 @@ fun LazyListScope.shelfRows(items: List<ShelfItem>, columns: Int, theme: ShelfTh
 
 /** The small outlined pill used for View All and Sort by. */
 @Composable
-fun PillButton(text: String, color: Color, stroke: StrokeLook? = null, onClick: () -> Unit) {
+fun PillButton(text: String, look: ControlsLook, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
+    val stroke = look.stroke
+    val back = look.fill?.let { Modifier.themedFill(it, shape) } ?: Modifier
     Text(
         text = text,
-        color = color,
+        color = Color(look.textColor ?: look.color),
         fontSize = 15.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
+            .clip(shape)
+            .then(back)
             .clickable(onClick = onClick)
-            .border(stroke?.widthDp?.dp ?: 1.5.dp, stroke?.let { Color(it.color) } ?: color, shape)
+            .border(stroke?.widthDp?.dp ?: 1.5.dp, Color(stroke?.color ?: look.color), shape)
             .padding(horizontal = 16.dp, vertical = 5.dp),
     )
 }

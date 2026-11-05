@@ -140,7 +140,7 @@ private fun HomeList(
         item { LibraryHeader(theme.header, header) }
         item {
             SectionTitle("Recently Read", theme) {
-                GlyphButton(Glyph.Grid, controls, "Open Recently Read", onRecentlyRead)
+                GlyphButton(Glyph.Grid, controls, "Open Recently Read", iconSize = 26.dp, outline = theme.controls.stroke, onClick = onRecentlyRead)
             }
         }
         item {
@@ -152,7 +152,7 @@ private fun HomeList(
             }
         }
         item {
-            SectionTitle("Read List", theme) { PillButton("View All", controls, theme.controls.stroke, onReadList) }
+            SectionTitle("Read List", theme) { PillButton("View All", theme.controls, onReadList) }
         }
         item {
             if (readList.isEmpty()) {

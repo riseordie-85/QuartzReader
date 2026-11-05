@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tim.reader.theme.StrokeLook
 
 enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search, Notes, Share }
 
@@ -60,13 +61,16 @@ private fun DrawScope.drawGear(color: Color) {
     drawCircle(color, unit * 0.27f, middle, style = Stroke(unit * 0.15f))
 }
 
-private fun DrawScope.drawGrid(color: Color) {
+private fun DrawScope.drawGrid(color: Color, outline: StrokeLook?) {
     val unit = size.minDimension
     val cell = unit * 0.38f
     val far = unit * 0.54f
     val near = unit * 0.08f
     listOf(Offset(near, near), Offset(far, near), Offset(near, far), Offset(far, far)).forEach {
         drawRect(color, it, Size(cell, cell))
+        if (outline != null) {
+            drawRect(Color(outline.color), it, Size(cell, cell), style = Stroke(outline.widthDp.dp.toPx()))
+        }
     }
 }
 
@@ -137,6 +141,7 @@ fun GlyphButton(
     description: String,
     iconSize: Dp,
     onLongClick: (() -> Unit)? = null,
+    outline: StrokeLook? = null,
     onClick: () -> Unit,
 ) {
     Canvas(
@@ -149,7 +154,7 @@ fun GlyphButton(
             Glyph.Plus -> drawPlus(color)
             Glyph.Book -> drawBook(color)
             Glyph.Gear -> drawGear(color)
-            Glyph.Grid -> drawGrid(color)
+            Glyph.Grid -> drawGrid(color, outline)
             Glyph.List -> drawList(color)
             Glyph.Search -> drawSearch(color)
             Glyph.Notes -> drawNotes(color)

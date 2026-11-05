@@ -67,7 +67,13 @@ data class BookLook(
     val spacingDp: Float = 16f,
 )
 
-data class ControlsLook(val color: Long, val stroke: StrokeLook? = null)
+/** The view icon and the small pill buttons. A pill's text falls back to [color]. */
+data class ControlsLook(
+    val color: Long,
+    val stroke: StrokeLook? = null,
+    val fill: Fill? = null,
+    val textColor: Long? = null,
+)
 
 data class BottomLook(
     val fadeColor: Long,

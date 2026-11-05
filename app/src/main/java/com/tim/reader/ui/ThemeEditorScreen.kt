@@ -192,8 +192,8 @@ private fun ThemePreview(theme: ShelfTheme, name: String, state: LibraryState, s
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ThemedText(name, theme.title, Modifier.weight(1f))
-                GlyphButton(Glyph.Grid, Color(theme.controls.color), "View") {}
-                PillButton("Sort by", Color(theme.controls.color), theme.controls.stroke) {}
+                GlyphButton(Glyph.Grid, Color(theme.controls.color), "View", iconSize = 26.dp, outline = theme.controls.stroke) {}
+                PillButton("Sort by", theme.controls) {}
             }
             ShelfRow(books, 4, theme, noBooks)
             if (showButton) {
@@ -462,6 +462,18 @@ private fun PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme
         ThemePart.Title -> TextLookEditor(theme.title, theme.background) { onChange(theme.copy(title = it)) }
         ThemePart.Ledge -> {
             val look = theme.ledge
+            EditorOutlineButton("Copy from header", Modifier.fillMaxWidth()) {
+                onChange(
+                    theme.copy(
+                        ledge = look.copy(
+                            fill = theme.header.fill,
+                            cornerDp = theme.header.cornerDp,
+                            stroke = theme.header.stroke,
+                            shadow = theme.header.shadow,
+                        ),
+                    ),
+                )
+            }
             FillEditor("Fill Style", look.fill) { onChange(theme.copy(ledge = look.copy(fill = it))) }
             EditorCard("Size and Shape") {
                 EditorSlider("Height", look.heightDp, 0f..60f, ::dpLabel) { onChange(theme.copy(ledge = look.copy(heightDp = it))) }
@@ -489,9 +501,20 @@ private fun PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme
         }
         ThemePart.Controls -> {
             val look = theme.controls
-            EditorCard("Color") {
-                ColorRow("Icons and Sort By", look.color) { onChange(theme.copy(controls = look.copy(color = it))) }
+            EditorCard("View Icon") {
+                ColorRow("Color", look.color) { onChange(theme.copy(controls = look.copy(color = it))) }
                 ContrastWarning(look.color, theme.background)
+            }
+            EditorCard("Sort Button") {
+                ColorRow("Text", look.textColor ?: look.color) { onChange(theme.copy(controls = look.copy(textColor = it))) }
+                ContrastWarning(look.textColor ?: look.color, look.fill ?: theme.background)
+                EditorDivider()
+                EditorSwitchRow("Fill behind the text", look.fill != null) { on ->
+                    onChange(theme.copy(controls = look.copy(fill = if (on) SolidFill(0xFFFFFFFF) else null)))
+                }
+            }
+            look.fill?.let { fill ->
+                FillEditor("Sort Button Fill", fill) { onChange(theme.copy(controls = look.copy(fill = it))) }
             }
             StrokeEditor(look.stroke) { onChange(theme.copy(controls = look.copy(stroke = it))) }
         }

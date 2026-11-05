@@ -58,7 +58,7 @@ import com.tim.reader.data.ViewMode
 import com.tim.reader.data.shelfItems
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ShelfTheme
-import com.tim.reader.theme.StrokeLook
+import com.tim.reader.theme.ControlsLook
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
 import com.tim.reader.theme.themedFill
@@ -212,13 +212,12 @@ private fun ShelfContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ThemedText(title, theme.title, Modifier.weight(1f))
-                GlyphButton(Glyph.Grid, controls, "Change view") {
+                GlyphButton(Glyph.Grid, controls, "Change view", iconSize = 26.dp, outline = theme.controls.stroke) {
                     onViewMode(ViewMode.entries[(viewMode.ordinal + 1) % ViewMode.entries.size])
                 }
                 if (sort != null) {
                     SortMenu(
-                        color = controls,
-                        stroke = theme.controls.stroke,
+                        look = theme.controls,
                         sort = sort,
                         groupSeries = groupSeries,
                         onSort = onSort,
@@ -228,7 +227,7 @@ private fun ShelfContent(
                         onPageSettings = onPageSettings,
                     )
                 } else if (viewMode != ViewMode.List) {
-                    PillButton("Books per row", controls, theme.controls.stroke) { choosingRow = true }
+                    PillButton("Books per row", theme.controls) { choosingRow = true }
                 }
             }
             BoxWithConstraints(
@@ -275,8 +274,7 @@ private fun ShelfContent(
 
 @Composable
 private fun SortMenu(
-    color: Color,
-    stroke: StrokeLook?,
+    look: ControlsLook,
     sort: SortOrder,
     groupSeries: Boolean,
     onSort: (SortOrder) -> Unit,
@@ -287,7 +285,7 @@ private fun SortMenu(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        PillButton("Sort by", color, stroke) { open = true }
+        PillButton("Sort by", look) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             SortOrder.entries.forEach { option ->
                 DropdownMenuItem(
