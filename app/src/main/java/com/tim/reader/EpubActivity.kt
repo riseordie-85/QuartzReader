@@ -24,6 +24,7 @@ import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.commitNow
 import androidx.lifecycle.lifecycleScope
 import com.tim.reader.data.LibraryRepository
+import com.tim.reader.theme.BookFonts
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
 import com.tim.reader.library.DeviceSettings
@@ -75,6 +76,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         val start = OpenEpub.locator?.let { saved ->
             runCatching { Locator.fromJSON(JSONObject(saved)) }.getOrNull()
         }
+        BookFonts.init(this)
         val repository = LibraryRepository.get(this)
         val book = OpenEpub.bookId?.let { repository.state.value.book(it) }
         val look = book?.let { repository.state.value.readerLook(it) } ?: ReaderLook()
@@ -92,10 +94,11 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             listener = this,
             // The activity keeps pages clear of the cutout, so Readium shouldn't add it again.
             configuration = EpubNavigatorFragment.Configuration(
+                servedAssets = listOf(BookFonts.SERVED),
                 shouldApplyInsetsPadding = false,
                 // Readium can't read a selection from a fixed-layout page, so those keep Android's menu.
                 selectionActionModeCallback = selectionWatcher.takeIf { publication.metadata.layout != Layout.FIXED },
-            ),
+            ).also(BookFonts::declareIn),
         )
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub)

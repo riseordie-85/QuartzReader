@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tim.reader.appScope
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.ViewMode
@@ -41,6 +44,18 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit) {
     val scope = rememberCoroutineScope()
     var organizing by remember { mutableStateOf(false) }
     var choosingRow by remember { mutableStateOf(false) }
+    var showLicenses by remember { mutableStateOf(false) }
+    if (showLicenses) {
+        val text = remember {
+            runCatching { context.assets.open("font-licenses.txt").use { it.readBytes().decodeToString() } }.getOrDefault("")
+        }
+        AlertDialog(
+            onDismissRequest = { showLicenses = false },
+            title = { Text("Font licenses") },
+            text = { Text(text, fontSize = 12.sp, modifier = Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = { TextButton({ showLicenses = false }) { Text("Close") } },
+        )
+    }
     val homeRowKey = booksPerRowKey("home", ViewMode.Shelf)
     val screenWidth = LocalConfiguration.current.screenWidthDp.toFloat()
     val homeWidth = if (screenWidth >= 700f && DeviceSettings.splitView) screenWidth / 2 else screenWidth
@@ -76,6 +91,8 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit) {
         OutlinedButton({ choosingRow = true }, Modifier.fillMaxWidth()) { Text("Books per row on Home") }
         Text("Display", style = MaterialTheme.typography.titleMedium)
         ToggleRow("Split view on large screens", DeviceSettings.splitView) { DeviceSettings.updateSplitView(it) }
+        Text("About", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton({ showLicenses = true }, Modifier.fillMaxWidth()) { Text("Font licenses") }
         Text("Testing", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onTestTools, Modifier.fillMaxWidth()) { Text("Test tools") }
     }

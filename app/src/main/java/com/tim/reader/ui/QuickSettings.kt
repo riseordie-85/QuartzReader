@@ -44,6 +44,7 @@ import com.tim.reader.data.ReaderLook
 import com.tim.reader.data.ReaderPrefs
 import com.tim.reader.data.USE_BOOK_VALUE
 import com.tim.reader.reader.TEXT_FONTS
+import com.tim.reader.theme.BookFonts
 import kotlin.math.abs
 
 val QUICK_BLUE = Color(0xFF4FC3F7)
@@ -194,7 +195,7 @@ fun ColumnScope.QuickSettings(
                     DropdownMenu(expanded = moreFonts, onDismissRequest = { moreFonts = false }) {
                         TEXT_FONTS.filter { font -> MAIN_FONTS.none { it.second == font.second } }.forEach { (label, family) ->
                             DropdownMenuItem(
-                                text = { Text(label) },
+                                text = { Text(label, fontFamily = BookFonts.family(family)) },
                                 onClick = {
                                     moreFonts = false
                                     onChange { it.copy(fontFamily = family) }

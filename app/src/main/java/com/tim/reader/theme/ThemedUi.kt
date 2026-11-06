@@ -45,7 +45,11 @@ fun fontFamily(name: String): FontFamily = when (name) {
     "mono" -> FontFamily.Monospace
     "cursive" -> FontFamily.Cursive
     "sans" -> FontFamily.SansSerif
-    else -> if (ThemeFiles.isImported(name)) ThemeFiles.fontFamily(name) else FontFamily.SansSerif
+    else -> when {
+        ThemeFiles.isImported(name) -> ThemeFiles.fontFamily(name)
+        BookFonts.isThemeName(name) -> BookFonts.family(name) ?: FontFamily.SansSerif
+        else -> FontFamily.SansSerif
+    }
 }
 
 private fun Fill.imageName() = (this as? ImageFill)?.name

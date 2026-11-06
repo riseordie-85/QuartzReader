@@ -5,6 +5,7 @@ import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
 import com.tim.reader.data.TextAlignment
 import androidx.core.graphics.ColorUtils
+import com.tim.reader.theme.BookFonts
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.preferences.Color
 import org.readium.r2.navigator.preferences.ColumnCount
@@ -15,7 +16,7 @@ import org.readium.r2.navigator.preferences.TextAlign
 import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.shared.ExperimentalReadiumApi
 
-/** Fonts every device can show, by their CSS name. */
+/** Fonts every device can show, then the reading fonts packaged with the app, by their CSS name. */
 val TEXT_FONTS = listOf(
     "Book's font" to BOOK_FONT,
     "Serif" to "serif",
@@ -23,7 +24,7 @@ val TEXT_FONTS = listOf(
     "Monospace" to "monospace",
     "Cursive" to "cursive",
     "OpenDyslexic" to "OpenDyslexic",
-)
+) + BookFonts.all.map { it.name to it.name }
 
 /** Turns reader settings into Readium's preferences. */
 @OptIn(ExperimentalReadiumApi::class)

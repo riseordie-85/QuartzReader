@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tim.reader.theme.BookFonts
 import com.tim.reader.theme.Fill
 import com.tim.reader.theme.GradientDirection
 import com.tim.reader.theme.GradientFill
@@ -383,7 +384,8 @@ fun FontEditor(font: String, onChange: (String) -> Unit) {
     }
     val fonts = remember(imported, font) {
         listOf("sans" to "Sans", "serif" to "Serif", "mono" to "Mono", "cursive" to "Cursive") +
-            ThemeFiles.fonts().map { it to ThemeFiles.fontLabel(it) }
+            ThemeFiles.fonts().map { it to ThemeFiles.fontLabel(it) } +
+            BookFonts.all.map { BookFonts.themeName(it) to it.name }
     }
     EditorCard(
         "Font",

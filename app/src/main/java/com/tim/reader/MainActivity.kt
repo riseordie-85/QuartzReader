@@ -13,6 +13,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.theme.BookFonts
 import com.tim.reader.theme.ThemeFiles
 import com.tim.reader.ui.ReaderApp
 
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
         ResultsLog.init(this)
         DeviceSettings.load(this)
         ThemeFiles.init(this)
+        BookFonts.init(this)
         if (savedInstanceState == null) incoming.value = urisFrom(intent)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {

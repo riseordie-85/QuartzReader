@@ -1,0 +1,515 @@
+FONT LICENSES
+
+These fonts come from the ebook-fonts collection by Nico Verbruggen,
+https://github.com/nicoverbruggen/ebook-fonts, which adjusts open fonts for reading on screens.
+Each font keeps its original copyright and license, listed below.
+
+============================================================
+Cartisse
+Files: Cartisse-Regular.ttf, Cartisse-Bold.ttf, Cartisse-Italic.ttf, Cartisse-BoldItalic.ttf
+
+Copyright (c) 1989-1992, Bitstream Inc., Cambridge, MA.
+Copyright (c) 2009, 2010, 2011, 2012 Andrey V. Panov
+Copyright (c) 2013-2024 Michael Sharpe
+Copyright (c) 2025-2026 Nico Verbruggen
+
+Cartisse is based on XCharter, itself an extension of Bitstream Charter.
+Cartisse contains metrics modifications and removes selected ligatures.
+
+Licensed under the Bitstream Charter license, reproduced at the end of this file.
+
+============================================================
+Libron
+Files: Libron-Regular.ttf, Libron-Bold.ttf, Libron-Italic.ttf, Libron-BoldItalic.ttf
+
+Newsreader (c) 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+Readerly (c) 2026 Nico Verbruggen (https://github.com/nicoverbruggen/readerly)
+Libron (c) 2026 Nico Verbruggen (https://github.com/nicoverbruggen/libron)
+
+Libron is a modified version of Readerly with reduced serifs.
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Bitter
+Files: NV_Bitter-Regular.ttf, NV_Bitter-Bold.ttf, NV_Bitter-Italic.ttf, NV_Bitter-BoldItalic.ttf
+
+Copyright 2011 The Bitter Project Authors (https://github.com/solmatas/BitterPro)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Charis
+Files: NV_Charis-Regular.ttf, NV_Charis-Bold.ttf, NV_Charis-Italic.ttf, NV_Charis-BoldItalic.ttf
+
+Copyright (c) 1997-2025 SIL Global
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Garamond
+Files: NV_Garamond-Regular.ttf, NV_Garamond-Bold.ttf, NV_Garamond-Italic.ttf, NV_Garamond-BoldItalic.ttf
+
+Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Jost
+Files: NV_Jost-Regular.ttf, NV_Jost-Bold.ttf, NV_Jost-Italic.ttf, NV_Jost-BoldItalic.ttf
+
+Copyright 2020 The Jost Project Authors (https://github.com/indestructible-type/Jost)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Legible Next
+Files: NV_Legible_Next-Regular.ttf, NV_Legible_Next-Bold.ttf, NV_Legible_Next-Italic.ttf, NV_Legible_Next-BoldItalic.ttf
+
+© 2020, 2024 Braille Institute of America, Inc., a 501(c)(3) Charitable Organization.
+
+Based on Atkinson Hyperlegible Next, licensed under the SIL Open Font License 1.1 (https://github.com/googlefonts/atkinson-hyperlegible-next).
+
+============================================================
+NV Palatium
+Files: NV_Palatium-Regular.ttf, NV_Palatium-Bold.ttf, NV_Palatium-Italic.ttf, NV_Palatium-BoldItalic.ttf
+
+Copyright 2014 by (URW)++ Design & Development.
+Copyright 2019 by Daniel Benjamin Miller.
+
+Based on Domitian, which is offered under the SIL Open Font License 1.1, the GNU AGPL with a font exception, or the LaTeX Project Public License. Quartz Reader uses it under the SIL Open Font License 1.1.
+
+============================================================
+Sourcerer
+Files: Sourcerer-Regular.ttf, Sourcerer-Bold.ttf, Sourcerer-Italic.ttf, Sourcerer-BoldItalic.ttf
+
+Source Serif 4 (c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+Sourcerer (c) 2026 Nico Verbruggen (https://github.com/nicoverbruggen/sourcerer)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Alegreya
+Files: NV_Alegreya-Regular.ttf, NV_Alegreya-Bold.ttf, NV_Alegreya-Italic.ttf, NV_Alegreya-BoldItalic.ttf
+
+Copyright 2011 The Alegreya Project Authors (https://github.com/huertatipografica/Alegreya)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Alizar
+Files: NV_Alizar-Regular.ttf, NV_Alizar-Bold.ttf, NV_Alizar-Italic.ttf, NV_Alizar-BoldItalic.ttf
+
+Copyright 2018 The Crimson Pro Project Authors (https://github.com/Fonthausen/CrimsonPro)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Ancizar Sans
+Files: NV_Ancizar_Sans-Regular.ttf, NV_Ancizar_Sans-Bold.ttf, NV_Ancizar_Sans-Italic.ttf, NV_Ancizar_Sans-BoldItalic.ttf
+
+Copyright 2014 The Ancizar Sans Project Authors (https://github.com/UNAL-OMD/UNAL-Ancizar)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Ancizar Serif
+Files: NV_Ancizar_Serif-Regular.ttf, NV_Ancizar_Serif-Bold.ttf, NV_Ancizar_Serif-Italic.ttf, NV_Ancizar_Serif-BoldItalic.ttf
+
+Copyright 2014 The Ancizar Serif Project Authors (https://github.com/UNAL-OMD/UNAL-Ancizar)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Andada
+Files: NV_Andada-Regular.ttf, NV_Andada-Bold.ttf, NV_Andada-Italic.ttf, NV_Andada-BoldItalic.ttf
+
+Copyright 2011 The Andada Pro Project Authors (https://github.com/huertatipografica/Andada)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Basker
+Files: NV_Basker-Regular.ttf, NV_Basker-Bold.ttf, NV_Basker-Italic.ttf, NV_Basker-BoldItalic.ttf
+
+Copyright 2018 The Baskervville Project Authors (https://github.com/anrt-type/ANRT-Baskervville)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Cardo
+Files: NV_Cardo-Regular.ttf, NV_Cardo-Bold.ttf, NV_Cardo-Italic.ttf
+
+Copyright (c) 2002-2011, David J. Perry (hospes02@scholarsfonts.net)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Castoro
+Files: NV_Castoro-Regular.ttf, NV_Castoro-Bold.ttf, NV_Castoro-Italic.ttf, NV_Castoro-BoldItalic.ttf
+
+Copyright 2020 The Castoro Project Authors (https://github.com/TiroTypeworks/Castoro)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Charis Literacy
+Files: NV_Charis_Literacy-Regular.ttf, NV_Charis_Literacy-Bold.ttf, NV_Charis_Literacy-Italic.ttf, NV_Charis_Literacy-BoldItalic.ttf
+
+Copyright (c) 1997-2025 SIL Global
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Charis Old Style
+Files: NV_Charis_Old_Style-Regular.ttf, NV_Charis_Old_Style-Bold.ttf, NV_Charis_Old_Style-Italic.ttf, NV_Charis_Old_Style-BoldItalic.ttf
+
+Copyright (c) 1997-2025 SIL Global
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Clara
+Files: NV_Clara-Regular.ttf, NV_Clara-Bold.ttf, NV_Clara-Italic.ttf, NV_Clara-BoldItalic.ttf
+
+Séamas Ó Brógain, 2014
+Séamas Ó Brógáin, 2014
+Séamas Ó Brógáin, 2015
+
+Based on Clara by Séamas Ó Brógáin, licensed under the SIL Open Font License 1.1.
+
+============================================================
+NV Disleksio
+Files: NV_Disleksio-Regular.ttf, NV_Disleksio-Bold.ttf, NV_Disleksio-Italic.ttf, NV_Disleksio-BoldItalic.ttf
+
+OpenDyslexic (c) 2019 Abbie Gonzalez (https://opendyslexic.org)
+Disleksio (c) 2026 Nico Verbruggen (https://github.com/nicoverbruggen/disleksio)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Elstob
+Files: NV_Elstob-Regular.ttf, NV_Elstob-Bold.ttf, NV_Elstob-Italic.ttf, NV_Elstob-BoldItalic.ttf
+
+Copyright (c) 2024 Peter S. Baker
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Erewhon
+Files: NV_Erewhon-Regular.ttf, NV_Erewhon-Bold.ttf, NV_Erewhon-Italic.ttf, NV_Erewhon-BoldItalic.ttf
+
+Copyright (c) 1989, 1991 Adobe Systems Incorporated.  All Rights Reserved. Utopia is either a registered trademark or trademark of Adobe Systems Incorporated in the United States and/or other countries. Used under license. The Utopia fonts are freely available; see http://tug.org/fonts/utopia.
+
+Cyrillic: Copyright (c) 2008-2012 Andrey V. Panov (panov@canopus.iacp.dvo.ru). 
+
+Greek: Copyright (C) 2003-2004 GUTenberg
+
+All modifications and additions are Copyright (c) 2014--2020, Michael Sharpe
+Copyright (c) 1989, 1991 Adobe Systems Incorporated.  All Rights Reserved. Utopia is either a registered trademark or trademark of Adobe Systems Incorporated in the United States and/or other countries. Used under license. The Utopia fonts are freely available; see http://tug.org/fonts/utopia.
+
+Cyrillic: Copyright (c) 2008-2012 Andrey V. Panov (panov@canopus.iacp.dvo.ru). 
+
+Greek: Copyright (C) 2003-2004 GUTenberg
+
+All modifications and additions are Copyright (c) 2014--2021, Michael Sharpe
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Gentium
+Files: NV_Gentium-Regular.ttf, NV_Gentium-Bold.ttf, NV_Gentium-Italic.ttf, NV_Gentium-BoldItalic.ttf
+
+Copyright (c) 2003-2025 SIL Global
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Georsio
+Files: NV_Georsio-Regular.ttf, NV_Georsio-Bold.ttf, NV_Georsio-Italic.ttf, NV_Georsio-BoldItalic.ttf
+
+Copyright 2019 The Gelasio Project Authors (https://github.com/SorkinType/Gelasio)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Halcyon
+Files: NV_Halcyon-Regular.ttf, NV_Halcyon-Bold.ttf, NV_Halcyon-Italic.ttf, NV_Halcyon-BoldItalic.ttf
+
+Copyright 2016 The Merriweather Project Authors (sorkintype@gmail.com), with Reserved Font Name "Merriweather".
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Ibarra
+Files: NV_Ibarra-Regular.ttf, NV_Ibarra-Bold.ttf, NV_Ibarra-Italic.ttf, NV_Ibarra-BoldItalic.ttf
+
+Copyright 2007 The Ibarra Real Nova Project Authors (https://github.com/googlefonts/ibarrareal)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Junius
+Files: NV_Junius-Regular.ttf, NV_Junius-Bold.ttf, NV_Junius-Italic.ttf, NV_Junius-BoldItalic.ttf
+
+Copyright (c) 1998-2025 by Peter S. Baker
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Kierkegaard
+Files: NV_Kierkegaard-Regular.ttf, NV_Kierkegaard-Bold.ttf, NV_Kierkegaard-Italic.ttf, NV_Kierkegaard-BoldItalic.ttf
+
+Copyright 2025 The Kierkegaard Font Project Authors (https://github.com/jrgdrs/Kierkegaard)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Libertinus
+Files: NV_Libertinus-Regular.ttf, NV_Libertinus-Bold.ttf, NV_Libertinus-Italic.ttf, NV_Libertinus-BoldItalic.ttf
+
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Literata
+Files: NV_Literata-Regular.ttf, NV_Literata-Bold.ttf, NV_Literata-Italic.ttf, NV_Literata-BoldItalic.ttf
+
+Copyright 2017 The Literata Project Authors (https://github.com/googlefonts/literata)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Lodestar
+Files: NV_Lodestar-Regular.ttf, NV_Lodestar-Bold.ttf, NV_Lodestar-Italic.ttf, NV_Lodestar-BoldItalic.ttf
+
+Copyright (c) 2014, Cooper Hewitt Smithsonian Design Museum (cooperhewitt.org)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Membo
+Files: NV_Membo-Regular.ttf, NV_Membo-Bold.ttf, NV_Membo-Italic.ttf, NV_Membo-BoldItalic.ttf
+
+Copyright (c) 2002-2011, David J. Perry (hospes02@scholarsfonts.net) Copyright (c) Michael Sharpe, 2013-2014
+Copyright (c) 2002-2011, David J. Perry (hospes02@scholarsfonts.net) Copyright (c) Michael Sharpe, 2013-2019
+Copyright (c) David J. Perry, 2002-2011. All rights reserved. Copyright (c) Michael Sharpe, 2013-2014.
+Copyright (c) David J. Perry, 2002-2011. All rights reserved. Copyright (c) Michael Sharpe, 2013-2015
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Newsreader
+Files: NV_Newsreader-Regular.ttf, NV_Newsreader-Bold.ttf, NV_Newsreader-Italic.ttf, NV_Newsreader-BoldItalic.ttf
+
+Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV NinePoint
+Files: NV_NinePoint-Regular.ttf, NV_NinePoint-Bold.ttf, NV_NinePoint-Italic.ttf, NV_NinePoint-BoldItalic.ttf
+
+Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Publica
+Files: NV_Publica-Regular.ttf, NV_Publica-Bold.ttf, NV_Publica-Italic.ttf, NV_Publica-BoldItalic.ttf
+
+Copyright © 2010 ParaType Ltd. All rights reserved.
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Publica Wide
+Files: NV_Publica_Wide-Regular.ttf, NV_Publica_Wide-Italic.ttf
+
+Copyright © 2010 ParaType Ltd. All rights reserved.
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Sable
+Files: NV_Sable-Regular.ttf, NV_Sable-Bold.ttf, NV_Sable-Italic.ttf, NV_Sable-BoldItalic.ttf
+
+Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Scarlet
+Files: NV_Scarlet-Regular.ttf, NV_Scarlet-Bold.ttf, NV_Scarlet-Italic.ttf, NV_Scarlet-BoldItalic.ttf
+
+Copyright (c) 2010, Sebastian Kosch (sebastian@aldusleaf.org),
+Additions and modifications Copyright (c) 2015--23 (msharpe@ucsd.edu)
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: http://scripts.sil.org/OFL
+Copyright (c) 2010, Sebastian Kosch (sebastian@aldusleaf.org),
+Additions and modifications copyright (c) 2015--16, Michael Sharpe (msharpe@ucsd.edu)
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: http://scripts.sil.org/OFL
+Copyright (c) 2010, Sebastian Kosch (sebastian@aldusleaf.org),
+Additions and modifications copyright (c) 2015--23, Michael Sharpe (msharpe@ucsd.edu)
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: http://scripts.sil.org/OFL
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Tabula
+Files: NV_Tabula-Regular.ttf, NV_Tabula-Bold.ttf, NV_Tabula-Italic.ttf, NV_Tabula-BoldItalic.ttf
+
+Copyright 2020 IBM Corp. All rights reserved.
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Technical
+Files: NV_Technical-Regular.ttf, NV_Technical-Bold.ttf, NV_Technical-Italic.ttf, NV_Technical-BoldItalic.ttf
+
+Copyright 2001-2021 The STIX Fonts Project Authors (https://github.com/stipub/stixfonts)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Yrsa
+Files: NV_Yrsa-Regular.ttf, NV_Yrsa-Bold.ttf, NV_Yrsa-Italic.ttf, NV_Yrsa-BoldItalic.ttf
+
+Copyright 2015 The Yrsa-Rasa Project Authors (https://github.com/rosettatype/yrsa-rasa/)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+NV Zilla Slab
+Files: NV_Zilla_Slab-Regular.ttf, NV_Zilla_Slab-Bold.ttf, NV_Zilla_Slab-Italic.ttf, NV_Zilla_Slab-BoldItalic.ttf
+
+Copyright 2017, The Mozilla Foundation
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+Readerly
+Files: Readerly-Regular.ttf, Readerly-Bold.ttf, Readerly-Italic.ttf, Readerly-BoldItalic.ttf
+
+Newsreader (c) 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+Readerly (c) 2026 Nico Verbruggen (https://github.com/nicoverbruggen/readerly)
+
+Licensed under the SIL Open Font License, Version 1.1, reproduced at the end of this file.
+
+============================================================
+SIL OPEN FONT LICENSE, VERSION 1.1
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://openfontlicense.org
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded, 
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+
+============================================================
+BITSTREAM CHARTER LICENSE (Cartisse)
+
+Copyright (c) 1989-1992, Bitstream Inc., Cambridge, MA.
+Copyright (c) 2009, 2010, 2011, 2012 Andrey V. Panov 
+Copyright (c) 2013-2024 Michael Sharpe
+
+This font is an extension of Bitstream Charter, whose original license is reproduced below, as required under the terms of that license. The extension provides small caps, oldstyle figures and superior figures in all four styles, accompanied by LaTeX font support files.
+
+---
+
+You are hereby granted permission under all Bitstream propriety rights
+to use, copy, modify, sublicense, sell, and redistribute the 4 Bitstream
+Charter (r) Type 1 outline fonts and the 4 Courier Type 1 outline fonts
+for any purpose and without restriction; provided, that this notice is
+left intact on all copies of such fonts and that Bitstream's trademark
+is acknowledged as shown below on all unmodified copies of the 4 Charter
+Type 1 fonts.
+
+BITSTREAM CHARTER is a registered trademark of Bitstream Inc.

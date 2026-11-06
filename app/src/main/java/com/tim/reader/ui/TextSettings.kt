@@ -1,6 +1,13 @@
 package com.tim.reader.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -9,6 +16,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tim.reader.data.BookType
 import com.tim.reader.data.ColorSet
 import com.tim.reader.data.PageAnimation
@@ -20,6 +32,7 @@ import com.tim.reader.data.TextAlignment
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.TwoPageMode
 import com.tim.reader.reader.TEXT_FONTS
+import com.tim.reader.theme.BookFonts
 import kotlin.math.roundToInt
 
 class TextSettingsActions(
@@ -52,6 +65,36 @@ private fun SettingSlider(
     )
 }
 
+/** Every font in one list, each shown in its own letters. */
+@Composable
+private fun FontMenuRow(current: String, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = TEXT_FONTS.firstOrNull { it.second == current }?.first ?: current
+    Box {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { open = true }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, fontFamily = BookFonts.family(current), fontSize = 18.sp, modifier = Modifier.weight(1f))
+            ListArrow(Color.White)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            TEXT_FONTS.forEach { (name, family) ->
+                DropdownMenuItem(
+                    text = { Text(name, fontFamily = BookFonts.family(family)) },
+                    onClick = {
+                        open = false
+                        onPick(family)
+                    },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun ColumnScope.TextSettings(
     direction: ReadDirection,
@@ -75,9 +118,7 @@ fun ColumnScope.TextSettings(
 
         if (!fixedLayout) {
             PanelHeading("Font")
-            TEXT_FONTS.forEach { (label, family) ->
-                ChoiceRow(label, look.fontFamily == family) { change { it.copy(fontFamily = family) } }
-            }
+            FontMenuRow(look.fontFamily) { family -> change { it.copy(fontFamily = family) } }
             SettingSlider("Text size", look.fontSize.toFloat(), 0.5f..3f) { size ->
                 change { it.copy(fontSize = size.toDouble()) }
             }
