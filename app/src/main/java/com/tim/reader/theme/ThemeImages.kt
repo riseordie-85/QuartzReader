@@ -29,6 +29,7 @@ object ThemeImages {
         "speed" to R.drawable.wall_speed,
         "kawaii" to R.drawable.wall_kawaii,
         "burst" to R.drawable.wall_burst,
+        "crystal" to R.drawable.wall_crystal,
     )
 
     private fun key(name: String, thumbnail: Boolean) = if (thumbnail) "$name#thumbnail" else name
@@ -60,7 +61,7 @@ object ThemeImages {
     }
 
     /** The wallpapers that come with the app, with names to show for them. */
-    val builtIn = listOf("wood" to "Wood", "speed" to "Speed lines", "kawaii" to "Kawaii", "burst" to "Burst")
+    val builtIn = listOf("wood" to "Wood", "speed" to "Speed lines", "kawaii" to "Kawaii", "burst" to "Burst", "crystal" to "Crystal")
 }
 
 @Composable
