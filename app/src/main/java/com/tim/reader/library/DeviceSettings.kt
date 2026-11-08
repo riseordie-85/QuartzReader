@@ -108,6 +108,11 @@ object DeviceSettings {
         }
     }
 
+    /** Loads settings unless the app already has, for work that runs without the app open. */
+    fun ensureLoaded(context: Context) {
+        if (preferences == null) load(context)
+    }
+
     fun load(context: Context) {
         val saved = context.applicationContext.getSharedPreferences("device", Context.MODE_PRIVATE)
         preferences = saved
@@ -119,7 +124,7 @@ object DeviceSettings {
         showTimeLeft = saved.getBoolean(KEY_SHOW_TIME_LEFT, false)
         homeGoals = saved.getBoolean(KEY_HOME_GOALS, false)
         reminderOn = saved.getBoolean(KEY_REMINDER_ON, false)
-        reminderMinutes = saved.getInt(KEY_REMINDER_MINUTES, 20 * 60)
+        reminderMinutes = saved.getInt(KEY_REMINDER_MINUTES, 20 * 60).coerceIn(0, 24 * 60 - 1)
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
         comicVineKey = saved.getString(KEY_COMIC_VINE, null).orEmpty()

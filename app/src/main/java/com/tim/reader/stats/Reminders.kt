@@ -30,8 +30,6 @@ object Reminders {
     private const val CHANNEL = "reminders"
     private const val NOTIFICATION_ID = 1001
     private const val REQUEST = 7
-    // Android may move an inexact alarm a little, which is fine for a nudge and needs no special permission.
-    private const val WINDOW_MS = 10 * 60_000L
 
     /** Sets the next reminder, or cancels it when reminders are off. */
     fun schedule(context: Context) {
@@ -43,7 +41,8 @@ object Reminders {
         val time = LocalTime.of(DeviceSettings.reminderMinutes / 60, DeviceSettings.reminderMinutes % 60)
         var next = LocalDate.now(zone).atTime(time).atZone(zone)
         if (!next.toInstant().isAfter(java.time.Instant.now().plusSeconds(60))) next = next.plusDays(1)
-        alarms.setWindow(AlarmManager.RTC_WAKEUP, next.toInstant().toEpochMilli(), WINDOW_MS, pending)
+        // Inexact but allowed while the phone is idle, so it arrives near the time and needs no special permission.
+        alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.toInstant().toEpochMilli(), pending)
     }
 
     private fun pendingIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
@@ -63,7 +62,9 @@ object Reminders {
         val open = PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            // Brings the app back as it was, without closing a book that's open.
+            (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent(context, MainActivity::class.java))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
@@ -81,7 +82,7 @@ object Reminders {
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
-        DeviceSettings.load(app)
+        DeviceSettings.ensureLoaded(app)
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             Reminders.schedule(app)
             return

@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
         ResultsLog.init(this)
         DeviceSettings.load(this)
         ThemeFiles.init(this)
-        // Alarms don't survive a phone update to the app, so the reminder is set again on every start.
+        // Keeps the reminder in step with its setting and time.
         Reminders.schedule(this)
         BookFonts.init(this)
         if (savedInstanceState == null) incoming.value = urisFrom(intent)

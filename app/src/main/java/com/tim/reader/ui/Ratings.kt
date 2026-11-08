@@ -157,9 +157,12 @@ fun FinishedCard(bookId: String, state: LibraryState, onDone: () -> Unit) {
     }
     val cover by rememberCover(book.displayCover)
     var sharing by remember { mutableStateOf(false) }
+    // Saving keeps the card open, so a fresh rating can go straight onto a share card.
+    var current by remember { mutableStateOf(saved) }
+    var savedHere by remember { mutableStateOf(false) }
     if (sharing) {
         StatsShareOverlay(
-            StatsCard.Finished(book, seriesTitle.takeIf { inSeries }, saved, minutes, days),
+            StatsCard.Finished(book, seriesTitle.takeIf { inSeries }, current, minutes, days),
             state,
         ) { sharing = false }
     }
@@ -180,15 +183,16 @@ fun FinishedCard(bookId: String, state: LibraryState, onDone: () -> Unit) {
                     val over = days?.takeIf { it > 1 }?.let { " over $it days" }.orEmpty()
                     Text("Read in ${formatMinutes(minutes)}$over", style = MaterialTheme.typography.bodyMedium)
                 }
-                RatingEditor(saved) { rating ->
+                RatingEditor(current) { rating ->
                     appScope.launch {
                         if (inSeries) saveSeriesRating(context, seriesTitle.orEmpty(), rating) else saveBookRating(context, book, rating)
                     }
-                    onDone()
+                    current = rating
+                    savedHere = true
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton({ sharing = true }) { Text("Share") }
-                    TextButton(onDone) { Text("Not now") }
+                    TextButton(onDone) { Text(if (savedHere) "Done" else "Not now") }
                 }
             }
         }

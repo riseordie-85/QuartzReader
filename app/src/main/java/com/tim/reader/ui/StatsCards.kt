@@ -102,12 +102,13 @@ fun StatsShareOverlay(card: StatsCard, state: LibraryState, onClose: () -> Unit)
     if (styles.isEmpty()) return
     var styleIndex by remember { mutableStateOf(0) }
     var ratio by remember { mutableStateOf(ShareRatio.Square) }
-    val layer = rememberGraphicsLayer()
-
-    /** The card as a plain image, ready to save or send. */
-    suspend fun capture(): Bitmap = layer.toImageBitmap().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
-
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        // Made inside the dialog, so it belongs to the window it's drawn in.
+        val layer = rememberGraphicsLayer()
+
+        /** The card as a plain image, ready to save or send. */
+        suspend fun capture(): Bitmap = layer.toImageBitmap().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
+
         Column(
             Modifier
                 .fillMaxSize()
@@ -255,7 +256,7 @@ private fun Cover(path: String?, width: Int) {
 private fun FinishedContent(card: StatsCard.Finished, theme: ShelfTheme, tall: Boolean) {
     val look = theme.header
     CardTitle(if (card.seriesTitle != null) "Caught up!" else "Finished!", theme, tall)
-    Cover(card.book.displayCover, if (tall) 230 else 110)
+    Cover(card.book.displayCover, if (tall) 230 else 90)
     CardPanel(look) {
         CardText(look, card.seriesTitle ?: card.book.title, 19, bold = true)
         if (card.book.author.isNotBlank()) CardText(look, card.book.author, 13, faded = true, lines = 1)
@@ -269,7 +270,7 @@ private fun FinishedContent(card: StatsCard.Finished, theme: ShelfTheme, tall: B
             if (card.rating?.spoiler == true) {
                 CardText(look, "Review hidden: it has spoilers", 12, faded = true)
             } else {
-                CardText(look, "“$review”", 13, lines = if (tall) 10 else 3)
+                CardText(look, "“$review”", 13, lines = if (tall) 10 else 2)
             }
         }
     }
@@ -334,14 +335,14 @@ private fun YearContent(recap: YearRecap, theme: ShelfTheme, state: LibraryState
         StatRow(
             look,
             listOf(
-                "${recap.minutes / 60}" to "hours",
+                formatMinutes(recap.minutes) to "read",
                 "${recap.finished.size}" to "finished",
                 "${recap.daysRead}" to "days read",
                 "${recap.bestStreak}" to "best streak",
             ),
         )
     }
-    CardPanel(look) {
+    if (recap.topSeries.isNotEmpty() || recap.fastest != null || recap.nightShare >= 10) CardPanel(look) {
         if (recap.topSeries.isNotEmpty()) {
             CardText(look, "Top series", 11, faded = true)
             recap.topSeries.take(if (tall) 3 else 1).forEach { (title, minutes) ->
@@ -350,12 +351,17 @@ private fun YearContent(recap: YearRecap, theme: ShelfTheme, state: LibraryState
         }
         recap.fastest?.let { (read, ms) ->
             val hours = ms / 3_600_000
-            val span = if (hours < 24) "${hours.coerceAtLeast(1)} ${if (hours <= 1) "hour" else "hours"}" else "${hours / 24} days"
+            val days = hours / 24
+            val span = when {
+                hours < 1 -> formatMinutes((ms / 60_000).coerceAtLeast(1))
+                hours < 24 -> "$hours ${if (hours == 1L) "hour" else "hours"}"
+                else -> "$days ${if (days == 1L) "day" else "days"}"
+            }
             CardText(look, "Fastest read: ${read.bookHash?.let(byHash::get)?.title ?: read.title ?: "a book"} in $span", 13, lines = 2)
         }
         if (recap.nightShare >= 10) CardText(look, "${recap.nightShare}% of it after dark", 13)
     }
-    CoverRow(finishedBooks(recap.finished, state).takeLast(if (tall) 15 else 5).reversed(), count = 5, rows = if (tall) 3 else 1)
+    CoverRow(finishedBooks(recap.finished, state).takeLast(if (tall) 15 else 6).reversed(), count = if (tall) 5 else 6, rows = if (tall) 3 else 1)
 }
 
 @Composable

@@ -65,15 +65,18 @@ fun yearRecap(history: ReadingHistory, state: LibraryState, year: Int, zone: Zon
     val minutesByDay = sessions.groupBy { dayOf(it.start, zone) }.mapValues { (_, list) -> list.sumOf { it.activeMs } / 60_000 }
     val finished = history.finished.filter { !it.dateUnknown && dayOf(it.at, zone).year == year }.sortedBy { it.at }
 
-    val seriesMinutes = HashMap<String, Long>()
+    val seriesMs = HashMap<String, Long>()
     for (session in sessions) {
         val book = session.bookHash?.let(byHash::get) ?: continue
         val title = state.seriesFor(book.seriesId)?.title ?: continue
-        seriesMinutes[title] = (seriesMinutes[title] ?: 0L) + session.activeMs / 60_000
+        seriesMs[title] = (seriesMs[title] ?: 0L) + session.activeMs
     }
 
-    // Only reads finished in the app have a real start, so only they can be the fastest.
-    val fastest = finished.filterNot { it.manual }.mapNotNull { read ->
+    // Only books finished in the app have a real start, so only they can be the fastest. Short
+    // chapters and episodes would always win, so this is for books.
+    val fastest = finished.filterNot { it.manual }
+        .filter { read -> (read.bookHash?.let(byHash::get)?.type ?: read.type) == BookType.Book }
+        .mapNotNull { read ->
         val start = read.readId?.let(history.readStarts::get) ?: return@mapNotNull null
         (read to read.at - start).takeIf { it.second >= 0 }
     }.minByOrNull { it.second }
@@ -88,7 +91,7 @@ fun yearRecap(history: ReadingHistory, state: LibraryState, year: Int, zone: Zon
         minutes = total / 60_000,
         daysRead = minutesByDay.count { it.value >= 1 },
         finished = finished,
-        topSeries = seriesMinutes.entries.sortedByDescending { it.value }.take(3).map { it.key to it.value },
+        topSeries = seriesMs.entries.sortedByDescending { it.value }.take(3).map { it.key to it.value / 60_000 },
         fastest = fastest,
         nightShare = if (total > 0) (night * 100 / total).toInt() else 0,
         bestStreak = bestRun(minutesByDay.filterValues { it >= 1 }.keys),
@@ -125,10 +128,17 @@ fun reminderMessage(history: ReadingHistory, now: Long = System.currentTimeMilli
 
 /** How long one read took: its reading time in minutes, and the days from start to finish when known. */
 fun readSummary(history: ReadingHistory, read: FinishedRecord, zone: ZoneId = ZoneId.systemDefault()): Pair<Long, Long?> {
+    // Without a recorded start, the read began after the book's previous finish.
     val start = read.readId?.let(history.readStarts::get)
+        ?: history.finished.filter { it.bookHash == read.bookHash && it.at < read.at }.maxOfOrNull { it.at }
     val minutes = history.sessions
         .filter { it.bookHash != null && it.bookHash == read.bookHash && it.start >= (start ?: 0L) && it.start <= read.at }
         .sumOf { it.activeMs } / 60_000
-    val days = if (start != null && !read.manual) java.time.temporal.ChronoUnit.DAYS.between(dayOf(start, zone), dayOf(read.at, zone)) + 1 else null
+    val recordedStart = read.readId?.let(history.readStarts::get)
+    val days = if (recordedStart != null && !read.manual) {
+        java.time.temporal.ChronoUnit.DAYS.between(dayOf(recordedStart, zone), dayOf(read.at, zone)) + 1
+    } else {
+        null
+    }
     return minutes to days
 }
