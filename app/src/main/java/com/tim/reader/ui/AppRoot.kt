@@ -273,7 +273,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         )
         is Route.ThemeEditor -> {
             val shelf = route.shelfId?.let { state.shelf(it) }
-            val start = shelf?.theme ?: state.homeTheme ?: Presets.silverGloss
+            val start = shelf?.theme ?: state.homeTheme ?: Presets.default
             ThemeEditorScreen(
                 name = shelf?.name ?: "Home",
                 start = start,

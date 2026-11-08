@@ -114,7 +114,7 @@ class LibraryRepository private constructor(context: Context) {
                 membership.getOrPut(rows.getString(0)) { HashSet() }.add(rows.getString(1))
             }
         }
-        val home = setting(KEY_HOME_THEME)?.let { ThemeJson.read(it) } ?: Presets.silverGloss
+        val home = setting(KEY_HOME_THEME)?.let { ThemeJson.read(it) } ?: Presets.default
         val bookmarks = db.rawQuery(Schema.SELECT_BOOKMARKS, null).use { rows ->
             buildList {
                 while (rows.moveToNext()) {
@@ -326,10 +326,10 @@ class LibraryRepository private constructor(context: Context) {
     private fun seedShelves() {
         if (setting(KEY_SEEDED) != null) return
         val seeds = listOf(
-            Triple("Books", Presets.wood, BookType.Book),
-            Triple("Comics", Presets.brushedMetal, BookType.Comic),
-            Triple("Manga", Presets.speedLines, BookType.Manga),
-            Triple("Manhwa", Presets.burst, BookType.Manhwa),
+            Triple("Books", Presets.books, BookType.Book),
+            Triple("Comics", Presets.comics, BookType.Comic),
+            Triple("Manga", Presets.manga, BookType.Manga),
+            Triple("Manhwa", Presets.manhwa, BookType.Manhwa),
         )
         db.beginTransaction()
         try {

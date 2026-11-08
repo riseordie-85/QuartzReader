@@ -30,6 +30,12 @@ object ThemeImages {
         "kawaii" to R.drawable.wall_kawaii,
         "burst" to R.drawable.wall_burst,
         "crystal" to R.drawable.wall_crystal,
+        "comics" to R.drawable.wall_comics,
+        "horror" to R.drawable.wall_horror,
+        "horror_art" to R.drawable.wall_horror_art,
+        "manga" to R.drawable.wall_manga,
+        "manhwa" to R.drawable.wall_manhwa,
+        "romantasy" to R.drawable.wall_romantasy,
     )
 
     private fun key(name: String, thumbnail: Boolean) = if (thumbnail) "$name#thumbnail" else name
@@ -61,7 +67,19 @@ object ThemeImages {
     }
 
     /** The wallpapers that come with the app, with names to show for them. */
-    val builtIn = listOf("wood" to "Wood", "speed" to "Speed lines", "kawaii" to "Kawaii", "burst" to "Burst", "crystal" to "Crystal")
+    val builtIn = listOf(
+        "crystal" to "Crystal",
+        "comics" to "Comics",
+        "horror" to "Horror library",
+        "horror_art" to "Horror poster",
+        "manga" to "Manga",
+        "manhwa" to "Manhwa",
+        "romantasy" to "Romantasy",
+        "wood" to "Wood",
+        "speed" to "Speed lines",
+        "kawaii" to "Kawaii",
+        "burst" to "Burst",
+    )
 }
 
 @Composable

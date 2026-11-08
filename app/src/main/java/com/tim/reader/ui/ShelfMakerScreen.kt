@@ -30,6 +30,7 @@ import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -226,7 +227,7 @@ fun ShelfMakerScreen(shelf: Shelf?, state: LibraryState, onDone: () -> Unit) {
     val repository = remember { LibraryRepository.get(context) }
     val styles = remember(state.userPresets) { Presets.all + state.userPresets }
     var name by remember { mutableStateOf(shelf?.name.orEmpty()) }
-    var styleName by remember { mutableStateOf(styles.first().first) }
+    var styleIndex by remember { mutableIntStateOf(0) }
     var chosen by remember { mutableStateOf(shelf?.let { held -> state.booksOn(held.id).map { it.id }.toSet() }.orEmpty()) }
     var picking by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -272,13 +273,13 @@ fun ShelfMakerScreen(shelf: Shelf?, state: LibraryState, onDone: () -> Unit) {
                             Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            styles.forEach { (label, style) ->
+                            styles.forEachIndexed { index, (label, style) ->
                                 StyleTile(
                                     name = label,
                                     style = style,
-                                    selected = label == styleName,
+                                    selected = index == styleIndex,
                                     modifier = Modifier.width(128.dp),
-                                    onPick = { styleName = label },
+                                    onPick = { styleIndex = index },
                                     onDelete = null,
                                 )
                             }
@@ -306,7 +307,7 @@ fun ShelfMakerScreen(shelf: Shelf?, state: LibraryState, onDone: () -> Unit) {
                     enabled = name.isNotBlank() && !saving,
                 ) {
                     saving = true
-                    val style = styles.first { it.first == styleName }.second
+                    val style = styles.getOrElse(styleIndex) { styles.first() }.second
                     // This finishes even if the screen closes, because it can touch many books.
                     appScope.launch {
                         if (shelf == null) {

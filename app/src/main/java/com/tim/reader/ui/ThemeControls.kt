@@ -385,7 +385,7 @@ fun FontEditor(font: String, onChange: (String) -> Unit) {
     val fonts = remember(imported, font) {
         listOf("sans" to "Sans", "serif" to "Serif", "mono" to "Mono", "cursive" to "Cursive") +
             ThemeFiles.fonts().map { it to ThemeFiles.fontLabel(it) } +
-            BookFonts.all.map { BookFonts.themeName(it) to it.name }
+            BookFonts.forThemes.map { BookFonts.themeName(it) to it.name }
     }
     EditorCard(
         "Font",

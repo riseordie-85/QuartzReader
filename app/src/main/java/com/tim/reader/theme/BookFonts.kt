@@ -21,9 +21,21 @@ class BookFont(val name: String, val isCore: Boolean, val faces: List<BookFontFa
 private const val FOLDER = "fonts"
 private const val THEME_PREFIX = "pack:"
 
-/** The reading fonts packaged with the app, for both the reader and shelf themes. */
+/** Display fonts for shelf titles and buttons. They're not offered for reading. */
+private val DISPLAY_FONT_LIST = listOf(
+    BookFont("Bungee", isCore = false, faces = listOf(BookFontFace("Bungee-Regular.ttf", 400, false))),
+    BookFont("Caveat", isCore = false, faces = listOf(BookFontFace("Caveat-Bold.ttf", 700, false))),
+    BookFont("Great Vibes", isCore = false, faces = listOf(BookFontFace("GreatVibes-Regular.ttf", 400, false))),
+    BookFont("Permanent Marker", isCore = false, faces = listOf(BookFontFace("PermanentMarker-Regular.ttf", 400, false))),
+)
+
+/** The fonts packaged with the app: reading fonts for the reader and themes, display fonts for themes only. */
 object BookFonts {
+    /** The reading fonts. */
     val all: List<BookFont> get() = BOOK_FONT_LIST
+
+    /** Every packaged font a shelf theme can use. */
+    val forThemes: List<BookFont> get() = BOOK_FONT_LIST + DISPLAY_FONT_LIST
 
     private var assets: AssetManager? = null
     private val families = HashMap<String, FontFamily>()
@@ -32,7 +44,7 @@ object BookFonts {
         assets = context.applicationContext.assets
     }
 
-    fun find(name: String) = all.firstOrNull { it.name == name }
+    fun find(name: String) = forThemes.firstOrNull { it.name == name }
 
     /** How a shelf theme refers to a packaged font. */
     fun themeName(font: BookFont) = THEME_PREFIX + font.name
