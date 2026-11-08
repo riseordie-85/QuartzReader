@@ -133,7 +133,7 @@ private fun Welcome(onChoose: () -> Unit) {
         Text("Quartz Reader", style = MaterialTheme.typography.headlineLarge)
         Text(
             "Choose a folder for your library. Quartz Reader keeps your books there and organizes them for you, " +
-                "so they stay safe if the app is ever removed. Used Quartz Reader before? Choose the same folder to bring your books back.",
+                "so they stay safe if the app is ever removed. Used Quartz Reader before? Choose the same folder to bring back your books, progress, shelves and stats.",
             textAlign = TextAlign.Center,
         )
         Button(onChoose) { Text("Choose library folder") }

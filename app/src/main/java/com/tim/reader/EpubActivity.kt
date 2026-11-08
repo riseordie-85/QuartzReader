@@ -30,6 +30,7 @@ import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
 import com.tim.reader.library.CameraEdge
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.library.LibrarySync
 import com.tim.reader.reader.epubPreferences
 import com.tim.reader.ui.EpubControls
 import com.tim.reader.ui.showsTwoPages
@@ -301,6 +302,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     override fun onPause() {
         super.onPause()
         if (isFinishing) ReadingTracker.stop(this) else ReadingTracker.pause(this)
+        LibrarySync.save(this)
     }
 
     override fun onDestroy() {

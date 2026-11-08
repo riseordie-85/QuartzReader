@@ -372,6 +372,7 @@ class LibraryRepository private constructor(context: Context) {
             db.endTransaction()
         }
         reload()
+        editCount.value++
     }
 
     private fun updateShelfField(id: String, build: ContentValues.() -> Unit) {
@@ -480,10 +481,8 @@ class LibraryRepository private constructor(context: Context) {
     /** Records where books moved to in the library folder. */
     suspend fun setDocumentUris(moved: Map<String, String>) = write {
         moved.forEach { (id, uri) ->
-            val values = ContentValues().apply {
-                put("document_uri", uri)
-                put("updated_at", now())
-            }
+            // Where a file sits is this device's own business, so moving it isn't an edit to sync.
+            val values = ContentValues().apply { put("document_uri", uri) }
             db.update("books", values, "id = ?", arrayOf(id))
         }
     }
@@ -769,6 +768,7 @@ class LibraryRepository private constructor(context: Context) {
             put("updated_at", now())
         }
         db.insertOrThrow("events", null, values)
+        editCount.value++
         return id
     }
 
@@ -867,6 +867,7 @@ class LibraryRepository private constructor(context: Context) {
             "read_id = ? AND kind IN (?, ?) AND deleted_at IS NULL",
             arrayOf(readId, EventKind.READ_STARTED, EventKind.READ_FINISHED),
         )
+        editCount.value++
         Unit
     }
 
@@ -891,6 +892,21 @@ class LibraryRepository private constructor(context: Context) {
         }
     }
 
+    // Library-folder sync. A count that goes up with every change, so sync knows when to save.
+    private val editCount = MutableStateFlow(0L)
+    val edits: StateFlow<Long> = editCount
+
+    /** The whole library as a snapshot for the library folder. */
+    suspend fun exportSnapshot(device: String, deviceName: String): JSONObject =
+        withContext(serial) { SnapshotCodec(db).export(device, deviceName, now()) }
+
+    /** Merges another device's snapshot, then reloads. */
+    suspend fun mergeSnapshot(remote: JSONObject): MergeResult = withContext(serial) {
+        val result = SnapshotCodec(db).merge(remote)
+        if (result.changed > 0) reload()
+        result
+    }
+
     /** Returns once every write queued before it is done. */
     suspend fun awaitWrites() = withContext(serial) { }
 
@@ -902,10 +918,11 @@ class LibraryRepository private constructor(context: Context) {
                 put("position", position)
                 put("progress", progress)
                 put("locator", locator)
+                // Reading moves last_read_at only, so sync can tell a new page from an edit to the book.
                 put("last_read_at", time)
-                put("updated_at", time)
             }
             db.update("books", values, "id = ?", arrayOf(id))
+            editCount.value++
             mutableState.update { current ->
                 current.copy(
                     books = current.books.map { book ->
@@ -915,7 +932,6 @@ class LibraryRepository private constructor(context: Context) {
                                 progress = progress,
                                 locator = locator,
                                 lastReadAt = time,
-                                updatedAt = time,
                             )
                         } else {
                             book

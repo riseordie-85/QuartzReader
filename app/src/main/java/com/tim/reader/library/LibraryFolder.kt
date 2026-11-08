@@ -197,10 +197,59 @@ class LibraryFolder private constructor(context: Context) {
 
     private fun ByteArray.toHex() = joinToString("") { "%02x".format(it) }
 
+    // Library data for backup and sync lives in its own folder beside the books.
+
+    /** A file in a folder, with when it last changed. */
+    class FileInfo(val documentId: String, val name: String, val lastModified: Long)
+
+    /** The "Library Data" folder, or a folder inside it. Made when first needed. */
+    fun dataFolder(child: String? = null): String {
+        val tree = requireTree()
+        val data = findOrCreateFolder(tree, DocumentsContract.getTreeDocumentId(tree), DATA_FOLDER)
+        return if (child == null) data else findOrCreateFolder(tree, data, child)
+    }
+
+    fun files(parentId: String): List<FileInfo> {
+        val tree = requireTree()
+        val listing = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
+        val columns = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED)
+        return resolver.query(listing, columns, null, null, null)?.use { rows ->
+            buildList {
+                while (rows.moveToNext()) {
+                    if (rows.getString(2) == Document.MIME_TYPE_DIR) continue
+                    add(FileInfo(rows.getString(0), rows.getString(1).orEmpty(), if (rows.isNull(3)) 0L else rows.getLong(3)))
+                }
+            }
+        }.orEmpty()
+    }
+
+    /** Writes [bytes] to a file in the folder, replacing it whole. A partial file is written first and swapped in. */
+    fun writeFile(parentId: String, name: String, mime: String, bytes: ByteArray) {
+        val existing = files(parentId).firstOrNull { it.name == name }
+        val target = existing?.let { documentUri(it.documentId) }
+            ?: DocumentsContract.createDocument(resolver, documentUri(parentId), mime, name)
+            ?: error("Android couldn't create $name")
+        (resolver.openOutputStream(target, "wt") ?: error("Android couldn't write $name")).use { it.write(bytes) }
+    }
+
+    fun readFile(documentId: String): ByteArray =
+        (resolver.openInputStream(documentUri(documentId)) ?: error("Android couldn't read the file")).use { it.readBytes() }
+
+    /** Copies a file from the app into the folder, unless one with that name is already there. */
+    fun saveFileOnce(parentId: String, file: File) {
+        if (files(parentId).any { it.name == file.name }) return
+        val target = DocumentsContract.createDocument(resolver, documentUri(parentId), BINARY, file.name)
+            ?: error("Android couldn't create ${file.name}")
+        (resolver.openOutputStream(target) ?: error("Android couldn't write ${file.name}")).use { output ->
+            file.inputStream().use { it.copyTo(output, BUFFER) }
+        }
+    }
+
     companion object {
         private const val KEY_TREE = "tree"
         private const val BUFFER = 256 * 1024
 private const val THEME_FOLDER = "Theme Files"
+        private const val DATA_FOLDER = "Library Data"
 
         @Volatile
         private var instance: LibraryFolder? = null

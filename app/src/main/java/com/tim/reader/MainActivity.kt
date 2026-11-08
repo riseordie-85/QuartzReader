@@ -13,6 +13,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.library.LibrarySync
 import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.stats.Reminders
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
         ThemeFiles.init(this)
         // Keeps the reminder in step with its setting and time.
         Reminders.schedule(this)
+        LibrarySync.watch(this)
         BookFonts.init(this)
         if (savedInstanceState == null) incoming.value = urisFrom(intent)
         setContent {
@@ -46,11 +48,13 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         ReadingTracker.resume(this)
         AchievementCenter.check(this)
+        LibrarySync.check(this)
     }
 
     override fun onPause() {
         super.onPause()
         ReadingTracker.pause(this)
+        LibrarySync.save(this)
     }
 
     override fun onNewIntent(intent: Intent) {

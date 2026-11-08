@@ -31,6 +31,7 @@ object DeviceSettings {
     private const val KEY_SHOW_TIME_LEFT = "show_time_left"
     private const val KEY_HOME_GOALS = "home_goals"
     private const val KEY_REMINDER_ON = "reminder_on"
+    private const val KEY_SYNC_FOLDER = "sync_folder"
     private const val KEY_REMINDER_MINUTES = "reminder_minutes"
     private const val KEY_CAMERA_GAP = "camera_gap"
     private const val KEY_GOOGLE_BOOKS = "google_books_key"
@@ -66,6 +67,15 @@ object DeviceSettings {
     fun updateShowTimeLeft(enabled: Boolean) {
         showTimeLeft = enabled
         preferences?.edit { putBoolean(KEY_SHOW_TIME_LEFT, enabled) }
+    }
+
+    /** Keeps the library's data in the library folder, for backup and folder sync. */
+    var syncFolder by mutableStateOf(true)
+        private set
+
+    fun updateSyncFolder(enabled: Boolean) {
+        syncFolder = enabled
+        preferences?.edit { putBoolean(KEY_SYNC_FOLDER, enabled) }
     }
 
     /** The evening reminder, and its time as minutes after midnight. */
@@ -124,6 +134,7 @@ object DeviceSettings {
         showTimeLeft = saved.getBoolean(KEY_SHOW_TIME_LEFT, false)
         homeGoals = saved.getBoolean(KEY_HOME_GOALS, false)
         reminderOn = saved.getBoolean(KEY_REMINDER_ON, false)
+        syncFolder = saved.getBoolean(KEY_SYNC_FOLDER, true)
         reminderMinutes = saved.getInt(KEY_REMINDER_MINUTES, 20 * 60).coerceIn(0, 24 * 60 - 1)
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
