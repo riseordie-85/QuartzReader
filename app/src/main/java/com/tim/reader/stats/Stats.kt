@@ -88,6 +88,9 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
     val msByType = HashMap<BookType, Long>()
     val pagesByType = HashMap<BookType, Int>()
     val wordsByType = HashMap<BookType, Long>()
+    // Text and page time are kept apart, so a type with both PDFs and EPUBs gets honest speeds.
+    val textMsByType = HashMap<BookType, Long>()
+    val pageMsByType = HashMap<BookType, Long>()
     val buckets = longArrayOf(0, 0, 0, 0)
 
     for (session in history.sessions) {
@@ -101,8 +104,10 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
             val forward = (session.to - session.from).coerceAtLeast(0)
             val counted = minOf(forward.toDouble(), minutes * MAX_POSITIONS_PER_MINUTE)
             wordsByType[type] = (wordsByType[type] ?: 0L) + (counted * WORDS_PER_POSITION).toLong()
+            textMsByType[type] = (textMsByType[type] ?: 0L) + session.activeMs
         } else {
             pagesByType[type] = (pagesByType[type] ?: 0) + session.turns
+            pageMsByType[type] = (pageMsByType[type] ?: 0L) + session.activeMs
         }
         val hour = Instant.ofEpochMilli(session.start).atZone(zone).hour
         val bucket = when (hour) {
@@ -148,10 +153,11 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
         val minutes = ms / MINUTE_MS
         val pages = pagesByType[type] ?: 0
         val words = wordsByType[type] ?: 0L
+        val textMinutes = (textMsByType[type] ?: 0L) / MINUTE_MS
+        val pageMs = pageMsByType[type] ?: 0L
         val speed = when {
-            minutes < MIN_MINUTES_FOR_SPEED -> null
-            words > 0 -> (words / minutes).toInt()
-            pages > 0 -> (ms / 1000 / pages).toInt()
+            words > 0 && textMinutes >= MIN_MINUTES_FOR_SPEED -> (words / textMinutes).toInt()
+            pages > 0 && pageMs / MINUTE_MS >= MIN_MINUTES_FOR_SPEED -> (pageMs / 1000 / pages).toInt()
             else -> null
         }
         TypeStats(type, minutes, finished, pages, words, speed)

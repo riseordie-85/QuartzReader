@@ -73,7 +73,8 @@ private val BAR_HEIGHT = 70.dp
 fun StatsScreen(state: LibraryState, header: HeaderActions) {
     val theme = state.homeTheme ?: return
     val context = LocalContext.current
-    val stats by produceState<Stats?>(null, state.books) {
+    // History doesn't change while the page is open, so it only reloads when books come or go.
+    val stats by produceState<Stats?>(null, state.books.size) {
         val repository = LibraryRepository.get(context)
         val history = repository.readingHistory()
         value = withContext(Dispatchers.Default) { computeStats(history, state.books) }
@@ -177,7 +178,15 @@ private fun Summary(look: BarLook, stats: Stats) {
                         Box(Modifier.weight(1f)) {
                             Panel(look, null, outer = 6.dp) {
                                 Muted(look, label)
-                                Text(value, color = Color(look.textColor), fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                // Long totals like "123 h 45 m" get smaller instead of cut off.
+                                Text(
+                                    value,
+                                    color = Color(look.textColor),
+                                    fontSize = if (value.length > 7) 18.sp else 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
@@ -280,13 +289,13 @@ private fun FinishedByMonth(look: BarLook, stats: Stats) {
     Panel(look, "Finished") {
         Body(look, "${stats.finishedThisYear} this year · ${stats.finishedTotal} in all")
         Row(
-            Modifier.fillMaxWidth().height(110.dp),
+            Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             stats.finishedByMonth.forEach { (month, count) ->
-                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
-                    if (count > 0) Muted(look, "$count")
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+                    Muted(look, if (count > 0) "$count" else " ")
                     Box(
                         Modifier
                             .fillMaxWidth()

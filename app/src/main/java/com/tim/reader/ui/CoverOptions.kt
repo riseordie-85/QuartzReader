@@ -56,6 +56,7 @@ import com.tim.reader.openBookSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -124,39 +125,49 @@ fun CoverOptionsDialog(book: Book, onDismiss: () -> Unit) {
  * Makes a new cover and saves it as the book's custom cover, replacing any earlier one. The work
  * outlives the dialog. [make] gets the book's pages when it needs them, opened just for this.
  */
+// Cover changes run one at a time, so a second change starts from the first one's result.
+private val coverWork = Dispatchers.IO.limitedParallelism(1)
+
 private fun changeCover(context: Context, bookId: String, needsPages: Boolean = false, make: suspend (PageSource?) -> Bitmap?) {
     val appContext = context.applicationContext
-    appScope.launch {
+    appScope.launch(coverWork) {
         val repository = LibraryRepository.get(appContext)
         val book = repository.state.value.book(bookId) ?: return@launch
-        val cover = try {
-            withContext(Dispatchers.IO) {
-                val source = if (needsPages) openBookSource(appContext, book) else null
-                try {
-                    make(source)
-                } finally {
-                    source?.close()
-                }
+        val path = try {
+            val source = if (needsPages) openBookSource(appContext, book) else null
+            val cover = try {
+                make(source)
+            } finally {
+                source?.close()
             }
+            cover?.let { Covers.saveCustom(appContext, bookId, it) }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             null
         }
-        if (cover == null) {
+        if (path == null) {
             withContext(Dispatchers.Main) { Toast.makeText(appContext, "Couldn't change the cover", Toast.LENGTH_LONG).show() }
             return@launch
         }
-        val path = withContext(Dispatchers.IO) { Covers.saveCustom(appContext, bookId, cover) }
         val old = repository.state.value.book(bookId)?.customCoverPath
         repository.setCustomCover(bookId, path)
         Covers.deleteCustom(old)
     }
 }
 
-private fun renderCoverPage(source: PageSource, page: Int): Bitmap? {
-    val full = source.render(page, COVER_WIDTH * 2) ?: return null
-    // A tall webtoon page becomes the top of the page, like the automatic covers.
+private fun renderCoverPage(source: PageSource, page: Int): Bitmap? = renderTop(source, page, COVER_WIDTH * 2)
+
+/**
+ * A page, or just its top for a tall webtoon page, like the automatic covers. Tall pages are cut
+ * before decoding where the format allows, so a long strip never sits whole in memory.
+ */
+private fun renderTop(source: PageSource, page: Int, width: Int): Bitmap? {
+    val size = runCatching { source.size(page) }.getOrNull()
+    if (size != null && source.canSlice && size.height > size.width * 3 / 2) {
+        runCatching { source.slice(page, 0, size.width * 3 / 2, width) }.getOrNull()?.let { return it }
+    }
+    val full = source.render(page, width) ?: return null
     return if (full.height > full.width * 3 / 2) Bitmap.createBitmap(full, 0, 0, full.width, full.width * 3 / 2) else full
 }
 
@@ -185,9 +196,11 @@ private fun PagePicker(book: Book, onDismiss: () -> Unit, onPick: (Int) -> Unit)
     // One page at a time, so a big archive doesn't decode dozens of pages at once.
     val renderer: CoroutineDispatcher = remember { Dispatchers.IO.limitedParallelism(1) }
     val opened by produceState<Result<PageSource>?>(null, book.id) {
-        val result = withContext(Dispatchers.IO) { runCatching { openBookSource(context, book) } }
+        // Not cancellable, so a book still opening when the picker closes is closed rather than left open.
+        val result = withContext(NonCancellable + Dispatchers.IO) { runCatching { openBookSource(context, book) } }
         value = result
-        awaitDispose { result.getOrNull()?.let { source -> appScope.launch { source.close() } } }
+        // Closing waits for any thumbnail still drawing.
+        awaitDispose { result.getOrNull()?.let { source -> appScope.launch(renderer) { source.close() } } }
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -225,7 +238,7 @@ private fun PagePicker(book: Book, onDismiss: () -> Unit, onPick: (Int) -> Unit)
 @Composable
 private fun PageThumbnail(source: PageSource, page: Int, renderer: CoroutineDispatcher, onClick: () -> Unit) {
     val image by produceState<ImageBitmap?>(null, source, page) {
-        value = withContext(renderer) { runCatching { source.render(page, THUMBNAIL_WIDTH) }.getOrNull()?.asImageBitmap() }
+        value = withContext(renderer) { runCatching { renderTop(source, page, THUMBNAIL_WIDTH) }.getOrNull()?.asImageBitmap() }
     }
     Column(
         Modifier.clickable(onClickLabel = "Use page ${page + 1}", onClick = onClick),
