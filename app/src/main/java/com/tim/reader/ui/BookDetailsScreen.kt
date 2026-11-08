@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -124,8 +125,8 @@ fun BookDetailsScreen(
             ReadsSection(book, history) { ratingVersion++ }
         }
 
-        OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") })
-        OutlinedTextField(author, { author = it }, Modifier.fillMaxWidth(), label = { Text("Author") })
+        OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
+        OutlinedTextField(author, { author = it }, Modifier.fillMaxWidth(), label = { Text("Author") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
         OutlinedTextField(
             series,
             { series = it },
@@ -133,6 +134,7 @@ fun BookDetailsScreen(
                 .fillMaxWidth()
                 .onFocusChanged { seriesFocused = it.isFocused },
             label = { Text("Series") },
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
             singleLine = true,
         )
         if (seriesFocused) {

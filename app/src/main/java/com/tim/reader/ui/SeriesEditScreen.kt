@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.tim.reader.appScope
@@ -100,13 +102,14 @@ fun SeriesEditScreen(
             }
         }
 
-        OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Series name") }, singleLine = true)
+        OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Series name") }, singleLine = true, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
         Text("Using the name of another series of the same type merges the two.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(
             author,
             { author = it },
             Modifier.fillMaxWidth(),
             label = { Text("Author") },
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
             placeholder = { if (startAuthor.isEmpty()) Text("Leave each volume's author as it is") },
             singleLine = true,
         )

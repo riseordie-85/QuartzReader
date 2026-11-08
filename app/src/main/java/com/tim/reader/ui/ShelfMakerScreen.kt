@@ -36,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -263,6 +265,7 @@ fun ShelfMakerScreen(shelf: Shelf?, state: LibraryState, onDone: () -> Unit) {
                         value = name,
                         onValueChange = { name = it },
                         placeholder = { Text("Thrillers") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )

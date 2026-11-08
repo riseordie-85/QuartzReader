@@ -30,6 +30,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -174,7 +176,7 @@ private fun NameDialog(title: String, start: String, onCancel: () -> Unit, onSav
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(title) },
-        text = { OutlinedTextField(name, { name = it }, singleLine = true) },
+        text = { OutlinedTextField(name, { name = it }, singleLine = true, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)) },
         confirmButton = {
             TextButton(onClick = { onSave(name.trim()) }, enabled = name.isNotBlank()) { Text("Save") }
         },

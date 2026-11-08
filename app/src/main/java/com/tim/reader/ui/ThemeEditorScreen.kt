@@ -40,6 +40,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -388,7 +390,7 @@ fun ThemeEditorScreen(
         AlertDialog(
             onDismissRequest = { naming = false },
             title = { Text("Save as a style") },
-            text = { OutlinedTextField(label, { label = it }, singleLine = true) },
+            text = { OutlinedTextField(label, { label = it }, singleLine = true, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)) },
             confirmButton = {
                 TextButton(
                     onClick = {

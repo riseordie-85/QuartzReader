@@ -26,6 +26,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -131,6 +133,7 @@ fun NoteEditor(
                 BasicTextField(
                     value = note,
                     onValueChange = { note = it },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     textStyle = TextStyle(color = Color.White, fontSize = 24.sp),
                     cursorBrush = SolidColor(Color.White),
                     modifier = Modifier
