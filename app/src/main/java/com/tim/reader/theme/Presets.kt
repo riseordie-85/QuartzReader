@@ -47,59 +47,6 @@ object Presets {
         ),
     )
 
-    val wood = ShelfTheme(
-        background = ImageFill("wood"),
-        header = BarLook(
-            fill = ImageFill("wood", ImageMode.Tile, tint = 0x665A3216),
-            cornerDp = 4f,
-            textColor = 0xFFF2DFC0,
-            iconColor = 0xFFF2DFC0,
-        ),
-        title = TextLook(color = 0xFFF2DFC0),
-        ledge = LedgeLook(fill = ImageFill("wood", ImageMode.Tile, tint = 0x665A3216), cornerDp = 2f),
-        controls = ControlsLook(0xFFF2DFC0),
-        bottom = BottomLook(fadeColor = 0xFF6B3F22, labelColor = 0xFFF2DFC0),
-        button = ButtonLook(
-            fill = ImageFill("wood", ImageMode.Tile, tint = 0x665A3216),
-            cornerDp = 8f,
-            font = "serif",
-            textColor = 0xFFF2DFC0,
-        ),
-    )
-
-    private val purpleBar = GradientFill(
-        listOf(0xFF8F44BF, 0xFFB86BD8, 0xFF8F44BF),
-        GradientDirection.Diagonal,
-    )
-
-    val pinkPattern = ShelfTheme(
-        background = ImageFill("kawaii"),
-        header = BarLook(
-            fill = purpleBar,
-            cornerDp = 32f,
-            stroke = StrokeLook(0x66FFFFFF, 1f),
-            textColor = 0xFFF7E9C8,
-            iconColor = 0xFFF7E9C8,
-        ),
-        title = TextLook(
-            font = "cursive",
-            sizeSp = 34f,
-            bold = true,
-            color = 0xFFF7D9F5,
-            stroke = StrokeLook(0xFF8F44BF, 3f),
-        ),
-        ledge = LedgeLook(fill = purpleBar, cornerDp = 14f),
-        controls = ControlsLook(0xFF8F44BF),
-        bottom = BottomLook(fadeColor = 0xFFA959CC, labelColor = 0xFFF7D9F5),
-        button = ButtonLook(fill = purpleBar, font = "cursive", textColor = 0xFFF7E9C8),
-    )
-
-    val burst = pinkPattern.copy(
-        background = ImageFill("burst"),
-        title = pinkPattern.title.copy(font = "sans", bold = true),
-        bottom = pinkPattern.bottom.copy(fadeColor = 0xFF8F44BF),
-    )
-
     private val royalBlue = 0xFF0000F0
 
     val speedLines = ShelfTheme(
@@ -173,7 +120,7 @@ object Presets {
     )
 
     val horror: ShelfTheme = ThemeJson.read(
-        """{"background":{"type":"image","name":"horror","mode":"Crop","scale":1},"header":{"fill":{"type":"solid","color":2820745771},"corner":0,"stroke":{"color":3093396349,"width":1},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5},"text":4284578685,"icon":4284578685},"title":{"font":"pack:NV Cardo","size":30,"bold":false,"italic":false,"color":4284578685,"stroke":{"color":4278190080,"width":2}},"ledge":{"fill":{"type":"solid","color":2820745771},"corner":0,"height":4.67,"width":1,"align":"Center","stroke":{"color":3093396349,"width":1},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5}},"book":{"shadow":{"color":4284578685,"angle":45,"distance":3.28,"blur":27.91,"opacity":1},"highlight":true,"spacing":16},"controls":{"color":4284578685,"fill":{"type":"gradient","colors":[4278190080,4281545523],"direction":"Vertical"}},"bottom":{"fade":4284578685,"height":155.83,"label":4294967295},"button":{"fill":{"type":"image","name":"horror_art","mode":"Crop","scale":1,"tint":2600468480},"corner":0,"font":"sans","bold":true,"italic":false,"text":4294967295,"stroke":{"color":4291176488,"width":2},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5}}}""",
+        """{"background":{"type":"image","name":"horror","mode":"Crop","scale":1},"header":{"fill":{"type":"solid","color":2820745771},"corner":0,"stroke":{"color":3093396349,"width":1},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5},"text":4284578685,"icon":4284578685},"title":{"font":"pack:NV Cardo","size":30,"bold":false,"italic":false,"color":4284578685,"stroke":{"color":4278190080,"width":2}},"ledge":{"fill":{"type":"solid","color":2820745771},"corner":0,"height":4.67,"width":1,"align":"Center","stroke":{"color":3093396349,"width":1},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5}},"book":{"shadow":{"color":4284578685,"angle":45,"distance":3.28,"blur":27.91,"opacity":1},"highlight":true,"spacing":16},"controls":{"color":4284578685,"fill":{"type":"gradient","colors":[4278190080,4281545523],"direction":"Vertical"}},"bottom":{"fade":4284578685,"height":155.83,"label":4294967295},"button":{"fill":{"type":"image","name":"horror","mode":"Crop","scale":1,"tint":2600468480},"corner":0,"font":"sans","bold":true,"italic":false,"text":4294967295,"stroke":{"color":4291176488,"width":2},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5}}}""",
     )
 
     val manga: ShelfTheme = ThemeJson.read(
@@ -200,9 +147,6 @@ object Presets {
         "Romantasy" to romantasy,
         "Silver Gloss" to silverGloss,
         "Brushed Metal" to brushedMetal,
-        "Wood" to wood,
-        "Pink Pattern" to pinkPattern,
-        "Burst" to burst,
         "Speed Lines" to speedLines,
         "Crystal" to crystal,
     )

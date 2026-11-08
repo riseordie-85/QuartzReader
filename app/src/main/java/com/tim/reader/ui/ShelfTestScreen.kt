@@ -90,15 +90,11 @@ private class ShelfTheme(
 
 private val silver = Brush.verticalGradient(listOf(Color(0xFFF2F2F2), Color(0xFFA8A8A8)))
 private val metal = Brush.linearGradient(listOf(Color(0xFF9A9A9A), Color(0xFFC8C8C8), Color(0xFF9A9A9A)))
-private val walnut = Brush.linearGradient(listOf(Color(0xFF6B3F22), Color(0xFF8A5A36), Color(0xFF6B3F22)))
-private val purple = Brush.linearGradient(listOf(Color(0xFF8F44BF), Color(0xFFB86BD8), Color(0xFF8F44BF)))
 private val blue = Brush.verticalGradient(listOf(Color(0xFF0000FF), Color(0xFF0000D0)))
 
 private val themes = listOf(
     ShelfTheme("Silver Gloss", null, Color(0xFFB8B8B8), silver, Color.Black, 28),
     ShelfTheme("Brushed Metal", null, Color(0xFFADADAD), metal, Color.Black, 4),
-    ShelfTheme("Wood", R.drawable.wall_wood, Color(0xFF8A5E3B), walnut, Color(0xFFF2DFC0), 4),
-    ShelfTheme("Burst", R.drawable.wall_burst, Color(0xFFE4C9FB), purple, Color(0xFFF7E9C8), 28),
     ShelfTheme("Speed Lines", R.drawable.wall_speed, Color(0xFFF08A1D), blue, Color.White, 28),
 )
 

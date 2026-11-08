@@ -25,18 +25,17 @@ object ThemeImages {
     }
 
     private val placeholders = mapOf(
-        "wood" to R.drawable.wall_wood,
         "speed" to R.drawable.wall_speed,
-        "kawaii" to R.drawable.wall_kawaii,
-        "burst" to R.drawable.wall_burst,
         "crystal" to R.drawable.wall_crystal,
         "comics" to R.drawable.wall_comics,
         "horror" to R.drawable.wall_horror,
-        "horror_art" to R.drawable.wall_horror_art,
         "manga" to R.drawable.wall_manga,
         "manhwa" to R.drawable.wall_manhwa,
         "romantasy" to R.drawable.wall_romantasy,
     )
+
+    /** Art that has been taken out of the app, and what draws in its place for themes that still name it. */
+    private val retired = mapOf("horror_art" to "horror", "wood" to "crystal", "kawaii" to "crystal", "burst" to "crystal")
 
     private fun key(name: String, thumbnail: Boolean) = if (thumbnail) "$name#thumbnail" else name
 
@@ -47,7 +46,7 @@ object ThemeImages {
         val screenWidth = if (thumbnail) THUMBNAIL_SIZE else maxOf(metrics.widthPixels, metrics.heightPixels)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val file = if (ThemeFiles.isImported(name)) ThemeFiles.imageFile(name) ?: return@withContext null else null
-        val resource = placeholders[name]
+        val resource = placeholders[retired[name] ?: name]
         if (file == null && resource == null) return@withContext null
 
         fun decode(options: BitmapFactory.Options) =
@@ -70,15 +69,11 @@ object ThemeImages {
     val builtIn = listOf(
         "crystal" to "Crystal",
         "comics" to "Comics",
-        "horror" to "Horror library",
-        "horror_art" to "Horror poster",
+        "horror" to "Horror",
         "manga" to "Manga",
         "manhwa" to "Manhwa",
         "romantasy" to "Romantasy",
-        "wood" to "Wood",
         "speed" to "Speed lines",
-        "kawaii" to "Kawaii",
-        "burst" to "Burst",
     )
 }
 
