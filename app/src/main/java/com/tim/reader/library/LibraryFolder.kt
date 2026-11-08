@@ -223,13 +223,19 @@ class LibraryFolder private constructor(context: Context) {
         }.orEmpty()
     }
 
-    /** Writes [bytes] to a file in the folder, replacing it whole. A partial file is written first and swapped in. */
+    /**
+     * Writes [bytes] to a file in the folder, replacing it whole. The new copy is written as
+     * "name.tmp" first and renamed once complete, so a crash midway never leaves a cut-off file.
+     */
     fun writeFile(parentId: String, name: String, mime: String, bytes: ByteArray) {
-        val existing = files(parentId).firstOrNull { it.name == name }
-        val target = existing?.let { documentUri(it.documentId) }
-            ?: DocumentsContract.createDocument(resolver, documentUri(parentId), mime, name)
-            ?: error("Android couldn't create $name")
-        (resolver.openOutputStream(target, "wt") ?: error("Android couldn't write $name")).use { it.write(bytes) }
+        val temporary = "$name.tmp"
+        val listing = files(parentId)
+        val partial = listing.firstOrNull { it.name == temporary }?.let { documentUri(it.documentId) }
+            ?: DocumentsContract.createDocument(resolver, documentUri(parentId), mime, temporary)
+            ?: error("Android couldn't create $temporary")
+        (resolver.openOutputStream(partial, "wt") ?: error("Android couldn't write $temporary")).use { it.write(bytes) }
+        listing.firstOrNull { it.name == name }?.let { old -> DocumentsContract.deleteDocument(resolver, documentUri(old.documentId)) }
+        DocumentsContract.renameDocument(resolver, partial, name)
     }
 
     fun readFile(documentId: String): ByteArray =

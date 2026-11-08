@@ -273,6 +273,8 @@ class Importer(context: Context) {
                 }
             }
             onProgress(ImportProgress(items.size, items.size, ""))
+            // New books can now take their progress, shelves and notes from other devices' snapshots.
+            if (imported > 0) LibrarySync.check(appContext, force = true)
             ImportResult(imported, duplicates, failed, originalsKept)
         }
 
@@ -333,7 +335,8 @@ class Importer(context: Context) {
                 coverPath = coverPath,
                 customCoverPath = null,
                 addedAt = now,
-                updatedAt = now,
+                // Zero marks details that came from the file, not from an edit, so sync lets any real edit win.
+                updatedAt = 0L,
                 lastReadAt = null,
                 position = 0,
                 locator = null,

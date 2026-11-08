@@ -41,7 +41,6 @@ import com.tim.reader.library.ImportOptions
 import com.tim.reader.library.ImportProgress
 import com.tim.reader.library.ImportResult
 import com.tim.reader.library.Importer
-import com.tim.reader.library.LibrarySync
 import kotlinx.coroutines.launch
 
 @Composable
@@ -246,11 +245,8 @@ fun RestoreSheet(items: List<ImportItem>, skipped: List<String>, onDone: () -> U
                                     removeOriginals = false,
                                 )
                                 progress = ImportProgress(0, items.size, items.first().name)
-                                scope.launch {
-                                    result = importer.run(items, options) { progress = it }
-                                    // With the books back, their progress, ratings, shelves and history can follow.
-                                    LibrarySync.check(context, force = true)
-                                }
+                                // With the books back, the importer brings their progress, shelves and history after them.
+                                scope.launch { result = importer.run(items, options) { progress = it } }
                             }) { Text("Add and organize ${items.size}") }
                         }
                     }

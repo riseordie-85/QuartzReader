@@ -235,6 +235,11 @@ class LibraryRepository private constructor(context: Context) {
         updateBookField(id) { put("custom_cover_path", path) }
     }
 
+    /** Sets a cover that came from another device, without making it look like an edit here. */
+    suspend fun setSyncedCover(id: String, path: String) = write {
+        db.update("books", ContentValues().apply { put("custom_cover_path", path) }, "id = ?", arrayOf(id))
+    }
+
     /** Takes the books out of a series, which then disappears. The books stay. */
     suspend fun ungroupSeries(seriesId: String) = write {
         val time = now()
@@ -338,7 +343,8 @@ class LibraryRepository private constructor(context: Context) {
         )
         db.beginTransaction()
         try {
-            seeds.forEachIndexed { index, (name, theme, type) -> insertShelf(name, index, theme, type) }
+            // Starting shelves are defaults, so their changes from another device or a backup win.
+            seeds.forEachIndexed { index, (name, theme, type) -> insertShelf(name, index, theme, type, updatedAt = 0L) }
             saveSetting(KEY_SEEDED, "1")
             db.setTransactionSuccessful()
         } finally {
@@ -346,7 +352,7 @@ class LibraryRepository private constructor(context: Context) {
         }
     }
 
-    private fun insertShelf(name: String, order: Int, theme: ShelfTheme, type: BookType?): String {
+    private fun insertShelf(name: String, order: Int, theme: ShelfTheme, type: BookType?, updatedAt: Long = now()): String {
         val id = UUID.randomUUID().toString()
         val values = ContentValues().apply {
             put("id", id)
@@ -357,7 +363,7 @@ class LibraryRepository private constructor(context: Context) {
             put("sort_order", SortOrder.Title.name)
             put("group_series", 1)
             put("default_type", type?.name)
-            put("updated_at", now())
+            put("updated_at", updatedAt)
         }
         db.insertOrThrow("shelves", null, values)
         return id
@@ -692,7 +698,8 @@ class LibraryRepository private constructor(context: Context) {
             if (!book.info.isEmpty) put("info", writeInfo(book.info))
         }
         db.insertOrThrow("books", null, values)
-        shelfIds.forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, book.id, now())) }
+        // Shelves a book starts on are a default, so a removal synced from another device wins.
+        shelfIds.forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, book.id, 0L)) }
     }
 
     suspend fun updateBookDetails(

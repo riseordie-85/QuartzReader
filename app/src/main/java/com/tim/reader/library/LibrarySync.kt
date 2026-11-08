@@ -40,6 +40,8 @@ data class SyncStatus(
 object LibrarySync {
     private const val COVERS = "Covers"
     private const val PREFIX = "quartz-"
+    // Only snapshots this app wrote; sync tools' conflict copies and other files are left alone.
+    private val SNAPSHOT = Regex("""^quartz-([0-9a-f]{8})\.json(\.tmp)?$""")
     private const val SAVE_DELAY_MS = 15_000L
     private const val CHECK_GAP_MS = 30_000L
 
@@ -51,7 +53,7 @@ object LibrarySync {
 
     private fun fileName() = "$PREFIX${DeviceSettings.deviceId.take(8)}.json"
 
-    private fun deviceName() = listOfNotNull(Build.MANUFACTURER?.replaceFirstChar { it.uppercase() }, Build.MODEL)
+    private fun deviceName() = listOf(Build.MANUFACTURER.replaceFirstChar { it.uppercase() }, Build.MODEL)
         .distinct().joinToString(" ")
 
     private fun enabled(context: Context) = DeviceSettings.syncFolder && LibraryFolder.get(context).isReady()
@@ -76,12 +78,13 @@ object LibrarySync {
                 runStep("Couldn't save library data") {
                     val folder = LibraryFolder.get(app)
                     val repository = LibraryRepository.get(app)
-                    val snapshot = repository.exportSnapshot(DeviceSettings.deviceId, deviceName())
-                    folder.writeFile(folder.dataFolder(), fileName(), "application/json", snapshot.toString().toByteArray())
+                    // Covers go first, so a snapshot never names a cover that isn't in the folder yet.
                     val covers = folder.dataFolder(COVERS)
                     repository.state.value.books.mapNotNull { it.customCoverPath }.forEach { path ->
                         File(path).takeIf { it.exists() }?.let { folder.saveFileOnce(covers, it) }
                     }
+                    val snapshot = repository.exportSnapshot(DeviceSettings.deviceId, deviceName())
+                    folder.writeFile(folder.dataFolder(), fileName(), "application/json", snapshot.toString().toByteArray())
                     state.value = state.value.copy(lastSaved = System.currentTimeMillis(), problem = null)
                 }
             }
@@ -104,8 +107,13 @@ object LibrarySync {
                     val folder = LibraryFolder.get(app)
                     val repository = LibraryRepository.get(app)
                     val seen = app.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                    val own = DeviceSettings.deviceId.take(8)
+                    // One file per other device: its snapshot, or the new copy if a save was cut off before the swap.
                     val others = folder.files(folder.dataFolder())
-                        .filter { it.name.startsWith(PREFIX) && it.name.endsWith(".json") && it.name != fileName() }
+                        .mapNotNull { file -> SNAPSHOT.matchEntire(file.name)?.let { it.groupValues[1] to file } }
+                        .filter { (device, _) -> device != own }
+                        .groupBy({ it.first }, { it.second })
+                        .mapNotNull { (_, files) -> files.firstOrNull { !it.name.endsWith(".tmp") } ?: files.firstOrNull() }
                     val devices = ArrayList<Pair<String, Long>>()
                     var merged = false
                     for (file in others) {
@@ -114,8 +122,9 @@ object LibrarySync {
                         devices += remote.optString("deviceName", file.name) to remote.optLong("written")
                         if (!force && seen.getLong(key, 0L) >= file.lastModified) continue
                         val result = repository.mergeSnapshot(remote)
-                        if (result.covers.isNotEmpty()) fetchCovers(app, folder, result.covers)
-                        seen.edit { putLong(key, file.lastModified) }
+                        val allCovers = result.covers.isEmpty() || fetchCovers(app, folder, result.covers)
+                        // A cover still on its way means reading this snapshot again next time.
+                        if (allCovers) seen.edit { putLong(key, file.lastModified) }
                         merged = merged || result.changed > 0
                     }
                     state.value = state.value.copy(lastChecked = System.currentTimeMillis(), devices = devices, problem = null)
@@ -125,18 +134,29 @@ object LibrarySync {
         }
     }
 
-    private suspend fun fetchCovers(context: Context, folder: LibraryFolder, covers: List<Pair<String, String>>) {
+    /** Copies covers from the folder. Returns false if any hasn't arrived yet. */
+    private suspend fun fetchCovers(context: Context, folder: LibraryFolder, covers: List<Pair<String, String>>): Boolean {
         val available = folder.files(folder.dataFolder(COVERS)).associateBy { it.name }
         val repository = LibraryRepository.get(context)
         val target = File(context.filesDir, "custom-covers").apply { mkdirs() }
+        var all = true
         for ((bookId, name) in covers) {
-            val file = available[name] ?: continue
+            val file = available[name]
+            if (file == null) {
+                all = false
+                continue
+            }
             val copy = File(target, name)
-            if (!copy.exists()) copy.writeBytes(folder.readFile(file.documentId))
+            if (!copy.exists()) {
+                val partial = File(target, "$name.part")
+                partial.writeBytes(folder.readFile(file.documentId))
+                partial.renameTo(copy)
+            }
             val old = repository.state.value.book(bookId)?.customCoverPath
-            repository.setCustomCover(bookId, copy.path)
+            repository.setSyncedCover(bookId, copy.path)
             if (old != null && old != copy.path) Covers.deleteCustom(old)
         }
+        return all
     }
 
     private suspend fun runStep(problem: String, block: suspend () -> Unit) {

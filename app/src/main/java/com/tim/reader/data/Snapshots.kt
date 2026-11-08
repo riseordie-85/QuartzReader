@@ -16,9 +16,11 @@ class MergeResult(val changed: Int, val covers: List<Pair<String, String>>)
  *
  * Every row has its own ID and an updated_at time, so most things merge by keeping the newest.
  * Books are matched by their file hash, since each device gives a book its own ID. Shelves match by
- * ID, then by the type they hold, then by name. Series match by their title. A reading position
- * goes with whichever device read last. On a fresh install with no reading history yet, everything
- * from the snapshot is taken, since the local library is only defaults.
+ * ID, then by the type they hold, then by name, and then take the same ID so later merges match
+ * by it. Series match by their title. A reading position goes with whichever device read last.
+ *
+ * Things the app set up itself, like a book's details from its file or the starting shelves, are
+ * stored with an updated_at of zero, so any real edit from another device wins over them.
  */
 internal class SnapshotCodec(private val db: SQLiteDatabase) {
 
@@ -65,7 +67,6 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
     fun merge(remote: JSONObject): MergeResult {
         var changed = 0
         val covers = ArrayList<Pair<String, String>>()
-        val fresh = count("SELECT COUNT(*) FROM events") == 0L
 
         db.beginTransaction()
         try {
@@ -88,22 +89,27 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
             // Books, matched by hash. Books whose file isn't here are left for when it is.
             val bookIds = HashMap<String, String>()
             for (row in remote.optJSONArray("books").objects()) {
+                // A book deleted on the other device stays here; its file and rows are this device's to keep.
+                if (!row.isNull("deleted_at")) continue
                 val local = db.rawQuery(
-                    "SELECT id, updated_at, last_read_at, custom_cover_path, added_at FROM books WHERE hash = ? AND deleted_at IS NULL LIMIT 1",
+                    "SELECT id, updated_at, last_read_at, custom_cover_path FROM books WHERE hash = ? AND deleted_at IS NULL LIMIT 1",
                     arrayOf(row.getString("hash")),
-                ).use { if (it.moveToFirst()) LocalBook(it.getString(0), it.getLong(1), it.longOrNull(2), it.getString(3), it.getLong(4)) else null } ?: continue
+                ).use { if (it.moveToFirst()) LocalBook(it.getString(0), it.getLong(1), it.longOrNull(2), if (it.isNull(3)) null else it.getString(3)) else null } ?: continue
                 bookIds[row.getString("id")] = local.id
 
                 val update = ContentValues()
-                // A book just added here, such as after a reinstall, has nothing of its own to keep.
-                val untouched = local.updatedAt <= local.addedAt + UNTOUCHED_MS
-                if (fresh || untouched || row.optLong("updated_at") > local.updatedAt) {
+                val remoteUpdated = row.optLong("updated_at")
+                if (remoteUpdated > local.updatedAt) {
                     for (column in listOf("title", "author", "series_number", "in_read_list", "direction", "reader_prefs", "spread_shift", "info", "type", "updated_at")) {
                         if (row.has(column)) update.putJson(column, row.opt(column))
                     }
                     update.put("series_id", localSeries(row.optStringOrNull("series_id")))
-                    val cover = row.optStringOrNull("custom_cover")
-                    if (cover != null && cover != local.customCover?.let { File(it).name }) covers += local.id to cover
+                }
+                // A cover is fetched whenever the other device's is at least as new, so one that
+                // arrives after its snapshot is picked up next time.
+                val cover = row.optStringOrNull("custom_cover")
+                if (cover != null && remoteUpdated >= local.updatedAt && cover != local.customCover?.let { File(it).name }) {
+                    covers += local.id to cover
                 }
                 val remoteRead = row.optLongOrNull("last_read_at")
                 if (remoteRead != null && remoteRead > (local.lastReadAt ?: 0L)) {
@@ -118,9 +124,23 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
             for (row in remote.optJSONArray("shelves").objects()) {
                 val remoteId = row.getString("id")
                 val type = row.optStringOrNull("default_type")
-                val localId = single("SELECT id FROM shelves WHERE id = ?", remoteId)
-                    ?: type?.let { single("SELECT id FROM shelves WHERE default_type = ? AND deleted_at IS NULL", it) }
-                    ?: single("SELECT id FROM shelves WHERE lower(name) = lower(?) AND deleted_at IS NULL", row.optString("name"))
+                // Deleted shelves count as matches too, so a shelf deleted here isn't brought back.
+                val matched = single("SELECT id FROM shelves WHERE id = ?", remoteId)
+                    ?: type?.let { single("SELECT id FROM shelves WHERE default_type = ? ORDER BY deleted_at IS NULL DESC, updated_at DESC LIMIT 1", it) }
+                    ?: single("SELECT id FROM shelves WHERE lower(name) = lower(?) ORDER BY deleted_at IS NULL DESC, updated_at DESC LIMIT 1", row.optString("name"))
+                // Matched shelves settle on the smaller ID on both devices, so a rename later still matches.
+                val localId = if (matched != null && matched != remoteId && remoteId < matched) {
+                    if (single("SELECT id FROM shelves WHERE id = ?", remoteId) == null) {
+                        db.update("shelves", ContentValues().apply { put("id", remoteId) }, "id = ?", arrayOf(matched))
+                        db.update("shelf_books", ContentValues().apply { put("shelf_id", remoteId) }, "shelf_id = ?", arrayOf(matched))
+                        changed++
+                        remoteId
+                    } else {
+                        matched
+                    }
+                } else {
+                    matched
+                }
                 if (localId == null) {
                     if (row.isNull("deleted_at")) {
                         db.insertWithOnConflict("shelves", null, values(row, listOf("id") + shelfColumns), SQLiteDatabase.CONFLICT_IGNORE)
@@ -131,7 +151,7 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
                 }
                 shelfIds[remoteId] = localId
                 val localUpdated = count("SELECT updated_at FROM shelves WHERE id = ?", localId)
-                if (fresh || row.optLong("updated_at") > localUpdated) {
+                if (row.optLong("updated_at") > localUpdated) {
                     if (db.update("shelves", values(row, shelfColumns), "id = ?", arrayOf(localId)) > 0) changed++
                 }
             }
@@ -142,7 +162,7 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
                 val book = bookIds[row.getString("book_id")] ?: continue
                 val localUpdated = db.rawQuery("SELECT updated_at FROM shelf_books WHERE shelf_id = ? AND book_id = ?", arrayOf(shelf, book))
                     .use { if (it.moveToFirst()) it.getLong(0) else null }
-                if (localUpdated == null || fresh || row.optLong("updated_at") > localUpdated) {
+                if (localUpdated == null || row.optLong("updated_at") > localUpdated) {
                     val values = ContentValues().apply {
                         put("shelf_id", shelf)
                         put("book_id", book)
@@ -177,11 +197,14 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
             for (row in remote.optJSONArray("settings").objects()) {
                 val key = row.getString("key")
                 val localUpdated = db.rawQuery("SELECT updated_at FROM settings WHERE key = ?", arrayOf(key)).use { if (it.moveToFirst()) it.getLong(0) else null }
-                if (localUpdated == null || fresh || row.optLong("updated_at") > localUpdated) {
+                if (localUpdated == null || row.optLong("updated_at") > localUpdated) {
                     db.insertWithOnConflict("settings", null, values(row, listOf("key", "value", "updated_at")), SQLiteDatabase.CONFLICT_REPLACE)
                     changed++
                 }
             }
+            // Series a merge left without books go, as they do after an edit here.
+            val time = System.currentTimeMillis()
+            db.execSQL(Schema.DELETE_EMPTY_SERIES, arrayOf<Any>(time, time))
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -210,7 +233,7 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
         return changed
     }
 
-    private class LocalBook(val id: String, val updatedAt: Long, val lastReadAt: Long?, val customCover: String?, val addedAt: Long)
+    private class LocalBook(val id: String, val updatedAt: Long, val lastReadAt: Long?, val customCover: String?)
 
     private fun values(row: JSONObject, columns: List<String>) = ContentValues().apply {
         for (column in columns) if (row.has(column)) putJson(column, row.opt(column))
@@ -238,9 +261,6 @@ internal class SnapshotCodec(private val db: SQLiteDatabase) {
 
     companion object {
         const val VERSION = 1
-
-        // Adding a book takes a moment, so a book changed within this of being added counts as untouched.
-        private const val UNTOUCHED_MS = 5_000L
     }
 }
 
