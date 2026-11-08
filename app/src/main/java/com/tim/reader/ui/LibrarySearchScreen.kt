@@ -79,7 +79,7 @@ fun LibrarySearchScreen(state: LibraryState, actions: BookActions, onClose: () -
     var query by remember { mutableStateOf(lastQuery) }
     val results = remember(state.books, query) { searchLibrary(state, query) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(Unit) { if (lastQuery.isBlank()) focus.requestFocus() }
 
     EditorTheme {
         Column(

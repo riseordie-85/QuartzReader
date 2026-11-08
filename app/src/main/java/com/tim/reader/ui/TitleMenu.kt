@@ -119,14 +119,20 @@ fun TitleWithMenu(title: String, theme: ShelfTheme, menu: TitleMenu, modifier: M
             if (hasMenu) TitleArrow(Color(theme.title.color), theme.title.sizeSp)
         }
         if (open) {
-            val shift = with(density) { IntOffset(-12.dp.roundToPx(), titleHeight + 6.dp.roundToPx()) }
+            // Room around the panel so its shadow isn't cut off at the popup's edge.
+            val room = theme.header.shadow?.let { (it.distanceDp * 2 + 4).dp } ?: 0.dp
+            val shift = with(density) {
+                IntOffset(-12.dp.roundToPx() - room.roundToPx(), titleHeight + 6.dp.roundToPx() - room.roundToPx())
+            }
             Popup(
                 alignment = Alignment.TopStart,
                 offset = shift,
                 onDismissRequest = { open = false },
                 properties = PopupProperties(focusable = true),
             ) {
-                MenuPanel(theme, menu, minOf(screenWidth - 32, 560)) { open = false }
+                Box(Modifier.padding(room)) {
+                    MenuPanel(theme, menu, minOf(screenWidth - 32, 560)) { open = false }
+                }
             }
         }
     }
@@ -186,10 +192,10 @@ private fun MenuPanel(theme: ShelfTheme, menu: TitleMenu, widthDp: Int, onClose:
                 steps = MOST - FEWEST - 1,
                 colors = SliderDefaults.colors(
                     thumbColor = accent,
-                    activeTrackColor = accent.copy(alpha = 0.45f),
-                    inactiveTrackColor = accent,
-                    activeTickColor = accent,
-                    inactiveTickColor = accent.copy(alpha = 0.45f),
+                    activeTrackColor = accent,
+                    inactiveTrackColor = accent.copy(alpha = 0.45f),
+                    activeTickColor = accent.copy(alpha = 0.45f),
+                    inactiveTickColor = accent,
                 ),
                 modifier = Modifier
                     .fillMaxWidth()

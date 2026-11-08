@@ -204,7 +204,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         onImport = { chooser = true },
         onShelves = { push(Route.Shelves) },
         onSettings = { push(Route.Settings) },
-        onSearch = { push(Route.Search) },
+        onSearch = { if (stack.last() != Route.Search) push(Route.Search) },
     )
     val actions = BookActions(
         onOpen = { book -> scope.launch { openBook(context, book, ::push) } },
@@ -250,7 +250,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             onNewShelf = { push(Route.ShelfMaker(null)) },
             onChooseBooks = { push(Route.ShelfMaker(it)) },
         )
-        Route.Search -> LibrarySearchScreen(state, actions) { stack.remove(route) }
+        Route.Search -> LibrarySearchScreen(state, actions) { stack.removeAt(stack.lastIndex) }
         is Route.InfoLookup -> {
             val series = route.seriesId?.let { state.seriesFor(it) }
             val books = when {
