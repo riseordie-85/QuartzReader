@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.Gem
+import com.tim.reader.stats.GemToast
 import kotlinx.coroutines.delay
 
 private const val TOAST_MS = 3_200L
@@ -84,13 +85,14 @@ fun GemIcon(gem: Gem?, size: Dp, modifier: Modifier = Modifier) {
 
 /** Shows queued achievement and goal toasts one at a time at the top of the screen. */
 @Composable
-fun GemToastHost(onOpen: () -> Unit) {
+fun GemToastHost(paused: Boolean = false, onOpen: (GemToast) -> Unit) {
     val toasts by AchievementCenter.toasts.collectAsState()
     val current = toasts.firstOrNull()
     var visible by remember { mutableStateOf(false) }
     var shown by remember { mutableStateOf(current) }
-    LaunchedEffect(current?.id) {
-        if (current == null) return@LaunchedEffect
+    // Waits while something else holds the screen, like the Finished card, so toasts aren't missed.
+    LaunchedEffect(current?.id, paused) {
+        if (current == null || paused) return@LaunchedEffect
         shown = current
         visible = true
         delay(TOAST_MS)
@@ -113,7 +115,7 @@ fun GemToastHost(onOpen: () -> Unit) {
                     .background(Color(0xF2201A2B), RoundedCornerShape(18.dp))
                     .clickable(onClickLabel = "See achievements") {
                         visible = false
-                        onOpen()
+                        onOpen(toast)
                     }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,

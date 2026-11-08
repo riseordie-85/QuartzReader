@@ -41,7 +41,7 @@ private fun tiers(vararg thresholds: Long) = thresholds.toList().zip(FOUR)
 private fun plural(n: Long, one: String, many: String = one + "s") = "$n ${if (n == 1L) one else many}"
 
 /** Everything the achievements look at, worked out once. */
-class AchievementFacts(history: ReadingHistory, state: LibraryState, zone: ZoneId) {
+class AchievementFacts(history: ReadingHistory, state: LibraryState, private val zone: ZoneId) {
     private fun dateOf(time: Long) = Instant.ofEpochMilli(time).atZone(zone)
 
     private val byHash = state.books.associateBy { it.hash }

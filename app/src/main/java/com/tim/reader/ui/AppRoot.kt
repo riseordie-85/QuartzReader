@@ -53,6 +53,7 @@ import com.tim.reader.engine.PageSource
 import com.tim.reader.library.ImportItem
 import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
+import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.openBookSource
 import com.tim.reader.openEpub
@@ -426,10 +427,16 @@ private fun Library(
 
     // A book finished in either reader gets its card once the reader has closed.
     val finishedId by ReadingTracker.finished.collectAsState()
-    if (stack.last() !is Route.Reader) {
+    val reading = stack.last() is Route.Reader
+    if (!reading) {
         finishedId?.let { id -> FinishedCard(id, state) { ReadingTracker.finished.value = null } }
     }
-    GemToastHost { if (stack.last() != Route.Achievements) push(Route.Achievements) }
+    // Tapping a toast mid-read doesn't close the book.
+    GemToastHost(paused = finishedId != null && !reading) { toast ->
+        val target = if (toast.isGoal) Route.Goals else Route.Achievements
+        if (!reading && stack.last() != target) push(target)
+    }
+    LaunchedEffect(Unit) { AchievementCenter.check(context) }
 }
 
 @Composable

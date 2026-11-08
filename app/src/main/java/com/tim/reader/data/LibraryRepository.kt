@@ -824,12 +824,15 @@ class LibraryRepository private constructor(context: Context) {
         Unit
     }
 
-    /** Finishes the read under way, if there is one. */
-    suspend fun finishRead(book: Book, at: Long) = withContext(serial) {
-        val readId = openRead(book) ?: return@withContext
+    /** Finishes the read under way, if there is one. Returns whether a read was finished. */
+    suspend fun finishRead(book: Book, at: Long): Boolean = withContext(serial) {
+        val readId = openRead(book) ?: return@withContext false
         insertEvent(EventKind.READ_FINISHED, book, readId, at, null, JSONObject().put("source", "reader"))
-        Unit
+        true
     }
+
+    /** Returns once every write queued before it is done. */
+    suspend fun awaitWrites() = withContext(serial) { }
 
     /** Saves a reading position. Runs on every page turn, so it patches the snapshot directly. */
     suspend fun savePosition(id: String, position: Int, progress: Float, locator: String? = null) =

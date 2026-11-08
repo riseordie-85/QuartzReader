@@ -244,7 +244,14 @@ fun GoalEditor(state: LibraryState, onDismiss: () -> Unit, onSave: (Goal) -> Uni
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     GoalKind.entries.forEach { option ->
-                        FilterChip(kind == option, { kind = option }, label = { Text(option.label) })
+                        FilterChip(kind == option, {
+                            kind = option
+                            target = when (option) {
+                                GoalKind.Habit -> if (habitDays) "5" else "20"
+                                GoalKind.Shelf -> "5"
+                                else -> "4"
+                            }
+                        }, label = { Text(option.label) })
                     }
                 }
                 when (kind) {
@@ -277,7 +284,10 @@ fun GoalEditor(state: LibraryState, onDismiss: () -> Unit, onSave: (Goal) -> Uni
                         DeadlineButton(end) { pickingDate = "end" }
                     }
                     GoalKind.Book -> {
-                        val titles = state.books.associate { it.title to it.hash }
+                        // Books sharing a title are told apart by author.
+                        val titles = state.books.groupBy { it.title.lowercase() }.values.flatMap { same ->
+                            same.map { book -> (if (same.size > 1) "${book.title} · ${book.author}" else book.title) to book.hash }
+                        }.toMap()
                         Picker(search, "Book", bookTitle, titles.keys.toList(), { search = it }) { title ->
                             bookTitle = title
                             bookHash = titles[title]

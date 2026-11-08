@@ -8,6 +8,7 @@ import com.tim.reader.data.Book
 import com.tim.reader.data.EventKind
 import com.tim.reader.data.LibraryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -37,8 +38,13 @@ object ReadingTracker {
         var turns = 0
     }
 
-    /** The book just finished, until the library has shown its Finished card. */
+    /** The book just finished, until the library has shown its Finished card. Set once the reader closes. */
     val finished = MutableStateFlow<String?>(null)
+
+    // A finish waiting for the reader to close, so the card's time includes the last session.
+    @Volatile
+    private var finishPending: String? = null
+    private var finishing: Job? = null
 
     private var owner: ComponentActivity? = null
     private var appContext: Context? = null
@@ -131,6 +137,14 @@ object ReadingTracker {
     fun stop(activity: ComponentActivity) {
         if (activity !== owner) return
         endSession()
+        val waitFor = finishing
+        finishing = null
+        record { repository ->
+            waitFor?.join()
+            repository.awaitWrites()
+            finishPending?.let { finished.value = it }
+            finishPending = null
+        }
         book = null
         owner = null
     }
@@ -144,9 +158,9 @@ object ReadingTracker {
     private fun finish(book: Book, now: Long) {
         finishLogged = true
         readChecked = false
-        finished.value = book.id
-        record { repository ->
-            repository.finishRead(book, now)
+        finishing = record { repository ->
+            // A reread that never started (opened near the end) finishes nothing, so it gets no card.
+            if (repository.finishRead(book, now)) finishPending = book.id
             appContext?.let(AchievementCenter::check)
         }
     }
@@ -174,8 +188,8 @@ object ReadingTracker {
         }
     }
 
-    private fun record(write: suspend (LibraryRepository) -> Unit) {
-        val target = repository ?: return
-        appScope.launch(writes) { write(target) }
+    private fun record(write: suspend (LibraryRepository) -> Unit): Job? {
+        val target = repository ?: return null
+        return appScope.launch(writes) { write(target) }
     }
 }

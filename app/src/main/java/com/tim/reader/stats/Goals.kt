@@ -138,7 +138,7 @@ fun goalProgress(goal: Goal, history: ReadingHistory, state: LibraryState, today
     val (from, to) = when {
         goal.kind == GoalKind.Habit && goal.unit == GoalUnit.Days -> weekOf(today)
         goal.kind == GoalKind.Habit -> today to today
-        goal.kind == GoalKind.Series || goal.kind == GoalKind.Book -> created to (goal.end ?: today)
+        goal.kind == GoalKind.Series || goal.kind == GoalKind.Book -> (goal.end ?: today).let { end -> minOf(created, end) to end }
         else -> when (goal.period) {
             GoalPeriod.Day -> today to today
             GoalPeriod.Week -> weekOf(today)
@@ -233,6 +233,8 @@ private fun weekOf(day: LocalDate): Pair<LocalDate, LocalDate> {
 
 private fun fractionElapsed(from: LocalDate, to: LocalDate, today: LocalDate): Float {
     val total = ChronoUnit.DAYS.between(from, to) + 1
+    // A deadline before the start counts as already over.
+    if (total <= 0) return 1f
     val gone = (ChronoUnit.DAYS.between(from, today) + 1).coerceIn(0, total)
     return gone.toFloat() / total
 }

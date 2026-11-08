@@ -9,11 +9,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.time.LocalDate
 
 /** A celebration waiting to slide in at the top of the screen. */
-data class GemToast(val title: String, val subtitle: String, val gem: Gem, val id: Long = System.nanoTime())
+data class GemToast(val title: String, val subtitle: String, val gem: Gem, val isGoal: Boolean = false, val id: Long = System.nanoTime())
 
 /**
  * Checks for newly unlocked achievements and reached goals, records them so each is celebrated
@@ -23,6 +25,9 @@ object AchievementCenter {
     private const val MAX_TOASTS = 3
 
     private val work = Dispatchers.IO.limitedParallelism(1)
+
+    // A check suspends while it reads and writes, so the lock keeps two from seeing the same unlock as new.
+    private val lock = Mutex()
     private val queue = MutableStateFlow<List<GemToast>>(emptyList())
     val toasts: StateFlow<List<GemToast>> = queue
 
@@ -31,7 +36,11 @@ object AchievementCenter {
     /** Looks for anything new. Cheap enough to run after each session and whenever the app comes back. */
     fun check(context: Context) {
         val repository = LibraryRepository.get(context.applicationContext)
-        appScope.launch(work) {
+        appScope.launch(work) { lock.withLock { checkNow(repository, context) } }
+    }
+
+    private suspend fun checkNow(repository: LibraryRepository, context: Context) {
+        run {
             val history = repository.readingHistory()
             val state = repository.state.value
             val now = System.currentTimeMillis()
@@ -56,10 +65,10 @@ object AchievementCenter {
                 val progress = goalProgress(goal, history, state, today)
                 if (!progress.done || progress.key in history.goalsDone) continue
                 repository.addEvent(EventKind.GOAL_DONE, null, null, now, null, JSONObject().put("key", progress.key))
-                fresh += GemToast("Goal reached", goal.describe(), Gem.Amethyst)
+                fresh += GemToast("Goal reached", goal.describe(), Gem.Amethyst, isGoal = true)
             }
 
-            if (fresh.isEmpty()) return@launch
+            if (fresh.isEmpty()) return
             // A big first check shouldn't bury the screen in toasts.
             val shown = if (fresh.size > MAX_TOASTS) {
                 fresh.take(MAX_TOASTS - 1) + GemToast("And ${fresh.size - MAX_TOASTS + 1} more", "See them all in Stats", Gem.Sapphire)
@@ -68,7 +77,7 @@ object AchievementCenter {
             }
             queue.update { it + shown }
             // Goals reached can unlock Goal Getter, which the next check picks up.
-            if (fresh.any { it.title == "Goal reached" }) check(context)
+            if (fresh.any { it.isGoal }) check(context)
         }
     }
 }

@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +31,8 @@ import com.tim.reader.stats.evaluateAchievements
 import com.tim.reader.theme.BarLook
 import com.tim.reader.theme.ThemedBackground
 import com.tim.reader.theme.ThemedText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Every achievement, unlocked ones first, with the way to the next tier. */
 @Composable
@@ -36,8 +40,13 @@ fun AchievementsScreen(state: LibraryState, header: HeaderActions) {
     val theme = state.homeTheme ?: return
     val look = theme.header
     val history = rememberHistory(state.books.size)
-    val statuses = history?.let { evaluateAchievements(it, state) }
-        ?.sortedWith(compareByDescending<AchievementStatus> { it.tier }.thenBy { it.achievement.hidden })
+    val statuses by produceState<List<AchievementStatus>?>(null, history, state) {
+        val loaded = history ?: return@produceState
+        value = withContext(Dispatchers.Default) {
+            evaluateAchievements(loaded, state)
+                .sortedWith(compareByDescending<AchievementStatus> { it.tier }.thenBy { it.achievement.hidden })
+        }
+    }
 
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
         LazyColumn(
@@ -52,14 +61,15 @@ fun AchievementsScreen(state: LibraryState, header: HeaderActions) {
                     ThemedText("Achievements", theme.title)
                 }
             }
-            if (statuses != null) {
+            val loaded = statuses
+            if (loaded != null) {
                 item {
-                    val unlocked = statuses.count { it.tier >= 0 }
+                    val unlocked = loaded.count { it.tier >= 0 }
                     Panel(look, null) {
-                        Body(look, "$unlocked of ${statuses.size} unlocked. Each one has up to four gems: Quartz, Amethyst, Sapphire and Diamond.")
+                        Body(look, "$unlocked of ${loaded.size} unlocked. Each one has up to four gems: Quartz, Amethyst, Sapphire and Diamond.")
                     }
                 }
-                items(statuses, key = { it.achievement.id }) { status ->
+                items(loaded, key = { it.achievement.id }) { status ->
                     Panel(look, null) { AchievementRow(look, status) }
                 }
             }
