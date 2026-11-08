@@ -197,7 +197,6 @@ private fun ShelfContent(
 ) {
     val controls = Color(theme.controls.color)
     val rowKey = booksPerRowKey(place, viewMode)
-    var choosingRow by remember { mutableStateOf(false) }
     var automatic by remember { mutableStateOf(1) }
     val bottomSpace = if (neighbors != null) theme.bottom.heightDp.dp else 24.dp
 
@@ -215,7 +214,19 @@ private fun ShelfContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ThemedText(title, theme.title, Modifier.weight(1f))
+                TitleWithMenu(
+                    title = title,
+                    theme = theme,
+                    menu = TitleMenu(
+                        buttons = listOfNotNull(
+                            onEditStyle?.let { "Shelf Style" to it },
+                            onPageSettings?.let { "Page Settings" to it },
+                        ),
+                        rowKey = rowKey.takeIf { viewMode != ViewMode.List },
+                        automaticRow = automatic,
+                    ),
+                    modifier = Modifier.weight(1f),
+                )
                 GlyphButton(Glyph.Grid, controls, "Change view", iconSize = 26.dp, outline = theme.controls.stroke) {
                     onViewMode(ViewMode.entries[(viewMode.ordinal + 1) % ViewMode.entries.size])
                 }
@@ -226,13 +237,8 @@ private fun ShelfContent(
                         groupSeries = groupSeries,
                         onSort = onSort,
                         onGroupSeries = onGroupSeries,
-                        onBooksPerRow = if (viewMode == ViewMode.List) null else ({ choosingRow = true }),
-                        onEditStyle = onEditStyle,
-                        onPageSettings = onPageSettings,
                         onChooseBooks = onChooseBooks,
                     )
-                } else if (viewMode != ViewMode.List) {
-                    PillButton("Books per row", theme.controls) { choosingRow = true }
                 }
             }
             BoxWithConstraints(
@@ -274,7 +280,6 @@ private fun ShelfContent(
             BottomBar(neighbors, theme, Modifier.align(Alignment.BottomCenter))
         }
     }
-    if (choosingRow) BooksPerRowDialog(rowKey, automatic) { choosingRow = false }
 }
 
 @Composable
@@ -284,9 +289,6 @@ private fun SortMenu(
     groupSeries: Boolean,
     onSort: (SortOrder) -> Unit,
     onGroupSeries: (Boolean) -> Unit,
-    onBooksPerRow: (() -> Unit)?,
-    onEditStyle: (() -> Unit)?,
-    onPageSettings: (() -> Unit)?,
     onChooseBooks: (() -> Unit)?,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -309,18 +311,13 @@ private fun SortMenu(
                     onGroupSeries(!groupSeries)
                 },
             )
-            HorizontalDivider()
-            listOfNotNull(
-                onChooseBooks?.let { "Add or remove books" to it },
-                onBooksPerRow?.let { "Books per row" to it },
-                onPageSettings?.let { "Page settings" to it },
-                onEditStyle?.let { "Edit shelf style" to it },
-            ).forEach { (label, action) ->
+            if (onChooseBooks != null) {
+                HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text(label) },
+                    text = { Text("Add or remove books") },
                     onClick = {
                         open = false
-                        action()
+                        onChooseBooks()
                     },
                 )
             }

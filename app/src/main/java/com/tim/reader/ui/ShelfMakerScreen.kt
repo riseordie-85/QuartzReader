@@ -86,7 +86,7 @@ private fun pickEntries(state: LibraryState, query: String, type: BookType?): Li
 }
 
 @Composable
-private fun SmallCover(path: String?) {
+fun SmallCover(path: String?) {
     val cover by rememberCover(path)
     Box(
         Modifier

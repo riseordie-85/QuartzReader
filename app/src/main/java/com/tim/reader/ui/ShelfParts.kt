@@ -71,6 +71,7 @@ class HeaderActions(
     val onImport: () -> Unit,
     val onShelves: () -> Unit,
     val onSettings: () -> Unit,
+    val onSearch: () -> Unit = {},
 )
 
 class BookActions(
@@ -106,6 +107,7 @@ fun LibraryHeader(look: BarLook, actions: HeaderActions) {
                 .clickable(onClickLabel = "Home", onClick = actions.onHome),
         )
         val icon = Color(look.iconColor)
+        GlyphButton(Glyph.Search, icon, "Search your library", actions.onSearch)
         GlyphButton(Glyph.Plus, icon, "Import", actions.onImport)
         GlyphButton(Glyph.Book, icon, "Shelves", actions.onShelves)
         GlyphButton(Glyph.Gear, icon, "Settings", actions.onSettings)

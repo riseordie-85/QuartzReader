@@ -79,6 +79,7 @@ private sealed interface Route {
     data class ShelfMaker(val shelfId: String?) : Route
     /** Looks a book or a whole series up online. */
     data class InfoLookup(val bookId: String?, val seriesId: String?) : Route
+    data object Search : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -203,6 +204,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         onImport = { chooser = true },
         onShelves = { push(Route.Shelves) },
         onSettings = { push(Route.Settings) },
+        onSearch = { push(Route.Search) },
     )
     val actions = BookActions(
         onOpen = { book -> scope.launch { openBook(context, book, ::push) } },
@@ -248,6 +250,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             onNewShelf = { push(Route.ShelfMaker(null)) },
             onChooseBooks = { push(Route.ShelfMaker(it)) },
         )
+        Route.Search -> LibrarySearchScreen(state, actions) { stack.remove(route) }
         is Route.InfoLookup -> {
             val series = route.seriesId?.let { state.seriesFor(it) }
             val books = when {
@@ -310,7 +313,6 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
                     header,
                     actions,
                     onPageSettings = { push(Route.PageSettings(null, series.id)) },
-                    onFindInfo = { push(Route.InfoLookup(null, series.id)) },
                 ) {
                     push(Route.SeriesEditor(series.id))
                 }

@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tim.reader.data.Book
@@ -44,14 +45,11 @@ fun SeriesScreen(
     header: HeaderActions,
     actions: BookActions,
     onPageSettings: () -> Unit,
-    onFindInfo: () -> Unit,
     onEdit: () -> Unit,
 ) {
     val ordered = volumes.sortedWith(volumeOrder)
     val rowKey = booksPerRowKey("series", ViewMode.Shelf)
-    var choosingRow by remember { mutableStateOf(false) }
     var automatic by remember { mutableStateOf(1) }
-    if (choosingRow) BooksPerRowDialog(rowKey, automatic) { choosingRow = false }
     CoverSplit(ordered.map { ShelfItem.Single(it) }, theme, actions, series.id) { pageModifier ->
     ThemedBackground(theme.background, pageModifier) {
         Column(
@@ -61,21 +59,16 @@ fun SeriesScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             LibraryHeader(theme.header, header)
-            ThemedText(series.title, theme.title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            Row(
-                Modifier
-                    .padding(horizontal = 24.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (ordered.isNotEmpty()) {
-                    Button(onClick = { actions.onOpen(nextVolume(ordered)) }) { Text("Continue") }
-                }
-                Button(onClick = onEdit) { Text("Edit series") }
-                Button(onClick = onPageSettings) { Text("Page settings") }
-                Button(onClick = onFindInfo) { Text("Find info") }
-                Button(onClick = { choosingRow = true }) { Text("Books per row") }
-            }
+            TitleWithMenu(
+                title = series.title,
+                theme = theme,
+                menu = TitleMenu(
+                    buttons = listOf("Edit Series" to onEdit, "Page Settings" to onPageSettings),
+                    rowKey = rowKey,
+                    automaticRow = automatic,
+                ),
+                modifier = Modifier.padding(start = 24.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            )
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val auto = columnsFor(maxWidth.value)
                 val columns = DeviceSettings.booksPerRow(rowKey) ?: auto
@@ -88,10 +81,20 @@ fun SeriesScreen(
                     { row -> list.layoutInfo.visibleItemsInfo.any { it.index == row } },
                     { row -> list.animateScrollToItem(row) },
                 )
-                LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 24.dp)) {
+                // Room at the end, so the last row can scroll clear of Continue.
+                LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 96.dp)) {
                     shelfRows(items, columns, theme, actions)
                 }
             }
+        }
+        if (ordered.isNotEmpty()) {
+            ContinuePill(
+                theme.button,
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(end = 20.dp, bottom = 20.dp),
+            ) { actions.onOpen(nextVolume(ordered)) }
         }
     }
     }
