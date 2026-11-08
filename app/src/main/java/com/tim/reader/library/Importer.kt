@@ -349,8 +349,7 @@ class Importer(context: Context) {
             val hint = item.seriesHint?.takeIf { item.inPlace || item.isFolder || type != BookType.Book }
             repository.addBook(book, details.series ?: hint, shelves)
             // The book is in the library now, so a failed move mustn't undo the import.
-            // Books found in the library folder stay exactly where they are.
-            if (!item.inPlace) runCatching { organizer.place(listOf(id)) }
+            runCatching { organizer.place(listOf(id)) }
         } catch (error: Exception) {
             if (!item.inPlace) runCatching { folder.delete(copy) }
             throw error

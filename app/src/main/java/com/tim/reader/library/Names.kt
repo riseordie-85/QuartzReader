@@ -9,10 +9,11 @@ private val brackets = Regex("""[(\[{][^)\]}]*[)\]}]""")
 private val copyPrefix = Regex("""^copy of\s+""", RegexOption.IGNORE_CASE)
 private val extension = Regex("""\.(epub|pdf|cbz|cbr|cb7|zip|rar|7z|mobi|azw3?|prc)$""", RegexOption.IGNORE_CASE)
 private val volumeMarker = Regex(
-    """^(.*?)[\s_\-.,:]*\b(?:v|vol|volume|book|ch|chapter|ep|episode|issue|#)[\s.\-_#]*(\d+(?:\.\d+)?)(?!\d)""",
+    """^(.*?)[\s_\-.,:]*\b(?:v|vol|volume|book|c|ch|chapter|ep|episode|issue|#)[\s.\-_#]*(\d+(?:\.\d+)?)(?!\d)""",
     RegexOption.IGNORE_CASE,
 )
 private val hashMarker = Regex("""^(.*?)[\s_\-.,:]*#\s*(\d+(?:\.\d+)?)(?!\d)""")
+private val japaneseMarker = Regex("""^(.*?)\s*第?\s*(\d+(?:\.\d+)?)\s*[巻話]""")
 private val trailingNumber = Regex("""^(.*?)[\s_\-]+(\d{1,3})$""")
 private val spaces = Regex("""\s+""")
 
@@ -28,6 +29,7 @@ fun parseName(fileName: String, allowTrailingNumber: Boolean = true): ParsedName
     val title = clean.ifBlank { tidy(base) }
     val match = hashMarker.find(clean)
         ?: volumeMarker.find(clean)
+        ?: japaneseMarker.find(clean)
         ?: if (allowTrailingNumber) trailingNumber.find(clean) else null
     val series = match?.groupValues?.get(1)?.let(::tidy)?.takeIf { it.isNotBlank() }
     // A file named only "Vol. 12" has no series name, but its number still orders the series.

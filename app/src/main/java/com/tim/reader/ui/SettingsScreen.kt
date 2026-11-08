@@ -79,11 +79,10 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit, onFindExist
             onClick = {
                 organizing = true
                 appScope.launch {
-                    val ids = repository.state.value.books.map { it.id }
-                    val moved = LibraryOrganizer(context).place(ids)
+                    val (joined, moved) = LibraryOrganizer(context).organizeAll()
                     withContext(Dispatchers.Main) {
                         organizing = false
-                        Toast.makeText(context, "Moved $moved books into place", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Added $joined books to series and moved $moved into place", Toast.LENGTH_LONG).show()
                     }
                 }
             },
