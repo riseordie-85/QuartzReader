@@ -39,7 +39,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit, onFindExisting: () -> Unit = {}) {
+fun SettingsScreen(
+    onHomeStyle: () -> Unit,
+    onTestTools: () -> Unit,
+    onFindExisting: () -> Unit = {},
+    onStats: () -> Unit = {},
+) {
     val context = LocalContext.current
     val repository = LibraryRepository.get(context)
     val scope = rememberCoroutineScope()
@@ -89,6 +94,8 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit, onFindExist
             enabled = !organizing,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (organizing) "Organizing" else "Organize library folder") }
+        Text("Reading", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton(onStats, Modifier.fillMaxWidth()) { Text("Reading stats") }
         Text("Home", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onHomeStyle, Modifier.fillMaxWidth()) { Text("Edit Home style") }
         OutlinedButton({ choosingRow = true }, Modifier.fillMaxWidth()) { Text("Books per row on Home") }

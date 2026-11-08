@@ -7,6 +7,9 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.seriesMatchKey
+import com.tim.reader.stats.FinishedRecord
+import com.tim.reader.stats.ReadingHistory
+import com.tim.reader.stats.SessionRecord
 import com.tim.reader.theme.Presets
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemeJson
@@ -768,6 +771,42 @@ class LibraryRepository private constructor(context: Context) {
         }
         db.insertOrThrow("events", null, values)
         return id
+    }
+
+    /** Every session and finished read, oldest first, for the stats page. */
+    suspend fun readingHistory(): ReadingHistory = withContext(serial) {
+        val sessions = db.rawQuery(
+            "SELECT book_hash, started_at, ended_at, data FROM events WHERE kind = ? AND deleted_at IS NULL ORDER BY started_at",
+            arrayOf(EventKind.SESSION),
+        ).use { rows ->
+            buildList {
+                while (rows.moveToNext()) {
+                    val data = runCatching { JSONObject(rows.getString(3)) }.getOrNull() ?: continue
+                    add(
+                        SessionRecord(
+                            bookHash = rows.getString(0),
+                            start = rows.getLong(1),
+                            end = if (rows.isNull(2)) rows.getLong(1) else rows.getLong(2),
+                            type = BookType.entries.firstOrNull { it.name == data.optString("type") },
+                            format = data.optString("format"),
+                            activeMs = data.optLong("active"),
+                            from = data.optInt("from"),
+                            to = data.optInt("to"),
+                            turns = data.optInt("turns"),
+                        ),
+                    )
+                }
+            }
+        }
+        val finished = db.rawQuery(
+            "SELECT book_hash, started_at FROM events WHERE kind = ? AND deleted_at IS NULL ORDER BY started_at",
+            arrayOf(EventKind.READ_FINISHED),
+        ).use { rows ->
+            buildList {
+                while (rows.moveToNext()) add(FinishedRecord(rows.getString(0), rows.getLong(1)))
+            }
+        }
+        ReadingHistory(sessions, finished)
     }
 
     /** The read of this book that's under way, or null. */

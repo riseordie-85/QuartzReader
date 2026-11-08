@@ -63,6 +63,7 @@ fun HomeScreen(
     onRecentlyRead: () -> Unit,
     onReadList: () -> Unit,
     onShelf: (String) -> Unit,
+    onStats: () -> Unit = {},
 ) {
     val theme = state.homeTheme ?: return
     val chosenColumns = DeviceSettings.booksPerRow(booksPerRowKey("home", ViewMode.Shelf))
@@ -82,7 +83,7 @@ fun HomeScreen(
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
                         CompositionLocalProvider(LocalCoverSelection provides selection) {
-                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf)
+                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf, onStats)
                         }
                     }
                     Box(Modifier.weight(1f)) {
@@ -90,7 +91,7 @@ fun HomeScreen(
                     }
                 }
             } else {
-                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf)
+                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf, onStats)
             }
         }
     }
@@ -131,6 +132,7 @@ private fun HomeList(
     onRecentlyRead: () -> Unit,
     onReadList: () -> Unit,
     onShelf: (String) -> Unit,
+    onStats: () -> Unit,
 ) {
     val recent = state.recentlyRead.take(columns).map { ShelfItem.Single(it) }
     val readList = state.readList.take(columns).map { ShelfItem.Single(it) }
@@ -175,6 +177,16 @@ private fun HomeList(
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+        item {
+            ShelfButton(
+                "Stats",
+                theme.button.copy(cornerDp = theme.header.cornerDp),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 24.dp),
+                onClick = onStats,
+            )
         }
     }
 }

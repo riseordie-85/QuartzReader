@@ -83,6 +83,7 @@ private sealed interface Route {
     /** Looks a book or a whole series up online. */
     data class InfoLookup(val bookId: String?, val seriesId: String?) : Route
     data object Search : Route
+    data object Stats : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -261,6 +262,7 @@ private fun Library(
             onRecentlyRead = { push(Route.RecentlyRead) },
             onReadList = { push(Route.ReadList) },
             onShelf = { push(Route.ShelfPages(it)) },
+            onStats = { push(Route.Stats) },
         )
         is Route.ShelfPages -> ShelfPager(
             state,
@@ -287,6 +289,7 @@ private fun Library(
             onNewShelf = { push(Route.ShelfMaker(null)) },
             onChooseBooks = { push(Route.ShelfMaker(it)) },
         )
+        Route.Stats -> StatsScreen(state, header)
         Route.Search -> LibrarySearchScreen(state, actions) { stack.removeAt(stack.lastIndex) }
         is Route.InfoLookup -> {
             val series = route.seriesId?.let { state.seriesFor(it) }
@@ -308,6 +311,7 @@ private fun Library(
             onHomeStyle = { push(Route.ThemeEditor(null)) },
             onTestTools = { push(Route.Tools) },
             onFindExisting = { lookForExisting(sayIfNone = true) },
+            onStats = { push(Route.Stats) },
         )
         is Route.ThemeEditor -> {
             val shelf = route.shelfId?.let { state.shelf(it) }

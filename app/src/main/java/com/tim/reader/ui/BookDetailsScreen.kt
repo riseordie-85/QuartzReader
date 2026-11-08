@@ -45,7 +45,6 @@ import com.tim.reader.data.BookType
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.ReadDirection
-import com.tim.reader.library.Covers
 import com.tim.reader.library.deleteBooks
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.library.LibraryOrganizer
@@ -77,8 +76,10 @@ fun BookDetailsScreen(
         mutableStateListOf(*state.shelfBooks.filterValues { book.id in it }.keys.toTypedArray())
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    var changingCover by remember { mutableStateOf(false) }
     var seriesFocused by remember { mutableStateOf(false) }
     val cover by rememberCover(book.displayCover)
+    if (changingCover) CoverOptionsDialog(book) { changingCover = false }
 
     Column(
         Modifier
@@ -104,15 +105,7 @@ fun BookDetailsScreen(
                     shelfIds.toSet() != state.shelfBooks.filterValues { book.id in it }.keys
                 OutlinedButton(onFindInfo, enabled = !edited) { Text("Find info online") }
                 if (edited) Text("Save your changes first", style = MaterialTheme.typography.bodySmall)
-                if (book.customCoverPath != null) {
-                    TextButton({
-                        val old = book.customCoverPath
-                        scope.launch {
-                            repository.setCustomCover(book.id, null)
-                            Covers.deleteCustom(old)
-                        }
-                    }) { Text("Use the original cover") }
-                }
+                TextButton({ changingCover = true }) { Text("Change cover") }
             }
         }
 
