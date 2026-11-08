@@ -205,7 +205,8 @@ private fun ThemePreview(theme: ShelfTheme, name: String, state: LibraryState, s
             }
             ShelfRow(books, 4, theme, noBooks)
             if (showButton) {
-                ShelfButton(name, theme.button, Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()) {}
+                val homeCorner = state.homeTheme?.header?.cornerDp ?: theme.button.cornerDp
+                ShelfButton(name, theme.button.copy(cornerDp = homeCorner), Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()) {}
             }
         }
         BottomBar(neighbors, theme, Modifier.align(Alignment.BottomCenter))
@@ -570,7 +571,7 @@ private fun PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme
                 ColorRow("Text", look.textColor) { onChange(theme.copy(button = look.copy(textColor = it))) }
                 ContrastWarning(look.textColor, look.fill)
                 EditorDivider()
-                EditorSlider("Corners", look.cornerDp, 0f..40f, ::dpLabel) { onChange(theme.copy(button = look.copy(cornerDp = it))) }
+                Text("Corners match the Home header, so every button lines up.", color = EditorColors.Muted, fontSize = 13.sp)
             }
             StrokeEditor(look.stroke) { onChange(theme.copy(button = look.copy(stroke = it))) }
             ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(button = look.copy(shadow = it))) }

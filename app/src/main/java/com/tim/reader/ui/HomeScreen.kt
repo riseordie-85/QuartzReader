@@ -168,7 +168,11 @@ private fun HomeList(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                row.forEach { shelf -> ShelfButton(shelf.name, shelf.theme.button, Modifier.weight(1f)) { onShelf(shelf.id) } }
+                // Each button keeps its shelf's look, but takes Home's corners so they all match the header.
+                row.forEach { shelf ->
+                    val look = shelf.theme.button.copy(cornerDp = theme.header.cornerDp)
+                    ShelfButton(shelf.name, look, Modifier.weight(1f)) { onShelf(shelf.id) }
+                }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
