@@ -84,6 +84,8 @@ private sealed interface Route {
     data class InfoLookup(val bookId: String?, val seriesId: String?) : Route
     data object Search : Route
     data object Stats : Route
+    data object Goals : Route
+    data object Achievements : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -289,7 +291,9 @@ private fun Library(
             onNewShelf = { push(Route.ShelfMaker(null)) },
             onChooseBooks = { push(Route.ShelfMaker(it)) },
         )
-        Route.Stats -> StatsScreen(state, header)
+        Route.Stats -> StatsScreen(state, header, onGoals = { push(Route.Goals) }, onAchievements = { push(Route.Achievements) })
+        Route.Goals -> GoalsScreen(state, header)
+        Route.Achievements -> AchievementsScreen(state, header)
         Route.Search -> LibrarySearchScreen(state, actions) { stack.removeAt(stack.lastIndex) }
         is Route.InfoLookup -> {
             val series = route.seriesId?.let { state.seriesFor(it) }
@@ -419,6 +423,13 @@ private fun Library(
         ImportSheet(waiting.items, waiting.skipped, state.shelves, startShelf) { pending = null }
     }
     restore?.let { found -> RestoreSheet(found.items, found.skipped) { restore = null } }
+
+    // A book finished in either reader gets its card once the reader has closed.
+    val finishedId by ReadingTracker.finished.collectAsState()
+    if (stack.last() !is Route.Reader) {
+        finishedId?.let { id -> FinishedCard(id, state) { ReadingTracker.finished.value = null } }
+    }
+    GemToastHost { if (stack.last() != Route.Achievements) push(Route.Achievements) }
 }
 
 @Composable

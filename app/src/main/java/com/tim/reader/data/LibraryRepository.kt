@@ -7,9 +7,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.seriesMatchKey
-import com.tim.reader.stats.FinishedRecord
+import com.tim.reader.stats.EventRow
 import com.tim.reader.stats.ReadingHistory
-import com.tim.reader.stats.SessionRecord
 import com.tim.reader.theme.Presets
 import com.tim.reader.theme.ShelfTheme
 import com.tim.reader.theme.ThemeJson
@@ -773,41 +772,33 @@ class LibraryRepository private constructor(context: Context) {
         return id
     }
 
-    /** Every session and finished read, oldest first, for the stats page. */
-    suspend fun readingHistory(): ReadingHistory = withContext(serial) {
-        val sessions = db.rawQuery(
-            "SELECT book_hash, started_at, ended_at, data FROM events WHERE kind = ? AND deleted_at IS NULL ORDER BY started_at",
-            arrayOf(EventKind.SESSION),
+    /** Every event in the reading history, oldest first. */
+    suspend fun events(): List<EventRow> = withContext(serial) {
+        db.rawQuery(
+            "SELECT id, kind, book_hash, read_id, started_at, ended_at, data FROM events " +
+                "WHERE deleted_at IS NULL ORDER BY started_at, rowid",
+            null,
         ).use { rows ->
             buildList {
                 while (rows.moveToNext()) {
-                    val data = runCatching { JSONObject(rows.getString(3)) }.getOrNull() ?: continue
                     add(
-                        SessionRecord(
-                            bookHash = rows.getString(0),
-                            start = rows.getLong(1),
-                            end = if (rows.isNull(2)) rows.getLong(1) else rows.getLong(2),
-                            type = BookType.entries.firstOrNull { it.name == data.optString("type") },
-                            format = data.optString("format"),
-                            activeMs = data.optLong("active"),
-                            from = data.optInt("from"),
-                            to = data.optInt("to"),
-                            turns = data.optInt("turns"),
+                        EventRow(
+                            id = rows.getString(0),
+                            kind = rows.getString(1),
+                            bookHash = rows.getString(2),
+                            readId = rows.getString(3),
+                            startedAt = rows.getLong(4),
+                            endedAt = if (rows.isNull(5)) null else rows.getLong(5),
+                            data = runCatching { JSONObject(rows.getString(6)) }.getOrElse { JSONObject() },
                         ),
                     )
                 }
             }
         }
-        val finished = db.rawQuery(
-            "SELECT book_hash, started_at FROM events WHERE kind = ? AND deleted_at IS NULL ORDER BY started_at",
-            arrayOf(EventKind.READ_FINISHED),
-        ).use { rows ->
-            buildList {
-                while (rows.moveToNext()) add(FinishedRecord(rows.getString(0), rows.getLong(1)))
-            }
-        }
-        ReadingHistory(sessions, finished)
     }
+
+    /** The reading history, sorted into sessions, reads, ratings, goals and unlocks. */
+    suspend fun readingHistory(): ReadingHistory = ReadingHistory.from(events())
 
     /** The read of this book that's under way, or null. */
     private fun openRead(book: Book): String? =

@@ -11,24 +11,6 @@ import java.time.temporal.TemporalAdjusters
 import java.time.temporal.WeekFields
 import java.util.Locale
 
-/** One reading session from the history. */
-data class SessionRecord(
-    val bookHash: String?,
-    val start: Long,
-    val end: Long,
-    val type: BookType?,
-    val format: String,
-    val activeMs: Long,
-    val from: Int,
-    val to: Int,
-    val turns: Int,
-)
-
-/** One finished read from the history. */
-data class FinishedRecord(val bookHash: String?, val at: Long)
-
-class ReadingHistory(val sessions: List<SessionRecord>, val finished: List<FinishedRecord>)
-
 /** Reading for one type, in its own units. */
 data class TypeStats(
     val type: BookType,

@@ -13,6 +13,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.theme.BookFonts
 import com.tim.reader.theme.ThemeFiles
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ReadingTracker.resume(this)
+        AchievementCenter.check(this)
     }
 
     override fun onPause() {

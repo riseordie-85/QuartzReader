@@ -111,6 +111,18 @@ fun BookDetailsScreen(
 
         BookInfoCard(book)
 
+        // Saving a rating writes history, so the counter reloads it and the editor shows what was saved.
+        var ratingVersion by remember(book.id) { mutableStateOf(0) }
+        val history = rememberHistory(book.id to ratingVersion)
+        if (history != null) {
+            RatingEditor(history.ratings[book.hash]) { rating ->
+                appScope.launch {
+                    saveBookRating(context, book, rating)
+                    ratingVersion++
+                }
+            }
+        }
+
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") })
         OutlinedTextField(author, { author = it }, Modifier.fillMaxWidth(), label = { Text("Author") })
         OutlinedTextField(

@@ -1,5 +1,6 @@
 package com.tim.reader.stats
 
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
 import com.tim.reader.appScope
@@ -7,6 +8,7 @@ import com.tim.reader.data.Book
 import com.tim.reader.data.EventKind
 import com.tim.reader.data.LibraryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -35,7 +37,11 @@ object ReadingTracker {
         var turns = 0
     }
 
+    /** The book just finished, until the library has shown its Finished card. */
+    val finished = MutableStateFlow<String?>(null)
+
     private var owner: ComponentActivity? = null
+    private var appContext: Context? = null
     private var repository: LibraryRepository? = null
     private var book: Book? = null
     private var total = 0
@@ -56,6 +62,7 @@ object ReadingTracker {
         endSession()
         owner = activity
         repository = LibraryRepository.get(activity)
+        appContext = activity.applicationContext
         this.book = book
         this.total = total
         this.position = position
@@ -69,7 +76,7 @@ object ReadingTracker {
             null
         }
         // A one-page book has nothing to turn, so opening it is reading it.
-        if (total <= 1) {
+        if (total <= 1 && progress < FINISHED) {
             checkRead(book, progress, System.currentTimeMillis())
             finish(book, System.currentTimeMillis())
         } else if (progress >= FINISHED) {
@@ -137,7 +144,11 @@ object ReadingTracker {
     private fun finish(book: Book, now: Long) {
         finishLogged = true
         readChecked = false
-        record { it.finishRead(book, now) }
+        finished.value = book.id
+        record { repository ->
+            repository.finishRead(book, now)
+            appContext?.let(AchievementCenter::check)
+        }
     }
 
     private fun endSession() {
@@ -157,7 +168,10 @@ object ReadingTracker {
             put("toProgress", ended.toProgress.toDouble())
             put("turns", ended.turns)
         }
-        record { it.addEvent(EventKind.SESSION, ended.book, null, ended.startedAt, now, data) }
+        record { repository ->
+            repository.addEvent(EventKind.SESSION, ended.book, null, ended.startedAt, now, data)
+            appContext?.let(AchievementCenter::check)
+        }
     }
 
     private fun record(write: suspend (LibraryRepository) -> Unit) {

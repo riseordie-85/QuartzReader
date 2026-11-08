@@ -1,5 +1,6 @@
 package com.tim.reader.ui
 
+import com.tim.reader.stats.seriesKey
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -87,6 +88,17 @@ fun SeriesEditScreen(
             Text(if (edited) "Save your changes to find info online" else "Find series info online")
         }
         Text("Changes apply to all ${volumes.size} volumes.")
+
+        var ratingVersion by remember(series.id) { mutableStateOf(0) }
+        val history = rememberHistory(series.id to ratingVersion)
+        if (history != null) {
+            RatingEditor(history.seriesRatings[seriesKey(series.title)]) { rating ->
+                appScope.launch {
+                    saveSeriesRating(context, series.title, rating)
+                    ratingVersion++
+                }
+            }
+        }
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Series name") }, singleLine = true)
         Text("Using the name of another series of the same type merges the two.", style = MaterialTheme.typography.bodySmall)

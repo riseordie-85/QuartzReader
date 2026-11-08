@@ -1,6 +1,14 @@
 package com.tim.reader.ui
 
 import androidx.compose.foundation.Canvas
+import com.tim.reader.stats.goalProgress
+import com.tim.reader.stats.evaluateAchievements
+import com.tim.reader.stats.GoalProgress
+import com.tim.reader.stats.Goal
+import com.tim.reader.stats.AchievementStatus
+import com.tim.reader.stats.AchievementCenter
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,20 +73,30 @@ import java.util.Locale
 private const val MAX_WEEKS = 53
 private val CELL = 13.dp
 private val CELL_GAP = 3.dp
-private val MAX_WIDTH = 760.dp
+internal val MAX_WIDTH = 760.dp
 private val BAR_HEIGHT = 70.dp
 
 /** Reading stats, drawn in the Home style. */
 @Composable
-fun StatsScreen(state: LibraryState, header: HeaderActions) {
+fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit = {}, onAchievements: () -> Unit = {}) {
     val theme = state.homeTheme ?: return
     val context = LocalContext.current
+    LaunchedEffect(Unit) { AchievementCenter.check(context) }
     // History doesn't change while the page is open, so it only reloads when books come or go.
-    val stats by produceState<Stats?>(null, state.books.size) {
+    val page by produceState<StatsPage?>(null, state.books.size) {
         val repository = LibraryRepository.get(context)
         val history = repository.readingHistory()
-        value = withContext(Dispatchers.Default) { computeStats(history, state.books) }
+        value = withContext(Dispatchers.Default) {
+            val today = LocalDate.now()
+            StatsPage(
+                stats = computeStats(history, state.books),
+                goals = history.goals.map { it to goalProgress(it, history, state, today) }
+                    .filterNot { (goal, progress) -> goal.hasDeadline && (progress.over || progress.done) },
+                achievements = evaluateAchievements(history, state),
+            )
+        }
     }
+    val stats = page?.stats
     val look = theme.header
 
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
@@ -101,17 +119,23 @@ fun StatsScreen(state: LibraryState, header: HeaderActions) {
                         CircularProgressIndicator(color = Color(look.iconColor))
                     }
                 }
-                current.isEmpty -> item {
-                    Panel(look, "Nothing yet") {
-                        Body(
-                            look,
-                            "Start reading and your stats show up here. Time counts while you're turning pages, " +
-                                "so a book left open doesn't add hours.",
-                        )
+                current.isEmpty -> {
+                    item {
+                        Panel(look, "Nothing yet") {
+                            Body(
+                                look,
+                                "Start reading and your stats show up here. Time counts while you're turning pages, " +
+                                    "so a book left open doesn't add hours.",
+                            )
+                        }
                     }
+                    item { GoalsPanel(look, page?.goals.orEmpty(), onGoals) }
+                    item { AchievementsPanel(look, page?.achievements.orEmpty(), onAchievements) }
                 }
                 else -> {
                     item { Summary(look, current) }
+                    item { GoalsPanel(look, page?.goals.orEmpty(), onGoals) }
+                    item { AchievementsPanel(look, page?.achievements.orEmpty(), onAchievements) }
                     item { Calendar(look, current) }
                     if (current.byType.isNotEmpty()) item { ByType(look, current) }
                     item { FinishedByMonth(look, current) }
@@ -124,9 +148,47 @@ fun StatsScreen(state: LibraryState, header: HeaderActions) {
     }
 }
 
+private class StatsPage(val stats: Stats, val goals: List<Pair<Goal, GoalProgress>>, val achievements: List<AchievementStatus>)
+
+@Composable
+private fun GoalsPanel(look: BarLook, goals: List<Pair<Goal, GoalProgress>>, onGoals: () -> Unit) {
+    Panel(look, "Goals") {
+        if (goals.isEmpty()) Body(look, "Set a goal for the week, month or year, a series to finish, or a daily habit.")
+        goals.take(3).forEach { (goal, progress) -> GoalRow(look, goal, progress) }
+        PanelLink(look, if (goals.isEmpty()) "Add a goal" else "All goals", onGoals)
+    }
+}
+
+@Composable
+private fun AchievementsPanel(look: BarLook, statuses: List<AchievementStatus>, onAchievements: () -> Unit) {
+    val unlocked = statuses.filter { it.tier >= 0 }
+    Panel(look, "Achievements") {
+        Body(look, "${unlocked.size} of ${statuses.size} unlocked")
+        if (unlocked.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                unlocked.sortedByDescending { it.tier }.take(8).forEach { GemIcon(it.gem, 30.dp) }
+            }
+        }
+        PanelLink(look, "See all", onAchievements)
+    }
+}
+
+@Composable
+private fun PanelLink(look: BarLook, text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        color = Color(look.iconColor),
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clickable(onClickLabel = text, onClick = onClick)
+            .padding(vertical = 4.dp),
+    )
+}
+
 /** A card in the header's style, so stats match the shelf they're shown over. */
 @Composable
-private fun Panel(look: BarLook, title: String?, outer: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
+internal fun Panel(look: BarLook, title: String?, outer: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
     val shape = cornerShape(look.cornerDp)
     Box(Modifier.widthIn(max = MAX_WIDTH).fillMaxWidth().padding(horizontal = outer, vertical = 6.dp)) {
         Column(
@@ -145,12 +207,12 @@ private fun Panel(look: BarLook, title: String?, outer: Dp = 12.dp, content: @Co
 }
 
 @Composable
-private fun Body(look: BarLook, text: String, modifier: Modifier = Modifier) {
+internal fun Body(look: BarLook, text: String, modifier: Modifier = Modifier) {
     Text(text, color = Color(look.textColor), fontSize = 15.sp, modifier = modifier)
 }
 
 @Composable
-private fun Muted(look: BarLook, text: String, modifier: Modifier = Modifier, maxLines: Int = 1) {
+internal fun Muted(look: BarLook, text: String, modifier: Modifier = Modifier, maxLines: Int = 1) {
     Text(
         text,
         color = Color(look.textColor).copy(alpha = 0.7f),
@@ -245,7 +307,7 @@ private fun shade(minutes: Long) = when {
 }
 
 @Composable
-private fun Bar(look: BarLook, fraction: Float, modifier: Modifier = Modifier) {
+internal fun Bar(look: BarLook, fraction: Float, modifier: Modifier = Modifier) {
     val accent = Color(look.iconColor)
     Box(modifier.height(10.dp).background(accent.copy(alpha = 0.15f), RoundedCornerShape(5.dp))) {
         Box(
