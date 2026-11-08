@@ -159,14 +159,15 @@ fun goalProgress(goal: Goal, history: ReadingHistory, state: LibraryState, today
             }
             val done: Double = when {
                 goal.kind == GoalKind.Shelf -> history.finished.count { read ->
-                    inRange(read.at) && read.bookHash?.let(byHash::get)?.id?.let { it in shelfIds.orEmpty() } == true
+                    !read.dateUnknown && inRange(read.at) && read.bookHash?.let(byHash::get)?.id?.let { it in shelfIds.orEmpty() } == true
                 }.toDouble()
                 goal.unit == GoalUnit.Pages -> history.sessions.filter { inRange(it.start) }.sumOf { session ->
                     if (session.format == "EPUB") (session.to - session.from).coerceAtLeast(0) else session.turns
                 }.toDouble()
                 goal.unit == GoalUnit.Hours -> history.sessions.filter { inRange(it.start) }.sumOf { it.activeMs } / 3_600_000.0
                 else -> history.finished.count { read ->
-                    inRange(read.at) && (goal.unit.type == null || read.bookHash?.let(byHash::get)?.type == goal.unit.type)
+                    !read.dateUnknown && inRange(read.at) &&
+                        (goal.unit.type == null || (read.bookHash?.let(byHash::get)?.type ?: read.type) == goal.unit.type)
                 }.toDouble()
             }
             val unit = if (goal.kind == GoalKind.Shelf) GoalUnit.Books else goal.unit

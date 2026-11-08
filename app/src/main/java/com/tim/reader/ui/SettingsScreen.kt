@@ -96,6 +96,11 @@ fun SettingsScreen(
         ) { Text(if (organizing) "Organizing" else "Organize library folder") }
         Text("Reading", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onStats, Modifier.fillMaxWidth()) { Text("Reading stats") }
+        GoodreadsImportButton()
+        Text(
+            "On Goodreads, go to My Books, then Import and export, and choose Export Library. Pick the file it makes here.",
+            style = MaterialTheme.typography.bodySmall,
+        )
         Text("Home", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onHomeStyle, Modifier.fillMaxWidth()) { Text("Edit Home style") }
         OutlinedButton({ choosingRow = true }, Modifier.fillMaxWidth()) { Text("Books per row on Home") }

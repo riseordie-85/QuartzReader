@@ -266,6 +266,7 @@ private fun Library(
             onReadList = { push(Route.ReadList) },
             onShelf = { push(Route.ShelfPages(it)) },
             onStats = { push(Route.Stats) },
+            onGoals = { push(Route.Goals) },
         )
         is Route.ShelfPages -> ShelfPager(
             state,

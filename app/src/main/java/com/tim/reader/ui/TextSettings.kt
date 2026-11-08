@@ -178,6 +178,7 @@ fun ColumnScope.TextSettings(
 
         PanelHeading("This device")
         ToggleRow("Keep screen on", DeviceSettings.keepScreenOn) { DeviceSettings.updateKeepScreenOn(it) }
+        ToggleRow("Show time left while reading", DeviceSettings.showTimeLeft) { DeviceSettings.updateShowTimeLeft(it) }
         ToggleRow("Lock rotation", rotationLocked, actions.onRotationLock)
         // Kept for this screen held this way, so the Fold's two screens and both orientations each get their own.
         val screen = LocalConfiguration.current

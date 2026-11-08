@@ -831,6 +831,58 @@ class LibraryRepository private constructor(context: Context) {
         true
     }
 
+    /**
+     * Marks a book as read at [at]. A read under way is finished; otherwise a new read starts and
+     * finishes at once. [dateUnknown] reads count in totals but not by month or year.
+     */
+    suspend fun markAsRead(book: Book, at: Long, dateUnknown: Boolean) = withContext(serial) {
+        val data = JSONObject().put("source", "manual").put("dateUnknown", dateUnknown)
+        db.beginTransaction()
+        try {
+            val readId = openRead(book) ?: UUID.randomUUID().toString().also { id ->
+                insertEvent(EventKind.READ_STARTED, book, id, at, null, JSONObject(data.toString()))
+            }
+            insertEvent(EventKind.READ_FINISHED, book, readId, at, null, data)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** Removes one read, both its start and its finish. Kept as a deletion so sync can pass it on. */
+    suspend fun deleteRead(readId: String) = withContext(serial) {
+        val values = ContentValues().apply {
+            put("deleted_at", now())
+            put("updated_at", now())
+        }
+        db.update(
+            "events",
+            values,
+            "read_id = ? AND kind IN (?, ?) AND deleted_at IS NULL",
+            arrayOf(readId, EventKind.READ_STARTED, EventKind.READ_FINISHED),
+        )
+        Unit
+    }
+
+    /** One finished read to add in bulk, such as from a Goodreads export. */
+    class ImportedRead(val book: Book?, val at: Long, val data: JSONObject, val rating: JSONObject?)
+
+    /** Adds many finished reads, and their ratings, in one go. */
+    suspend fun importReads(reads: List<ImportedRead>) = withContext(serial) {
+        db.beginTransaction()
+        try {
+            for (read in reads) {
+                val readId = UUID.randomUUID().toString()
+                insertEvent(EventKind.READ_STARTED, read.book, readId, read.at, null, JSONObject(read.data.toString()))
+                insertEvent(EventKind.READ_FINISHED, read.book, readId, read.at, null, read.data)
+                read.rating?.let { insertEvent(EventKind.RATING, read.book, null, read.at, null, it) }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     /** Returns once every write queued before it is done. */
     suspend fun awaitWrites() = withContext(serial) { }
 

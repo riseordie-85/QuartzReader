@@ -121,6 +121,7 @@ fun BookDetailsScreen(
                     ratingVersion++
                 }
             }
+            ReadsSection(book, history) { ratingVersion++ }
         }
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") })

@@ -68,6 +68,8 @@ fun ReaderChrome(
     hasChapters: Boolean,
     hasSearch: Boolean = false,
     hasNotes: Boolean = false,
+    /** Time left to read, shown under the timeline. */
+    timeLeft: String? = null,
     sheet: ReaderSheet?,
     onSheet: (ReaderSheet?) -> Unit,
     onBookmark: () -> Unit,
@@ -137,7 +139,7 @@ fun ReaderChrome(
                 sheetContent(sheet)
             } else {
                 Spacer(Modifier.weight(1f))
-                if (pageCount > 1) ReaderTimeline(page, pageCount, onSeek)
+                if (pageCount > 1) ReaderTimeline(page, pageCount, timeLeft, onSeek)
             }
         }
     }
@@ -198,16 +200,35 @@ fun PillSlider(
 }
 
 @Composable
-private fun ReaderTimeline(page: Int, pageCount: Int, onSeek: (Int) -> Unit) {
+private fun ReaderTimeline(page: Int, pageCount: Int, timeLeft: String?, onSeek: (Int) -> Unit) {
     var scrubbing by remember { mutableStateOf<Float?>(null) }
     val shown = scrubbing?.toInt() ?: page
 
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
-            .background(PANEL_COLOR, PILL_SHAPE)
+            .background(PANEL_COLOR, if (timeLeft == null) PILL_SHAPE else SHEET_SHAPE)
             .blocksTouches()
             .padding(horizontal = 24.dp, vertical = 2.dp),
+    ) {
+        TimelineRow(shown, page, pageCount, { scrubbing = it }, onSeek)
+        if (timeLeft != null) {
+            Text(
+                timeLeft,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Light,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(bottom = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimelineRow(shown: Int, page: Int, pageCount: Int, onScrub: (Float?) -> Unit, onSeek: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -217,7 +238,7 @@ private fun ReaderTimeline(page: Int, pageCount: Int, onSeek: (Int) -> Unit) {
             range = 0f..(pageCount - 1).toFloat(),
             thumb = Color.White,
             onDone = { onSeek(it.toInt()) },
-            onDrag = { scrubbing = it },
+            onDrag = onScrub,
             modifier = Modifier.weight(1f),
         )
     }
@@ -315,5 +336,30 @@ fun ColumnScope.BookmarkSheet(
                 TextButton({ onRemove(bookmark.id) }) { Text("Remove") }
             }
         }
+    }
+}
+
+/** The time left, small in the bottom corner while reading. [shaded] adds a dark backing for pictures. */
+@Composable
+fun CornerTimeLeft(text: String, color: Color, shaded: Boolean = false) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(end = 14.dp, bottom = 6.dp),
+        contentAlignment = Alignment.BottomEnd,
+    ) {
+        Text(
+            text,
+            color = color.copy(alpha = if (shaded) 0.9f else 0.55f),
+            fontSize = 12.sp,
+            modifier = if (shaded) {
+                Modifier
+                    .background(Color(0x99000000), PILL_SHAPE)
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
+            } else {
+                Modifier
+            },
+        )
     }
 }

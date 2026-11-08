@@ -64,6 +64,7 @@ fun HomeScreen(
     onReadList: () -> Unit,
     onShelf: (String) -> Unit,
     onStats: () -> Unit = {},
+    onGoals: () -> Unit = {},
 ) {
     val theme = state.homeTheme ?: return
     val chosenColumns = DeviceSettings.booksPerRow(booksPerRowKey("home", ViewMode.Shelf))
@@ -83,7 +84,7 @@ fun HomeScreen(
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
                         CompositionLocalProvider(LocalCoverSelection provides selection) {
-                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf, onStats)
+                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf, onStats, onGoals)
                         }
                     }
                     Box(Modifier.weight(1f)) {
@@ -91,7 +92,7 @@ fun HomeScreen(
                     }
                 }
             } else {
-                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf, onStats)
+                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf, onStats, onGoals)
             }
         }
     }
@@ -133,6 +134,7 @@ private fun HomeList(
     onReadList: () -> Unit,
     onShelf: (String) -> Unit,
     onStats: () -> Unit,
+    onGoals: () -> Unit,
 ) {
     val recent = state.recentlyRead.take(columns).map { ShelfItem.Single(it) }
     val readList = state.readList.take(columns).map { ShelfItem.Single(it) }
@@ -140,6 +142,7 @@ private fun HomeList(
 
     LazyColumn(Modifier.fillMaxSize()) {
         item { LibraryHeader(theme.header, header) }
+        if (DeviceSettings.homeGoals) item { HomeGoalsStrip(state, theme.header, onGoals) }
         item {
             SectionTitle("Recently Read", theme) {
                 GlyphButton(Glyph.Grid, controls, "Open Recently Read", iconSize = 26.dp, outline = theme.controls.stroke, onClick = onRecentlyRead)

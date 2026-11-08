@@ -46,7 +46,7 @@ class AchievementFacts(history: ReadingHistory, state: LibraryState, private val
 
     private val byHash = state.books.associateBy { it.hash }
     val finishedByType: Map<BookType, Int> = history.finished
-        .mapNotNull { read -> read.bookHash?.let(byHash::get)?.type }
+        .mapNotNull { read -> read.bookHash?.let(byHash::get)?.type ?: read.type }
         .groupingBy { it }.eachCount()
     val hours = history.sessions.sumOf { it.activeMs } / 3_600_000L
     val bestStreak: Long
@@ -68,8 +68,9 @@ class AchievementFacts(history: ReadingHistory, state: LibraryState, private val
     val mostRereads = history.finished.mapNotNull { it.bookHash }.groupingBy { it }.eachCount().values.maxOrNull()?.toLong() ?: 0L
     val customShelves = state.shelves.count { it.defaultType == null }.toLong()
     val goalsReached = history.goalsDone.size.toLong()
-    val midnightFinish = history.finished.count { dateOf(it.at).hour == 0 }.toLong()
-    val quickFinish = history.finished.count { read ->
+    // Only reads finished in the app count for these, since a marked or imported date isn't a moment.
+    val midnightFinish = history.finished.count { !it.manual && dateOf(it.at).hour == 0 }.toLong()
+    val quickFinish = history.finished.filterNot { it.manual }.count { read ->
         val start = read.readId?.let(history.readStarts::get) ?: return@count false
         read.at - start in 0..86_400_000L
     }.toLong()

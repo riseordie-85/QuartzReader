@@ -23,7 +23,7 @@ data class TypeStats(
 )
 
 /** A book finished, with the book when it's still in the library. */
-data class FinishedBook(val book: Book?, val at: Long)
+data class FinishedBook(val book: Book?, val at: Long, val title: String? = null)
 
 data class Stats(
     val todayMinutes: Long,
@@ -124,7 +124,7 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
     val byHash = books.associateBy { it.hash }
     val finishedByType = HashMap<BookType, Int>()
     for (read in history.finished) {
-        val type = read.bookHash?.let { byHash[it]?.type } ?: continue
+        val type = read.bookHash?.let { byHash[it]?.type } ?: read.type ?: continue
         finishedByType[type] = (finishedByType[type] ?: 0) + 1
     }
 
@@ -146,13 +146,15 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
     }
 
     val thisMonth = YearMonth.from(today)
-    val finishedMonths = history.finished.groupingBy { YearMonth.from(dateOf(it.at)) }.eachCount()
+    // Reads without a real date count in the total only.
+    val dated = history.finished.filterNot { it.dateUnknown }
+    val finishedMonths = dated.groupingBy { YearMonth.from(dateOf(it.at)) }.eachCount()
     val finishedByMonth = (11 downTo 0).map { back -> thisMonth.minusMonths(back.toLong()).let { it to (finishedMonths[it] ?: 0) } }
 
-    val recentlyFinished = history.finished
+    val recentlyFinished = dated
         .sortedByDescending { it.at }
         .take(RECENT_FINISHED)
-        .map { FinishedBook(it.bookHash?.let(byHash::get), it.at) }
+        .map { FinishedBook(it.bookHash?.let(byHash::get), it.at, it.title) }
 
     return Stats(
         todayMinutes = minutesBetween(today),
@@ -165,7 +167,7 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
         today = today,
         byType = byType,
         finishedByMonth = finishedByMonth,
-        finishedThisYear = history.finished.count { !dateOf(it.at).isBefore(yearStart) },
+        finishedThisYear = dated.count { !dateOf(it.at).isBefore(yearStart) },
         finishedTotal = history.finished.size,
         timeOfDay = listOf("Morning", "Afternoon", "Evening", "Night").zip(buckets.map { it / MINUTE_MS }),
         pages = pagesByType.values.sum(),

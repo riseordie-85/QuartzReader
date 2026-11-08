@@ -393,7 +393,7 @@ private fun RecentlyFinished(look: BarLook, stats: Stats) {
         stats.recentlyFinished.forEach { finished ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    finished.book?.title ?: "A book no longer in your library",
+                    finished.book?.title ?: finished.title ?: "A book no longer in your library",
                     color = Color(look.textColor),
                     fontSize = 15.sp,
                     maxLines = 1,

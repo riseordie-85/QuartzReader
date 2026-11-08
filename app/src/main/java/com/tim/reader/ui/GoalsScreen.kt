@@ -32,6 +32,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -57,6 +58,7 @@ import com.tim.reader.appScope
 import com.tim.reader.data.EventKind
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
+import com.tim.reader.library.DeviceSettings
 import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.Goal
 import com.tim.reader.stats.GoalKind
@@ -149,6 +151,14 @@ fun GoalsScreen(state: LibraryState, header: HeaderActions) {
                 item {
                     Panel(look, "No goals yet") {
                         Body(look, "Set a goal for a week, a month or the year, finish a series by a date, or build a daily habit.")
+                    }
+                }
+            }
+            item {
+                Panel(look, null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Body(look, "Show goals on Home", Modifier.weight(1f))
+                        Switch(DeviceSettings.homeGoals, { DeviceSettings.updateHomeGoals(it) })
                     }
                 }
             }
@@ -379,5 +389,31 @@ private fun DateDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
     ) {
         DatePicker(picker)
+    }
+}
+
+/** A strip of goal rings for Home, shown when switched on from the Goals page. */
+@Composable
+fun HomeGoalsStrip(state: LibraryState, look: BarLook, onGoals: () -> Unit) {
+    val history = rememberHistory(state.books.size) ?: return
+    val today = LocalDate.now()
+    val goals = history.goals.map { it to goalProgress(it, history, state, today) }
+        .filterNot { (goal, progress) -> goal.hasDeadline && (progress.over || progress.done) }
+        .take(3)
+    if (goals.isEmpty()) return
+    Box(Modifier.fillMaxWidth().clickable(onClickLabel = "Open goals", onClick = onGoals)) {
+        Panel(look, null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                goals.forEach { (goal, progress) ->
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GoalRing(progress.fraction, Color(look.iconColor), 36.dp)
+                        Column {
+                            Muted(look, goal.describe().removePrefix("Read "), maxLines = 2)
+                            Muted(look, progress.headline)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

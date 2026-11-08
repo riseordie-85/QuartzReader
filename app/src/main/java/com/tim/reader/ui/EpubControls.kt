@@ -56,6 +56,8 @@ import com.tim.reader.data.resolveLook
 import com.tim.reader.engine.Chapter
 import com.tim.reader.library.CameraEdge
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.stats.textTimeLeft
+import com.tim.reader.stats.ReadingSpeeds
 import com.tim.reader.reader.capturePage
 import com.tim.reader.reader.epubPreferences
 import kotlinx.coroutines.CoroutineScope
@@ -222,6 +224,16 @@ fun EpubControls(
     val locator by navigator.currentLocator.collectAsState()
     val page = ((locator.locations.position ?: 1) - 1).coerceAtLeast(0)
     val pageCount = positions.size.coerceAtLeast(1)
+    // Time left comes from this reader's own speed, worked out once when the book opens.
+    val speeds by produceState(ReadingSpeeds.Default) { value = ReadingSpeeds.from(repository.readingHistory()) }
+    val chapterStarts = remember(positions, contents) {
+        contents.mapNotNull { (_, link) ->
+            val target = link.url()
+            positions.firstOrNull { it.href.isEquivalent(target) || it.href.isEquivalent(target.removeFragment()) }
+                ?.locations?.position
+        }.distinct().sorted()
+    }
+    val timeLeft = textTimeLeft(speeds, locator.locations.position ?: 0, positions.size, chapterStarts)
     val search = remember(publication) { SearchState() }
     LaunchedEffect(sheet) {
         if (sheet == ReaderSheet.Search) navigator.applyDecorations(emptyList(), SEARCH_GROUP)
@@ -313,7 +325,10 @@ fun EpubControls(
         }
         return
     }
-    if (!showControls) return
+    if (!showControls) {
+        if (DeviceSettings.showTimeLeft && timeLeft != null) CornerTimeLeft(timeLeft, Color(look.textColor))
+        return
+    }
 
     val bookmarks = liveBook?.let { library.bookmarks[it.id].orEmpty() }
     val pageBookmark = bookmarks?.firstOrNull { it.page == page }
@@ -330,6 +345,7 @@ fun EpubControls(
         hasChapters = contents.isNotEmpty(),
         hasSearch = publication.isSearchable,
         hasNotes = liveBook != null,
+        timeLeft = timeLeft,
         sheet = sheet,
         onSheet = { sheet = it },
         onBookmark = {

@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -98,6 +99,9 @@ import com.tim.reader.engine.Spread
 import com.tim.reader.engine.buildSpreads
 import com.tim.reader.engine.spreadIndexOf
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.data.BookType
+import com.tim.reader.stats.imageTimeLeft
+import com.tim.reader.stats.ReadingSpeeds
 import com.tim.reader.library.TwoPageMode
 import com.tim.reader.reader.CurlEffect
 import com.tim.reader.reader.PageLoader
@@ -235,6 +239,7 @@ fun ImageReaderScreen(
     val context = LocalContext.current
     val repository = remember { LibraryRepository.get(context) }
     val library by repository.state.collectAsState()
+    val speeds by produceState(ReadingSpeeds.Default) { value = ReadingSpeeds.from(repository.readingHistory()) }
     val liveBook = book?.let { library.book(it.id) ?: it }
     val loader = remember(source) { PageLoader(context, source, book?.hash) }
     val scope = rememberCoroutineScope()
@@ -358,6 +363,9 @@ fun ImageReaderScreen(
             }
         }
 
+        val pagesLeft = source.pageCount - 1 - currentPage
+        val timeLeft = imageTimeLeft(speeds, book?.type ?: BookType.Comic, pagesLeft)
+        if (!controls && DeviceSettings.showTimeLeft && timeLeft != null) CornerTimeLeft(timeLeft, Color.White, shaded = true)
         if (controls) {
             val bookmarks = liveBook?.let { library.bookmarks[it.id].orEmpty() }
             val pageBookmark = bookmarks?.firstOrNull { it.page == currentPage }
@@ -367,6 +375,7 @@ fun ImageReaderScreen(
                 pageCount = source.pageCount,
                 isBookmarked = bookmarks?.let { pageBookmark != null },
                 hasChapters = source.chapters.isNotEmpty(),
+                timeLeft = timeLeft,
                 sheet = sheet,
                 onSheet = { sheet = it },
                 onBookmark = {

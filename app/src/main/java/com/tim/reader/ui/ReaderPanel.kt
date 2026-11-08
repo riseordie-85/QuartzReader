@@ -109,6 +109,7 @@ fun ColumnScope.ReaderSettings(
 
         PanelHeading("This device")
         ToggleRow("Keep screen on", DeviceSettings.keepScreenOn) { DeviceSettings.updateKeepScreenOn(it) }
+        ToggleRow("Show time left while reading", DeviceSettings.showTimeLeft) { DeviceSettings.updateShowTimeLeft(it) }
         ToggleRow("Lock rotation", rotationLocked, actions.onRotationLock)
     }
 }

@@ -28,6 +28,8 @@ object DeviceSettings {
     private const val KEY_SPLIT_VIEW = "split_view"
     private const val KEY_TWO_PAGE = "two_page"
     private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+    private const val KEY_SHOW_TIME_LEFT = "show_time_left"
+    private const val KEY_HOME_GOALS = "home_goals"
     private const val KEY_CAMERA_GAP = "camera_gap"
     private const val KEY_GOOGLE_BOOKS = "google_books_key"
     private const val KEY_COMIC_VINE = "comic_vine_key"
@@ -50,6 +52,24 @@ object DeviceSettings {
 
     var keepScreenOn by mutableStateOf(true)
         private set
+
+    /** Keeps the time left in a corner while reading, not just with the controls. */
+    var showTimeLeft by mutableStateOf(false)
+        private set
+
+    /** Shows goal rings on Home. */
+    var homeGoals by mutableStateOf(false)
+        private set
+
+    fun updateShowTimeLeft(enabled: Boolean) {
+        showTimeLeft = enabled
+        preferences?.edit { putBoolean(KEY_SHOW_TIME_LEFT, enabled) }
+    }
+
+    fun updateHomeGoals(enabled: Boolean) {
+        homeGoals = enabled
+        preferences?.edit { putBoolean(KEY_HOME_GOALS, enabled) }
+    }
 
     /** Extra space in dp, for a camera in the screen that Android doesn't report. */
     var cameraGap by mutableStateOf(0)
@@ -79,6 +99,8 @@ object DeviceSettings {
         splitView = saved.getBoolean(KEY_SPLIT_VIEW, true)
         twoPage = TwoPageMode.entries.firstOrNull { it.name == saved.getString(KEY_TWO_PAGE, null) } ?: TwoPageMode.Auto
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)
+        showTimeLeft = saved.getBoolean(KEY_SHOW_TIME_LEFT, false)
+        homeGoals = saved.getBoolean(KEY_HOME_GOALS, false)
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
         comicVineKey = saved.getString(KEY_COMIC_VINE, null).orEmpty()

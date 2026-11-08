@@ -28,8 +28,30 @@ data class SessionRecord(
     val turns: Int,
 )
 
-/** One finished read from the history. */
-data class FinishedRecord(val bookHash: String?, val at: Long, val readId: String? = null)
+/**
+ * One finished read from the history. [manual] reads were marked as read or imported rather than
+ * read in the app. A book read elsewhere has no hash, only its [title], [author] and [type].
+ * [dateUnknown] reads have a stand-in date, so they count in totals but not by month or year.
+ */
+data class FinishedRecord(
+    val bookHash: String?,
+    val at: Long,
+    val readId: String? = null,
+    val manual: Boolean = false,
+    val dateUnknown: Boolean = false,
+    val title: String? = null,
+    val author: String? = null,
+    val type: BookType? = null,
+    /** The Goodreads book ID for imported reads, so importing again skips them. */
+    val sourceId: String? = null,
+    val eventId: String = "",
+) {
+    /** Ratings and reviews for books read elsewhere are kept under this, since they have no hash. */
+    val ratingKey get() = bookHash ?: title?.let { elsewhereKey(it, author.orEmpty()) }
+}
+
+/** Names a book read elsewhere by its title and author. */
+fun elsewhereKey(title: String, author: String) = "elsewhere:" + (title + "|" + author).lowercase().filter { it.isLetterOrDigit() || it == '|' }
 
 /** Stars from half a star to five, with an optional short review. */
 data class Rating(val stars: Float, val review: String = "", val spoiler: Boolean = false, val at: Long = 0L) {
@@ -53,7 +75,9 @@ class ReadingHistory(
     val finished: List<FinishedRecord>,
     /** When each read began, by read ID. */
     val readStarts: Map<String, Long> = emptyMap(),
-    /** The newest rating for each book, by book hash. */
+    /** Which book each read is of, by read ID. */
+    val readBooks: Map<String, String> = emptyMap(),
+    /** The newest rating for each book, by book hash, or by [elsewhereKey] for books read elsewhere. */
     val ratings: Map<String, Rating> = emptyMap(),
     /** The newest rating for each series, by [seriesKey]. */
     val seriesRatings: Map<String, Rating> = emptyMap(),
@@ -68,6 +92,7 @@ class ReadingHistory(
             val sessions = ArrayList<SessionRecord>()
             val finished = ArrayList<FinishedRecord>()
             val starts = HashMap<String, Long>()
+            val readBooks = HashMap<String, String>()
             val ratings = HashMap<String, Rating>()
             val seriesRatings = HashMap<String, Rating>()
             val goals = LinkedHashMap<String, Goal?>()
@@ -88,9 +113,23 @@ class ReadingHistory(
                         to = data.optInt("to"),
                         turns = data.optInt("turns"),
                     )
-                    EventKind.READ_STARTED -> row.readId?.let { starts[it] = row.startedAt }
-                    EventKind.READ_FINISHED -> finished += FinishedRecord(row.bookHash, row.startedAt, row.readId)
-                    EventKind.RATING -> row.bookHash?.let { hash ->
+                    EventKind.READ_STARTED -> row.readId?.let { id ->
+                        starts[id] = row.startedAt
+                        row.bookHash?.let { readBooks[id] = it }
+                    }
+                    EventKind.READ_FINISHED -> finished += FinishedRecord(
+                        bookHash = row.bookHash,
+                        at = row.startedAt,
+                        readId = row.readId,
+                        manual = data.optString("source", "reader") != "reader",
+                        dateUnknown = data.optBoolean("dateUnknown"),
+                        title = data.optString("title").takeIf { it.isNotEmpty() },
+                        author = data.optString("author").takeIf { it.isNotEmpty() },
+                        type = BookType.entries.firstOrNull { it.name == data.optString("type") },
+                        sourceId = data.optString("goodreads").takeIf { it.isNotEmpty() },
+                        eventId = row.id,
+                    )
+                    EventKind.RATING -> (row.bookHash ?: data.optString("elsewhere").takeIf { it.isNotEmpty() })?.let { hash ->
                         val rating = Rating.fromJson(data, row.startedAt)
                         if (rating.stars > 0f) ratings[hash] = rating else ratings.remove(hash)
                     }
@@ -112,6 +151,7 @@ class ReadingHistory(
                 sessions = sessions,
                 finished = finished,
                 readStarts = starts,
+                readBooks = readBooks,
                 ratings = ratings,
                 seriesRatings = seriesRatings,
                 goals = goals.values.filterNotNull(),
@@ -120,4 +160,11 @@ class ReadingHistory(
             )
         }
     }
+}
+
+/** A read of this book that began but hasn't finished, as its start time. */
+fun ReadingHistory.openReadStart(bookHash: String): Long? {
+    val finishedIds = finished.mapNotNullTo(HashSet()) { it.readId }
+    return readBooks.filter { (id, hash) -> hash == bookHash && id !in finishedIds }
+        .keys.mapNotNull(readStarts::get).maxOrNull()
 }
