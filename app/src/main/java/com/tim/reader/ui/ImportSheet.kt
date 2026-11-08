@@ -183,6 +183,77 @@ fun ImportSheet(
     }
 }
 
+/** Offers to add books already sitting in the library folder, such as after a reinstall. */
+@Composable
+fun RestoreSheet(items: List<ImportItem>, skipped: List<String>, onDone: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val importer = remember { Importer(context) }
+    var progress by remember { mutableStateOf<ImportProgress?>(null) }
+    var result by remember { mutableStateOf<ImportResult?>(null) }
+
+    Dialog(
+        onDismissRequest = { if (progress == null) onDone() },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth()
+                .heightIn(max = 640.dp),
+        ) {
+            Column(
+                Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val finished = result
+                val running = progress
+                when {
+                    finished != null -> ImportSummary(finished, skipped, onDone)
+                    running != null -> {
+                        Text("Adding ${running.done + 1} of ${running.total}", style = MaterialTheme.typography.titleLarge)
+                        Text(running.current, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        LinearProgressIndicator(
+                            progress = { running.done.toFloat() / running.total.coerceAtLeast(1) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    else -> {
+                        val counts = items.groupingBy { it.guess }.eachCount()
+                        Text("Books found in your library folder", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            BookType.entries.mapNotNull { type ->
+                                counts[type]?.let { count -> "$count ${if (count == 1) type.label else type.folderName}" }
+                            }.joinToString(", "),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "Quartz Reader can add them where they are. Each book's type comes from its folder, " +
+                                "and a folder inside that becomes a series. Nothing is copied or moved.",
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onDone) { Text("Not now") }
+                            Button({
+                                val options = ImportOptions(
+                                    types = items.associateWith { it.guess },
+                                    shelfId = null,
+                                    addToReadList = false,
+                                    removeOriginals = false,
+                                )
+                                progress = ImportProgress(0, items.size, items.first().name)
+                                scope.launch { result = importer.run(items, options) { progress = it } }
+                            }) { Text("Add ${items.size}") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private val TYPE_PADDING = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 
 @Composable

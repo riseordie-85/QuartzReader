@@ -37,6 +37,8 @@ data class ImportItem(
     val folderTree: Uri? = null,
     val folderDocumentId: String? = null,
     val seriesHint: String? = null,
+    /** Already in the library folder, so it's added where it is instead of copied. */
+    val inPlace: Boolean = false,
 ) {
     val isFolder get() = folderTree != null
 }
@@ -184,6 +186,68 @@ class Importer(context: Context) {
         walk(rootId, rootName, null, rootName, 0)
     }
 
+    /**
+     * Finds books already in the library folder that the library doesn't know, such as after a
+     * reinstall. The folder layout is the app's own: Type/Book or Type/Series/Book, where a folder
+     * of images is one book. Each book's type comes from its top folder.
+     */
+    suspend fun scanLibrary(): Pair<List<ImportItem>, List<String>> = withContext(Dispatchers.IO) {
+        val items = ArrayList<ImportItem>()
+        val skipped = ArrayList<String>()
+        val tree = folder.treeUri ?: return@withContext items to skipped
+        val known = repository.state.value.books.mapNotNull { book ->
+            runCatching { DocumentsContract.getDocumentId(Uri.parse(book.documentUri)) }.getOrNull()
+        }.toSet()
+        val top = folder.children(tree, DocumentsContract.getTreeDocumentId(tree))
+
+        for (type in BookType.entries) {
+            val typeFolder = top.firstOrNull { it.isFolder && it.name.equals(type.folderName, ignoreCase = true) } ?: continue
+
+            // parentSeries is the series folder above this one, if any.
+            fun walk(documentId: String, name: String, parentSeries: String?, depth: Int) {
+                val children = folder.children(tree, documentId).filterNot { it.name.startsWith(".") }
+                val files = children.filterNot { it.isFolder }
+                val folders = children.filter { it.isFolder }
+                val pages = files.filter { imageNames.containsMatchIn(it.name) }
+                val others = files - pages.toSet()
+
+                if (depth > 0 && pages.isNotEmpty() && folders.isEmpty() && others.none { bookNames.containsMatchIn(it.name) }) {
+                    if (documentId !in known) {
+                        items += ImportItem(
+                            uri = DocumentsContract.buildDocumentUriUsingTree(tree, documentId),
+                            name = name,
+                            kind = null,
+                            guess = type,
+                            folderTree = tree,
+                            folderDocumentId = documentId,
+                            seriesHint = parentSeries,
+                            inPlace = true,
+                        )
+                    }
+                    return
+                }
+                // Files in a type folder stand alone. Anything deeper belongs to the series folder it's in.
+                val series = parentSeries ?: if (depth > 0) seriesName(name) else null
+                others.forEach { file ->
+                    if (file.documentId in known) return@forEach
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(tree, file.documentId)
+                    val kind = runCatching { readKind(uri, file.name) }.getOrDefault(Kind.UNKNOWN)
+                    if (kind == Kind.UNKNOWN) {
+                        skipped += file.name
+                    } else {
+                        items += ImportItem(uri, file.name, kind, type, seriesHint = series, inPlace = true)
+                    }
+                }
+                folders.forEach { child ->
+                    if (depth < MAX_DEPTH) walk(child.documentId, child.name, series, depth + 1) else skipped += child.name
+                }
+            }
+
+            walk(typeFolder.documentId, typeFolder.name, null, 0)
+        }
+        items to skipped
+    }
+
     suspend fun run(items: List<ImportItem>, options: ImportOptions, onProgress: (ImportProgress) -> Unit): ImportResult =
         withContext(Dispatchers.IO) {
             var imported = 0
@@ -198,7 +262,7 @@ class Importer(context: Context) {
                     val added = importOne(item, type, options)
                     if (added) {
                         imported++
-                        if (options.removeOriginals && !removeOriginal(item)) originalsKept++
+                        if (options.removeOriginals && !item.inPlace && !removeOriginal(item)) originalsKept++
                     } else {
                         duplicates++
                     }
@@ -231,6 +295,7 @@ class Importer(context: Context) {
         }
         val existing = repository.state.value.books.firstOrNull { it.hash == hash }
         if (existing != null) {
+            if (item.inPlace) return false
             // The same file arriving with its series tells us where a book imported alone belongs.
             val parsed = parseName(item.name, allowTrailingNumber = type != BookType.Book)
             val hint = item.seriesHint?.takeIf { item.isFolder || type != BookType.Book }
@@ -242,11 +307,10 @@ class Importer(context: Context) {
             return false
         }
 
-        val parent = folder.typeFolder(type)
-        val copy = if (item.isFolder) {
-            folder.copyFolder(item.folderTree!!, item.folderDocumentId!!, parent, item.name)
-        } else {
-            folder.copyFile(item.uri, parent, item.name)
+        val copy = when {
+            item.inPlace -> item.uri
+            item.isFolder -> folder.copyFolder(item.folderTree!!, item.folderDocumentId!!, folder.typeFolder(type), item.name)
+            else -> folder.copyFile(item.uri, folder.typeFolder(type), item.name)
         }
 
         try {
@@ -281,12 +345,14 @@ class Importer(context: Context) {
             val shelves = options.shelfId?.let { listOf(it) }
                 ?: repository.state.value.shelves.filter { it.defaultType == type }.map { it.id }
             // Loose novels in a folder aren't assumed to be a series, but volumes of comics are.
-            val hint = item.seriesHint?.takeIf { item.isFolder || type != BookType.Book }
+            // In the library folder, a series folder is a series whatever the type.
+            val hint = item.seriesHint?.takeIf { item.inPlace || item.isFolder || type != BookType.Book }
             repository.addBook(book, details.series ?: hint, shelves)
             // The book is in the library now, so a failed move mustn't undo the import.
-            runCatching { organizer.place(listOf(id)) }
+            // Books found in the library folder stay exactly where they are.
+            if (!item.inPlace) runCatching { organizer.place(listOf(id)) }
         } catch (error: Exception) {
-            runCatching { folder.delete(copy) }
+            if (!item.inPlace) runCatching { folder.delete(copy) }
             throw error
         }
         return true

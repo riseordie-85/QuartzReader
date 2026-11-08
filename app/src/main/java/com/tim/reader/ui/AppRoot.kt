@@ -92,6 +92,7 @@ fun ReaderApp(incoming: List<Uri>, onIncomingHandled: () -> Unit) {
     val folder = remember { LibraryFolder.get(context) }
     val repository = remember { LibraryRepository.get(context) }
     var folderReady by remember { mutableStateOf(folder.isReady()) }
+    var justChose by remember { mutableStateOf(false) }
     val loaded by produceState(false) {
         repository.load()
         value = true
@@ -101,13 +102,14 @@ fun ReaderApp(incoming: List<Uri>, onIncomingHandled: () -> Unit) {
         if (uri != null) {
             folder.choose(uri)
             folderReady = folder.isReady()
+            justChose = true
         }
     }
 
     when {
         !loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         !folderReady -> Welcome { choose.launch(null) }
-        else -> Library(repository, incoming, onIncomingHandled)
+        else -> Library(repository, incoming, onIncomingHandled, findExisting = justChose)
     }
 }
 
@@ -123,7 +125,8 @@ private fun Welcome(onChoose: () -> Unit) {
     ) {
         Text("Quartz Reader", style = MaterialTheme.typography.headlineLarge)
         Text(
-            "Choose a folder for your library. Quartz Reader keeps your books there and organizes them for you, so they stay safe if the app is ever removed.",
+            "Choose a folder for your library. Quartz Reader keeps your books there and organizes them for you, " +
+                "so they stay safe if the app is ever removed. Used Quartz Reader before? Choose the same folder to bring your books back.",
             textAlign = TextAlign.Center,
         )
         Button(onChoose) { Text("Choose library folder") }
@@ -150,7 +153,12 @@ private suspend fun openBook(context: Context, book: Book, push: (Route) -> Unit
 }
 
 @Composable
-private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomingHandled: () -> Unit) {
+private fun Library(
+    repository: LibraryRepository,
+    incoming: List<Uri>,
+    onIncomingHandled: () -> Unit,
+    findExisting: Boolean = false,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by repository.state.collectAsState()
@@ -158,6 +166,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
     var chooser by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<PendingImport?>(null) }
+    var restore by remember { mutableStateOf<PendingImport?>(null) }
 
     fun scan(files: List<Uri>, folders: List<Uri>) {
         if (files.isEmpty() && folders.isEmpty()) return
@@ -176,6 +185,31 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         }
     }
 
+    /** Looks for books already in the library folder that the library doesn't know yet. */
+    fun lookForExisting(sayIfNone: Boolean) {
+        scanning = true
+        scope.launch {
+            try {
+                val (items, skipped) = Importer(context).scanLibrary()
+                if (items.isNotEmpty()) {
+                    restore = PendingImport(items, skipped)
+                } else if (sayIfNone) {
+                    Toast.makeText(context, "No new books in the library folder", Toast.LENGTH_LONG).show()
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Toast.makeText(context, "Couldn't read the library folder: ${error.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                scanning = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (findExisting) lookForExisting(sayIfNone = false)
+    }
+
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         scan(uris, emptyList())
     }
@@ -184,7 +218,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
     }
 
     // A file shared while the sheet is open waits until it closes.
-    val sheetBusy = pending != null || scanning
+    val sheetBusy = pending != null || restore != null || scanning
     LaunchedEffect(incoming, sheetBusy) {
         if (incoming.isNotEmpty() && !sheetBusy) {
             scan(incoming, emptyList())
@@ -270,6 +304,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         Route.Settings -> SettingsScreen(
             onHomeStyle = { push(Route.ThemeEditor(null)) },
             onTestTools = { push(Route.Tools) },
+            onFindExisting = { lookForExisting(sayIfNone = true) },
         )
         is Route.ThemeEditor -> {
             val shelf = route.shelfId?.let { state.shelf(it) }
@@ -376,6 +411,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         val startShelf = (stack.last() as? Route.ShelfPages)?.shelfId
         ImportSheet(waiting.items, waiting.skipped, state.shelves, startShelf) { pending = null }
     }
+    restore?.let { found -> RestoreSheet(found.items, found.skipped) { restore = null } }
 }
 
 @Composable
