@@ -15,6 +15,14 @@ enum class TwoPageMode(val label: String) {
     Never("Never"),
 }
 
+/** Which edge a camera sits on, for keeping text clear of it. */
+enum class CameraEdge(val label: String) {
+    Auto("Auto"),
+    Top("Top"),
+    Sides("Sides"),
+    Bottom("Bottom"),
+}
+
 /** Settings for this device only, which are not synced between devices. */
 object DeviceSettings {
     private const val KEY_SPLIT_VIEW = "split_view"
@@ -25,6 +33,8 @@ object DeviceSettings {
     private const val KEY_COMIC_VINE = "comic_vine_key"
     private const val KEY_DEVICE_ID = "device_id"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
+    private const val PREFIX_CAMERA_GAP = "camera_gap:"
+    private const val PREFIX_CAMERA_EDGE = "camera_edge:"
     private var preferences: SharedPreferences? = null
     private val rows = mutableStateMapOf<String, Int>()
 
@@ -77,6 +87,10 @@ object DeviceSettings {
             if (key.startsWith(PREFIX_BOOKS_PER_ROW) && value is Int) {
                 rows[key.removePrefix(PREFIX_BOOKS_PER_ROW)] = value
             }
+            if (key.startsWith(PREFIX_CAMERA_GAP) && value is Int) cameraGaps[key.removePrefix(PREFIX_CAMERA_GAP)] = value
+            if (key.startsWith(PREFIX_CAMERA_EDGE) && value is String) {
+                CameraEdge.entries.firstOrNull { it.name == value }?.let { cameraEdges[key.removePrefix(PREFIX_CAMERA_EDGE)] = it }
+            }
         }
     }
 
@@ -90,10 +104,29 @@ object DeviceSettings {
         }
     }
 
-    fun updateCameraGap(dp: Int) {
-        cameraGap = dp
-        preferences?.edit { putInt(KEY_CAMERA_GAP, dp) }
+    // A folding phone has two screens, and a camera moves edges when the screen turns, so the camera
+    // gap is kept for each screen size and orientation. Keys look like "large:landscape".
+    private val cameraGaps = mutableStateMapOf<String, Int>()
+    private val cameraEdges = mutableStateMapOf<String, CameraEdge>()
+
+    /** The camera gap for this screen and orientation, falling back to the one set before there were several. */
+    fun cameraGap(key: String): Int = cameraGaps[key] ?: cameraGap
+
+    fun cameraEdge(key: String): CameraEdge = cameraEdges[key] ?: CameraEdge.Auto
+
+    fun updateCameraGap(key: String, dp: Int) {
+        cameraGaps[key] = dp
+        preferences?.edit { putInt(PREFIX_CAMERA_GAP + key, dp) }
     }
+
+    fun updateCameraEdge(key: String, edge: CameraEdge) {
+        cameraEdges[key] = edge
+        preferences?.edit { putString(PREFIX_CAMERA_EDGE + key, edge.name) }
+    }
+
+    /** Names the screen being used: the big or small one, held upright or sideways. */
+    fun screenKey(smallestWidthDp: Int, landscape: Boolean) =
+        "${if (smallestWidthDp >= 600) "large" else "small"}:${if (landscape) "landscape" else "portrait"}"
 
     fun updateTwoPage(mode: TwoPageMode) {
         twoPage = mode

@@ -54,6 +54,7 @@ import com.tim.reader.data.ReaderPrefs
 import com.tim.reader.data.SettingScope
 import com.tim.reader.data.resolveLook
 import com.tim.reader.engine.Chapter
+import com.tim.reader.library.CameraEdge
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.reader.capturePage
 import com.tim.reader.reader.epubPreferences
@@ -125,7 +126,7 @@ fun EpubControls(
     onShowControls: (Boolean) -> Unit,
     onAnimatedTurns: (Boolean) -> Unit,
     onPageColor: (Int) -> Unit,
-    onPagePadding: (outerMargin: Int, cameraGap: Int) -> Unit,
+    onPagePadding: (outerMargin: Int, cameraGap: Int, cameraEdge: CameraEdge) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = remember { LibraryRepository.get(context) }
@@ -165,11 +166,13 @@ fun EpubControls(
     } else {
         0
     }
-    val cameraGap = (DeviceSettings.cameraGap * density).roundToInt()
+    val screenKey = DeviceSettings.screenKey(screen.smallestScreenWidthDp, screen.screenWidthDp > screen.screenHeightDp)
+    val cameraGap = (DeviceSettings.cameraGap(screenKey) * density).roundToInt()
+    val cameraEdge = DeviceSettings.cameraEdge(screenKey)
     SideEffect {
         onAnimatedTurns(look.animation != PageAnimation.None)
         onPageColor(Color(look.pageBackground).toArgb())
-        onPagePadding(outerMargin, cameraGap)
+        onPagePadding(outerMargin, cameraGap, cameraEdge)
     }
 
     ReaderWindow(showControls || sheet != null, rotationLocked)

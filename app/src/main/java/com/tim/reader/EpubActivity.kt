@@ -28,6 +28,7 @@ import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.theme.BookFonts
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
+import com.tim.reader.library.CameraEdge
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.reader.epubPreferences
 import com.tim.reader.ui.EpubControls
@@ -62,6 +63,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var cutout = Insets.NONE
     private var outerMargin = 0
     private var cameraGap = 0
+    private var cameraEdge = CameraEdge.Auto
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -157,9 +159,10 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                             onShowControls = { controls = it },
                             onAnimatedTurns = { animatedTurns = it },
                             onPageColor = container::setBackgroundColor,
-                            onPagePadding = { outer, gap ->
+                            onPagePadding = { outer, gap, edge ->
                                 outerMargin = outer
                                 cameraGap = gap
+                                cameraEdge = edge
                                 updatePagePadding()
                             },
                         )
@@ -231,13 +234,29 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         selectionMode?.finish()
     }
 
-    /** Both sides match even when only one has a camera, so the spine stays in the middle. */
+    /**
+     * Keeps text clear of the camera. Both sides match even when only one has a camera, so the
+     * spine stays in the middle. Auto follows a cutout Android reports, and otherwise guesses: a
+     * big screen held sideways has its camera on top, like an unfolded Fold or a tablet, and a
+     * phone held sideways has it on a side.
+     */
     private fun updatePagePadding() {
-        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val sideGap = if (isLandscape) cameraGap else 0
-        val endGap = if (isLandscape) 0 else cameraGap
+        val configuration = resources.configuration
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val isLarge = configuration.smallestScreenWidthDp >= 600
+        val edge = when {
+            cameraEdge != CameraEdge.Auto -> cameraEdge
+            cutout.top > 0 -> CameraEdge.Top
+            cutout.bottom > 0 -> CameraEdge.Bottom
+            cutout.left > 0 || cutout.right > 0 -> CameraEdge.Sides
+            isLandscape && !isLarge -> CameraEdge.Sides
+            else -> CameraEdge.Top
+        }
+        val sideGap = if (edge == CameraEdge.Sides) cameraGap else 0
+        val topGap = if (edge == CameraEdge.Top) cameraGap else 0
+        val bottomGap = if (edge == CameraEdge.Bottom) cameraGap else 0
         val side = maxOf(cutout.left, cutout.right) + outerMargin + sideGap
-        pageContainer?.setPadding(side, cutout.top + endGap, side, cutout.bottom + endGap)
+        pageContainer?.setPadding(side, cutout.top + topGap, side, cutout.bottom + bottomGap)
     }
 
     /** Volume keys turn pages, as they do in the image reader. */

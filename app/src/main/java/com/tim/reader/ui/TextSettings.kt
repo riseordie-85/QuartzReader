@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +30,7 @@ import com.tim.reader.data.ReaderLook
 import com.tim.reader.data.ReaderPrefs
 import com.tim.reader.data.SettingScope
 import com.tim.reader.data.TextAlignment
+import com.tim.reader.library.CameraEdge
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.TwoPageMode
 import com.tim.reader.reader.TEXT_FONTS
@@ -177,11 +179,18 @@ fun ColumnScope.TextSettings(
         PanelHeading("This device")
         ToggleRow("Keep screen on", DeviceSettings.keepScreenOn) { DeviceSettings.updateKeepScreenOn(it) }
         ToggleRow("Lock rotation", rotationLocked, actions.onRotationLock)
+        // Kept for this screen held this way, so the Fold's two screens and both orientations each get their own.
+        val screen = LocalConfiguration.current
+        val screenKey = DeviceSettings.screenKey(screen.smallestScreenWidthDp, screen.screenWidthDp > screen.screenHeightDp)
+        PanelHeading("Camera on this screen, held this way")
+        CameraEdge.entries.forEach { edge ->
+            ChoiceRow(edge.label, DeviceSettings.cameraEdge(screenKey) == edge) { DeviceSettings.updateCameraEdge(screenKey, edge) }
+        }
         SettingSlider(
             label = "Camera gap",
-            value = DeviceSettings.cameraGap.toFloat(),
+            value = DeviceSettings.cameraGap(screenKey).toFloat(),
             range = 0f..96f,
             display = { "${it.roundToInt()} dp" },
-        ) { DeviceSettings.updateCameraGap(it.roundToInt()) }
+        ) { DeviceSettings.updateCameraGap(screenKey, it.roundToInt()) }
     }
 }
