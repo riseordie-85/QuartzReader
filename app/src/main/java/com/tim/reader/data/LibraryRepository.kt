@@ -206,12 +206,17 @@ class LibraryRepository private constructor(context: Context) {
     suspend fun applyInfo(ids: Collection<String>, update: InfoUpdate) = write {
         ids.forEach { id ->
             val book = state.value.book(id) ?: return@forEach
+            val description = update.description?.takeIf { it.isNotBlank() }
+            val genres = update.genres?.takeIf { it.isNotEmpty() }
+            val publisher = update.publisher?.takeIf { it.isNotBlank() }
+            val year = update.year?.takeIf { it.isNotBlank() }
+            val changesInfo = listOf(description, genres, publisher, year).any { it != null }
             val info = book.info.copy(
-                description = update.description ?: book.info.description,
-                genres = update.genres ?: book.info.genres,
-                publisher = update.publisher ?: book.info.publisher,
-                year = update.year ?: book.info.year,
-                source = update.source,
+                description = description ?: book.info.description,
+                genres = genres ?: book.info.genres,
+                publisher = publisher ?: book.info.publisher,
+                year = year ?: book.info.year,
+                source = if (changesInfo) update.source else book.info.source,
             )
             updateBookField(id) {
                 update.title?.takeIf { it.isNotBlank() }?.let { put("title", it) }

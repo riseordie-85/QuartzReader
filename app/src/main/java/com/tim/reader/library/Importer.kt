@@ -70,7 +70,7 @@ private data class Details(
 )
 
 /** EPUB descriptions are often HTML. */
-private fun plainText(html: String) = android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
+private fun plainText(text: String) = plainDescription(text)
 
 class Importer(context: Context) {
     private val appContext = context.applicationContext

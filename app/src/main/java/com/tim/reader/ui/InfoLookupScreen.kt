@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tim.reader.ResultsLog
 import com.tim.reader.appScope
 import com.tim.reader.data.Book
 import com.tim.reader.data.BookType
@@ -54,7 +55,9 @@ import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.InfoSource
 import com.tim.reader.library.LookupResult
 import com.tim.reader.library.MetadataLookup
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -70,7 +73,7 @@ private enum class Field(val label: String) {
 
 @Composable
 private fun RemoteCover(url: String?, width: Int, height: Int) {
-    val image by produceState<Bitmap?>(null, url) { value = url?.let { MetadataLookup.downloadImage(it) } }
+    val image by produceState<Bitmap?>(null, url) { value = url?.let { MetadataLookup.downloadImage(it, maxSide = 360) } }
     Box(
         Modifier
             .size(width.dp, height.dp)
@@ -95,7 +98,7 @@ private fun ResultRow(result: LookupResult, onPick: () -> Unit) {
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        RemoteCover(result.coverUrl, 52, 78)
+        RemoteCover(result.thumbUrl, 52, 78)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(result.title, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val details = listOf(result.author, result.year, result.publisher, result.extra).filter { it.isNotBlank() }
@@ -131,6 +134,9 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
     var message by remember { mutableStateOf<String?>(null) }
     var chosen by remember { mutableStateOf<LookupResult?>(null) }
     var applying by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var applyProblem by remember { mutableStateOf<String?>(null) }
+    var pickJob by remember { mutableStateOf<Job?>(null) }
     // A series shares details, but its volumes keep their own titles and covers.
     val fields = if (isSeries) listOf(Field.Author, Field.Description, Field.Genres, Field.Publisher) else Field.entries
     val picked = remember { mutableStateMapOf<Field, Boolean>() }
@@ -152,6 +158,8 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
                 )
                 results += found
                 if (found.isEmpty()) message = "Nothing found. Try fewer words, or another source."
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 message = "Couldn't search ${source.label}: ${error.message ?: "no connection"}"
             } finally {
@@ -161,8 +169,13 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
     }
 
     fun pick(result: LookupResult) {
-        scope.launch {
+        pickJob?.cancel()
+        loading = true
+        pickJob = scope.launch {
             val complete = MetadataLookup.complete(result)
+            // Series records shouldn't rename a single volume or replace its own cover unless asked.
+            val wholeSeries = result.source == InfoSource.AniList || result.source == InfoSource.ComicVine ||
+                first.seriesId != null
             picked.clear()
             fields.forEach { field ->
                 val has = when (field) {
@@ -174,9 +187,10 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
                     Field.Year -> complete.year.isNotBlank()
                     Field.Cover -> complete.coverUrl != null
                 }
-                picked[field] = has
+                picked[field] = has && !(wholeSeries && (field == Field.Title || field == Field.Cover))
             }
             chosen = complete
+            loading = false
         }
     }
 
@@ -211,7 +225,7 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
                         .background(EditorColors.Card, RoundedCornerShape(24.dp))
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
-                    if (searching) CircularProgressIndicator(Modifier.padding(12.dp))
+                    if (searching || loading) CircularProgressIndicator(Modifier.padding(12.dp))
                     message?.let { Text(it, color = EditorColors.Muted, modifier = Modifier.padding(8.dp)) }
                     if (!searching && results.isEmpty() && message == null) {
                         Text(
@@ -235,6 +249,7 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    applyProblem?.let { Text(it, color = EditorColors.Warning) }
                     EditorCard(if (isSeries) "Apply to all ${books.size} volumes" else "Choose what to use") {
                         fields.forEachIndexed { index, field ->
                             if (index > 0) EditorDivider()
@@ -278,17 +293,36 @@ fun InfoLookupScreen(books: List<Book>, seriesTitle: String?, onDone: () -> Unit
                         )
                         // This finishes even if the screen closes, so a series is never half updated.
                         appScope.launch {
-                            repository.applyInfo(books.map { it.id }, update)
-                            val coverUrl = result.coverUrl
-                            if (!isSeries && use(Field.Cover) && coverUrl != null) {
-                                val image = MetadataLookup.downloadImage(coverUrl)
-                                if (image != null) {
-                                    val path = withContext(Dispatchers.IO) { Covers.saveCustom(context, first.id, image) }
-                                    Covers.deleteCustom(first.customCoverPath)
-                                    repository.setCustomCover(first.id, path)
+                            val problem = try {
+                                repository.applyInfo(books.map { it.id }, update)
+                                val coverUrl = result.coverUrl
+                                if (!isSeries && use(Field.Cover) && coverUrl != null) {
+                                    val image = MetadataLookup.downloadImage(coverUrl, maxSide = 1200)
+                                    if (image == null) {
+                                        "The details were saved, but the cover couldn't be downloaded."
+                                    } else {
+                                        val path = withContext(Dispatchers.IO) { Covers.saveCustom(context, first.id, image) }
+                                        Covers.deleteCustom(first.customCoverPath)
+                                        repository.setCustomCover(first.id, path)
+                                        null
+                                    }
+                                } else {
+                                    null
+                                }
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Throwable) {
+                                ResultsLog.add("Saving book info failed: ${error::class.simpleName}: ${error.message}")
+                                "Couldn't save: ${error.message ?: error::class.simpleName}"
+                            }
+                            withContext(Dispatchers.Main) {
+                                if (problem == null) {
+                                    onDone()
+                                } else {
+                                    applying = false
+                                    applyProblem = problem
                                 }
                             }
-                            withContext(Dispatchers.Main) { onDone() }
                         }
                     }
                 }

@@ -14,6 +14,7 @@ import com.tim.reader.engine.describeMobi
 import com.tim.reader.engine.sniff
 import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +40,12 @@ object OpenEpub {
 }
 
 /** For work that should finish even after the screen that started it is gone. */
-val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+/** Work that outlives a screen. A failure is logged rather than closing the app. */
+val appScope = CoroutineScope(
+    SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, error ->
+        ResultsLog.add("Background work failed: ${error::class.simpleName}: ${error.message}")
+    },
+)
 
 /** Opens a library book in the fixed-page reader. */
 fun openBookSource(context: Context, book: Book): PageSource {

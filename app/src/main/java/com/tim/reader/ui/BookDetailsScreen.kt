@@ -96,7 +96,14 @@ fun BookDetailsScreen(
                 Text(book.title, style = MaterialTheme.typography.titleLarge)
                 Text("${(book.progress * 100).toInt()}% read")
                 Button(onOpen) { Text(if (book.progress > 0f) "Continue reading" else "Read") }
-                OutlinedButton(onFindInfo) { Text("Find info online") }
+                // Leaving for the lookup would lose typing, so it waits until the edits are saved.
+                val edited = title != book.title || author != book.author ||
+                    series != state.seriesFor(book.seriesId)?.title.orEmpty() ||
+                    number != book.seriesNumber?.let(::formatNumber).orEmpty() ||
+                    type != book.type || direction != book.direction || inReadList != book.inReadList ||
+                    shelfIds.toSet() != state.shelfBooks.filterValues { book.id in it }.keys
+                OutlinedButton(onFindInfo, enabled = !edited) { Text("Find info online") }
+                if (edited) Text("Save your changes first", style = MaterialTheme.typography.bodySmall)
                 if (book.customCoverPath != null) {
                     TextButton({
                         val old = book.customCoverPath

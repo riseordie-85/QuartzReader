@@ -80,7 +80,12 @@ fun SeriesEditScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Edit series", style = MaterialTheme.typography.headlineMedium)
-        OutlinedButton(onFindInfo, Modifier.fillMaxWidth()) { Text("Find series info online") }
+        // Leaving for the lookup would lose typing, so it waits until the edits are saved.
+        val edited = title != series.title || author != startAuthor || type != startType ||
+            direction != startDirection || shelfIds.toSet() != startShelves
+        OutlinedButton(onFindInfo, Modifier.fillMaxWidth(), enabled = !edited) {
+            Text(if (edited) "Save your changes to find info online" else "Find series info online")
+        }
         Text("Changes apply to all ${volumes.size} volumes.")
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Series name") }, singleLine = true)
@@ -158,17 +163,20 @@ fun SeriesEditScreen(
                         removing = false
                         saving = true
                         appScope.launch {
-                            repository.ungroupSeries(series.id)
-                            LibraryOrganizer(context).place(volumes.map { it.id })
-                            withContext(Dispatchers.Main) { onDone() }
+                            val worked = runCatching {
+                                repository.ungroupSeries(series.id)
+                                // The books are already ungrouped, so a failed folder move doesn't undo that.
+                                runCatching { LibraryOrganizer(context).place(volumes.map { it.id }) }
+                            }.isSuccess
+                            withContext(Dispatchers.Main) { if (worked) onDone() else saving = false }
                         }
                     }) { Text("Ungroup, keep the books") }
                     TextButton({
                         removing = false
                         saving = true
                         appScope.launch {
-                            deleteBooks(context, volumes)
-                            withContext(Dispatchers.Main) { onDone() }
+                            val worked = runCatching { deleteBooks(context, volumes) }.isSuccess
+                            withContext(Dispatchers.Main) { if (worked) onDone() else saving = false }
                         }
                     }) { Text("Delete the series and its ${volumes.size} books", color = MaterialTheme.colorScheme.error) }
                 }

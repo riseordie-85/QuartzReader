@@ -33,21 +33,35 @@ data class LookupResult(
     val publisher: String,
     val coverUrl: String?,
     val extra: String = "",
+    /** A small version of the cover for lists. */
+    val thumbUrl: String? = coverUrl,
 )
 
 private const val TIMEOUT_MS = 15_000
 private const val RESULTS = 15
-private const val USER_AGENT = "QuartzReader/1.0 (personal Android reading app)"
+private const val USER_AGENT = "QuartzReader/1.0 (personal Android reading app; +https://github.com/riseordie-85/QuartzReader)"
+private const val MAX_IMAGE_BYTES = 12 * 1024 * 1024
 
 private fun encode(text: String) = URLEncoder.encode(text, "UTF-8")
 
-/** Turns HTML descriptions into plain text with paragraph breaks. */
-private fun plain(text: String?): String =
-    text.orEmpty().takeIf { it.isNotBlank() }
-        ?.let { Html.fromHtml(it, Html.FROM_HTML_MODE_COMPACT).toString() }
-        ?.replace(Regex("\n{3,}"), "\n\n")
-        ?.trim()
-        .orEmpty()
+/**
+ * Turns a description into plain text with paragraph breaks. Only HTML goes through the HTML
+ * reader, because plain text would lose its line breaks there.
+ */
+fun plainDescription(text: String?): String {
+    val raw = text.orEmpty().trim()
+    if (raw.isEmpty()) return ""
+    val flat = if ('<' in raw) {
+        // AniList hides spoilers in spans, which would show once the tags are gone.
+        val noSpoilers = raw.replace(Regex("<span class=['\"]markdown_spoiler['\"]>.*?</span>", RegexOption.DOT_MATCHES_ALL), "")
+        Html.fromHtml(noSpoilers, Html.FROM_HTML_MODE_COMPACT).toString().replace("\uFFFC", "")
+    } else {
+        raw.replace("\r\n", "\n")
+    }
+    return flat.replace(Regex("\n{3,}"), "\n\n").trim()
+}
+
+private fun plain(text: String?) = plainDescription(text)
 
 private fun JSONObject.text(key: String) = if (has(key) && !isNull(key)) optString(key).trim() else ""
 
@@ -121,26 +135,44 @@ object MetadataLookup {
         runCatching {
             val work = JSONObject(request("https://openlibrary.org${result.id}.json"))
             val description = work.optJSONObject("description")?.text("value") ?: work.text("description")
-            result.copy(description = plain(description))
+            result.copy(description = plainDescription(description))
         }.getOrElse { error ->
             ResultsLog.add("Open Library description failed: ${error.message}")
             result
         }
     }
 
-    suspend fun downloadImage(url: String): Bitmap? = withContext(Dispatchers.IO) {
+    /** Downloads an image, shrunk on decode so its longer side is about [maxSide] pixels. */
+    suspend fun downloadImage(url: String, maxSide: Int): Bitmap? = withContext(Dispatchers.IO) {
         runCatching {
             val connection = URL(url).openConnection() as HttpURLConnection
-            try {
+            val bytes = try {
                 connection.connectTimeout = TIMEOUT_MS
                 connection.readTimeout = TIMEOUT_MS
                 connection.setRequestProperty("User-Agent", USER_AGENT)
                 connection.instanceFollowRedirects = true
-                connection.inputStream.use { BitmapFactory.decodeStream(it) }
+                connection.inputStream.use { input ->
+                    val buffer = java.io.ByteArrayOutputStream()
+                    val chunk = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        buffer.write(chunk, 0, read)
+                        if (buffer.size() > MAX_IMAGE_BYTES) throw IOException("Image is too large")
+                    }
+                    buffer.toByteArray()
+                }
             } finally {
                 connection.disconnect()
             }
-        }.getOrNull()
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        }.getOrElse { error ->
+            if (error is OutOfMemoryError || error is Exception) null else throw error
+        }
     }
 
     private fun openLibrary(title: String, author: String): List<LookupResult> {
@@ -160,8 +192,9 @@ object MetadataLookup {
                 genres = doc.optJSONArray("subject").strings().take(8),
                 publisher = doc.optJSONArray("publisher").strings().firstOrNull().orEmpty(),
                 coverUrl = cover?.let { "https://covers.openlibrary.org/b/id/$it-L.jpg" },
+                thumbUrl = cover?.let { "https://covers.openlibrary.org/b/id/$it-M.jpg" },
             )
-        }
+        }.distinctBy { it.id }
     }
 
     private fun googleBooks(title: String, author: String, key: String): List<LookupResult> {
@@ -174,6 +207,7 @@ object MetadataLookup {
             val info = item.optJSONObject("volumeInfo") ?: return@mapNotNull null
             val images = info.optJSONObject("imageLinks")
             val image = images?.let { it.text("thumbnail").ifEmpty { it.text("smallThumbnail") } }
+            val small = images?.text("smallThumbnail")?.ifEmpty { null } ?: image
             val subtitle = info.text("subtitle")
             LookupResult(
                 source = InfoSource.GoogleBooks,
@@ -188,8 +222,11 @@ object MetadataLookup {
                 coverUrl = image?.takeIf { it.isNotEmpty() }
                     ?.replace("http://", "https://")
                     ?.replace("&edge=curl", ""),
+                thumbUrl = small?.takeIf { it.isNotEmpty() }
+                    ?.replace("http://", "https://")
+                    ?.replace("&edge=curl", ""),
             )
-        }
+        }.distinctBy { it.id }
     }
 
     private const val ANILIST_QUERY = """
@@ -204,7 +241,7 @@ object MetadataLookup {
               volumes
               countryOfOrigin
               startDate { year }
-              coverImage { extraLarge large }
+              coverImage { extraLarge large medium }
               staff(perPage: 4) { edges { role node { name { full } } } }
             }
           }
@@ -223,7 +260,7 @@ object MetadataLookup {
             val names = item.optJSONObject("title")
             val creators = item.optJSONObject("staff")?.optJSONArray("edges").objects()
                 .filter { edge -> edge.text("role").let { "Story" in it || "Art" in it || "Original" in it } }
-                .mapNotNull { it.optJSONObject("node")?.optJSONObject("name")?.text("full") }
+                .mapNotNull { it.optJSONObject("node")?.optJSONObject("name")?.text("full")?.takeIf { name -> name.isNotEmpty() } }
                 .distinct()
             val volumes = item.optInt("volumes", 0)
             val country = item.text("countryOfOrigin")
@@ -238,19 +275,22 @@ object MetadataLookup {
                 publisher = "",
                 coverUrl = item.optJSONObject("coverImage")?.let { it.text("extraLarge").ifEmpty { it.text("large") } }
                     ?.takeIf { it.isNotEmpty() },
+                thumbUrl = item.optJSONObject("coverImage")?.let { it.text("medium").ifEmpty { it.text("large") } }
+                    ?.takeIf { it.isNotEmpty() },
                 extra = listOfNotNull(
                     if (country == "KR") "Manhwa" else null,
                     if (volumes > 0) "$volumes volumes" else null,
                 ).joinToString(", "),
             )
-        }
+        }.distinctBy { it.id }
     }
 
     private fun comicVine(title: String, key: String): List<LookupResult> {
         if (key.isBlank()) throw IOException("Comic Vine needs your API key, which you can add in Settings")
         val fields = "id,name,start_year,publisher,deck,description,image,count_of_issues"
+        // Comic Vine's search returns at most ten.
         val url = "https://comicvine.gamespot.com/api/search/?api_key=${encode(key)}&format=json" +
-            "&resources=volume&limit=$RESULTS&field_list=$fields&query=${encode(title)}"
+            "&resources=volume&limit=10&field_list=$fields&query=${encode(title)}"
         val root = JSONObject(request(url))
         if (root.optInt("status_code", 1) != 1) throw IOException("Comic Vine: ${root.text("error")}")
         return root.optJSONArray("results").objects().map { item ->
@@ -266,8 +306,10 @@ object MetadataLookup {
                 publisher = item.optJSONObject("publisher")?.text("name").orEmpty(),
                 coverUrl = item.optJSONObject("image")?.let { it.text("original_url").ifEmpty { it.text("medium_url") } }
                     ?.takeIf { it.isNotEmpty() },
+                thumbUrl = item.optJSONObject("image")?.let { it.text("small_url").ifEmpty { it.text("medium_url") } }
+                    ?.takeIf { it.isNotEmpty() },
                 extra = if (issues > 0) "$issues issues" else "",
             )
-        }
+        }.distinctBy { it.id }
     }
 }
