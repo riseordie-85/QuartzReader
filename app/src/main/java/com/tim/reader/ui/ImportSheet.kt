@@ -231,8 +231,9 @@ fun RestoreSheet(items: List<ImportItem>, skipped: List<String>, onDone: () -> U
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            "Quartz Reader can add them where they are. Each book's type comes from its folder, " +
-                                "and a folder inside that becomes a series. Nothing is copied or moved.",
+                            "Quartz Reader will add them and sort them into folders, like Manga/One Piece. " +
+                                "Each book's type comes from its top folder, and its series from the folder it's in or its file name. " +
+                                "Files are moved within this folder, never copied or deleted.",
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onDone) { Text("Not now") }
@@ -245,7 +246,7 @@ fun RestoreSheet(items: List<ImportItem>, skipped: List<String>, onDone: () -> U
                                 )
                                 progress = ImportProgress(0, items.size, items.first().name)
                                 scope.launch { result = importer.run(items, options) { progress = it } }
-                            }) { Text("Add ${items.size}") }
+                            }) { Text("Add and organize ${items.size}") }
                         }
                     }
                 }
