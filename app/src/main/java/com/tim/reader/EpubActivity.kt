@@ -24,6 +24,7 @@ import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.commitNow
 import androidx.lifecycle.lifecycleScope
 import com.tim.reader.data.LibraryRepository
+import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.theme.BookFonts
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
@@ -172,10 +173,18 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         if (bookId != null) {
             lifecycleScope.launch {
                 val positions = publication.positions().size
+                var tracking = false
                 navigator.currentLocator.collect { locator ->
                     // Readium's last position reports just under 100%, so it counts as finished here.
-                    val atEnd = positions > 0 && (locator.locations.position ?: 0) >= positions
+                    val position = locator.locations.position ?: 0
+                    val atEnd = positions > 0 && position >= positions
                     val progress = if (atEnd) 1f else locator.locations.totalProgression?.toFloat() ?: 0f
+                    if (!tracking && book != null) {
+                        tracking = true
+                        ReadingTracker.start(this@EpubActivity, book, positions, position, progress)
+                    } else {
+                        ReadingTracker.turn(position, progress)
+                    }
                     repository.savePosition(bookId, 0, progress, locator.toJSON().toString())
                 }
             }
@@ -260,6 +269,16 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                 if (isForward) current.goForward() else current.goBackward()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ReadingTracker.resume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (isFinishing) ReadingTracker.stop() else ReadingTracker.pause()
     }
 
     override fun onDestroy() {

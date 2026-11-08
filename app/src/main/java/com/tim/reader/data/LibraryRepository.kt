@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.seriesMatchKey
 import com.tim.reader.theme.Presets
 import com.tim.reader.theme.ShelfTheme
@@ -27,6 +28,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
         Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_4.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_5.forEach { db.execSQL(it) }
+        Schema.UPGRADE_TO_6.forEach { db.execSQL(it) }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -37,6 +39,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
         if (oldVersion < 3) Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
         if (oldVersion < 4) Schema.UPGRADE_TO_4.forEach { db.execSQL(it) }
         if (oldVersion < 5) Schema.UPGRADE_TO_5.forEach { db.execSQL(it) }
+        if (oldVersion < 6) Schema.UPGRADE_TO_6.forEach { db.execSQL(it) }
     }
 
     /** Series used to be shared by every book with the same name, whatever its type. */
@@ -741,6 +744,61 @@ class LibraryRepository private constructor(context: Context) {
         db.update("books", values, "id = ?", arrayOf(id))
         db.execSQL(Schema.REMOVE_BOOK_MEMBERSHIPS, arrayOf<Any>(time, time, id))
         db.execSQL(Schema.DELETE_EMPTY_SERIES, arrayOf<Any>(time, time))
+    }
+
+    // Reading history. It isn't part of the library snapshot, so these write without reloading it.
+
+    /** Adds one event to the reading history. */
+    suspend fun addEvent(kind: String, book: Book?, readId: String?, startedAt: Long, endedAt: Long?, data: JSONObject) =
+        withContext(serial) { insertEvent(kind, book, readId, startedAt, endedAt, data) }
+
+    private fun insertEvent(kind: String, book: Book?, readId: String?, startedAt: Long, endedAt: Long?, data: JSONObject): String {
+        val id = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("kind", kind)
+            put("book_id", book?.id)
+            put("book_hash", book?.hash)
+            put("read_id", readId)
+            put("started_at", startedAt)
+            put("ended_at", endedAt)
+            put("data", data.toString())
+            put("device", DeviceSettings.deviceId)
+            put("updated_at", now())
+        }
+        db.insertOrThrow("events", null, values)
+        return id
+    }
+
+    /** The read of this book that's under way, or null. */
+    private fun openRead(book: Book): String? =
+        db.rawQuery(Schema.SELECT_LAST_READ_EVENT, arrayOf(book.hash)).use { rows ->
+            if (rows.moveToFirst() && rows.getString(0) == EventKind.READ_STARTED) rows.getString(1) else null
+        }
+
+    private fun hasFinished(book: Book): Boolean =
+        db.rawQuery(
+            "SELECT 1 FROM events WHERE book_hash = ? AND kind = ? AND deleted_at IS NULL LIMIT 1",
+            arrayOf(book.hash, EventKind.READ_FINISHED),
+        ).use { it.moveToFirst() }
+
+    /**
+     * Starts a read of this book unless one is under way. A book that was already finished only
+     * starts again from early on, so a quick look back near the end isn't counted as a reread.
+     */
+    suspend fun startReadIfNeeded(book: Book, progress: Float, at: Long) = withContext(serial) {
+        if (openRead(book) != null) return@withContext
+        if (hasFinished(book) && progress >= EventKind.REREAD_BEFORE) return@withContext
+        val readId = UUID.randomUUID().toString()
+        insertEvent(EventKind.READ_STARTED, book, readId, at, null, JSONObject().put("source", "reader"))
+        Unit
+    }
+
+    /** Finishes the read under way, if there is one. */
+    suspend fun finishRead(book: Book, at: Long) = withContext(serial) {
+        val readId = openRead(book) ?: return@withContext
+        insertEvent(EventKind.READ_FINISHED, book, readId, at, null, JSONObject().put("source", "reader"))
+        Unit
     }
 
     /** Saves a reading position. Runs on every page turn, so it patches the snapshot directly. */

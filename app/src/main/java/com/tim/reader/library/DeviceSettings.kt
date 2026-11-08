@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import java.util.UUID
 
 enum class TwoPageMode(val label: String) {
     Auto("In landscape"),
@@ -22,9 +23,14 @@ object DeviceSettings {
     private const val KEY_CAMERA_GAP = "camera_gap"
     private const val KEY_GOOGLE_BOOKS = "google_books_key"
     private const val KEY_COMIC_VINE = "comic_vine_key"
+    private const val KEY_DEVICE_ID = "device_id"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
     private var preferences: SharedPreferences? = null
     private val rows = mutableStateMapOf<String, Int>()
+
+    /** A random name for this device, so history synced from several devices can tell them apart. */
+    var deviceId = "unknown"
+        private set
 
     var splitView by mutableStateOf(true)
         private set
@@ -58,6 +64,8 @@ object DeviceSettings {
     fun load(context: Context) {
         val saved = context.applicationContext.getSharedPreferences("device", Context.MODE_PRIVATE)
         preferences = saved
+        deviceId = saved.getString(KEY_DEVICE_ID, null)
+            ?: UUID.randomUUID().toString().also { id -> saved.edit { putString(KEY_DEVICE_ID, id) } }
         splitView = saved.getBoolean(KEY_SPLIT_VIEW, true)
         twoPage = TwoPageMode.entries.firstOrNull { it.name == saved.getString(KEY_TWO_PAGE, null) } ?: TwoPageMode.Auto
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)

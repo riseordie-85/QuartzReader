@@ -13,6 +13,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import com.tim.reader.library.DeviceSettings
+import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.theme.BookFonts
 import com.tim.reader.theme.ThemeFiles
 import com.tim.reader.ui.ReaderApp
@@ -35,6 +36,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ReadingTracker.resume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        ReadingTracker.pause()
     }
 
     override fun onNewIntent(intent: Intent) {

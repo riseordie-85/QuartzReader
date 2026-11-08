@@ -5,7 +5,7 @@ package com.tim.reader.data
  * to this schema rather than replace it.
  */
 object Schema {
-    const val VERSION = 5
+    const val VERSION = 6
 
     const val CREATE_BOOKS = """
         CREATE TABLE books (
@@ -107,11 +107,35 @@ object Schema {
             deleted_at INTEGER
         )"""
 
+    /**
+     * The reading history: sessions, and reads started and finished. Every row is one event with its
+     * own ID, so history from several devices merges by combining rows. Books are matched by hash.
+     */
+    const val CREATE_EVENTS = """
+        CREATE TABLE events (
+            id TEXT PRIMARY KEY NOT NULL,
+            kind TEXT NOT NULL,
+            book_id TEXT,
+            book_hash TEXT,
+            read_id TEXT,
+            started_at INTEGER NOT NULL,
+            ended_at INTEGER,
+            data TEXT NOT NULL DEFAULT '{}',
+            device TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            deleted_at INTEGER
+        )"""
+    const val CREATE_EVENTS_TIME_INDEX = "CREATE INDEX events_time ON events (kind, started_at)"
+    const val CREATE_EVENTS_BOOK_INDEX = "CREATE INDEX events_book ON events (book_hash, kind, started_at)"
+    const val SELECT_LAST_READ_EVENT = "SELECT kind, read_id FROM events WHERE book_hash = ? " +
+        "AND kind IN ('read_started', 'read_finished') AND deleted_at IS NULL ORDER BY started_at DESC, rowid DESC LIMIT 1"
+
     /** Each list brings a database from the version before it up to its version. */
     val UPGRADE_TO_2 = listOf(ADD_BOOK_READER_PREFS, ADD_BOOK_SPREAD_SHIFT, CREATE_BOOKMARKS)
     val UPGRADE_TO_3 = listOf(CREATE_HIGHLIGHTS)
     val UPGRADE_TO_4 = listOf(ADD_SHELF_READER_PREFS, ADD_SHELF_DIRECTION)
     val UPGRADE_TO_5 = listOf(ADD_BOOK_INFO)
+    val UPGRADE_TO_6 = listOf(CREATE_EVENTS, CREATE_EVENTS_TIME_INDEX, CREATE_EVENTS_BOOK_INDEX)
 
     val CREATE_ALL = listOf(
         CREATE_BOOKS,

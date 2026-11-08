@@ -51,6 +51,7 @@ import com.tim.reader.engine.PageSource
 import com.tim.reader.library.ImportItem
 import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
+import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.openBookSource
 import com.tim.reader.openEpub
 import com.tim.reader.theme.Presets
@@ -467,12 +468,17 @@ private fun BookReader(book: Book, repository: LibraryRepository) {
             DisposableEffect(source) {
                 onDispose { appScope.launch { source.close() } }
             }
+            DisposableEffect(source) {
+                ReadingTracker.start(context, book, source.pageCount, book.position, book.progress)
+                onDispose { ReadingTracker.stop() }
+            }
             ImageReaderScreen(
                 source = source,
                 book = book,
                 onPage = { page ->
                     val last = source.pageCount - 1
                     val progress = if (last <= 0) 1f else page.toFloat() / last
+                    ReadingTracker.turn(page, progress)
                     // Starting right away keeps saves in page order.
                     appScope.launch(start = CoroutineStart.UNDISPATCHED) {
                         repository.savePosition(book.id, page, progress)
