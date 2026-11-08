@@ -93,8 +93,12 @@ fun GoalRing(fraction: Float, color: Color, size: Dp = 56.dp) {
 
 /** One goal: its ring, what it is, and how it's going. */
 @Composable
-fun GoalRow(look: BarLook, goal: Goal, progress: GoalProgress, onRemove: (() -> Unit)? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+fun GoalRow(look: BarLook, goal: Goal, progress: GoalProgress, onEdit: (() -> Unit)? = null, onRemove: (() -> Unit)? = null) {
+    Row(
+        if (onEdit != null) Modifier.clickable(onClickLabel = "Edit goal", onClick = onEdit) else Modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         GoalRing(progress.fraction, Color(look.iconColor))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(goal.describe(), color = Color(look.textColor), fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -118,12 +122,14 @@ fun GoalsScreen(state: LibraryState, header: HeaderActions) {
     val context = LocalContext.current
     var version by remember { mutableStateOf(0) }
     var adding by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Goal?>(null) }
     val history = rememberHistory(version)
     val today = LocalDate.now()
 
-    if (adding) {
-        GoalEditor(state, onDismiss = { adding = false }) { goal ->
+    if (adding || editing != null) {
+        GoalEditor(state, editing, onDismiss = { adding = false; editing = null }) { goal ->
             adding = false
+            editing = null
             appScope.launch {
                 LibraryRepository.get(context).addEvent(EventKind.GOAL, null, goal.id, System.currentTimeMillis(), null, goal.toJson())
                 AchievementCenter.check(context)
@@ -164,7 +170,7 @@ fun GoalsScreen(state: LibraryState, header: HeaderActions) {
             }
             items(active, key = { it.first.id }) { (goal, progress) ->
                 Panel(look, null) {
-                    GoalRow(look, goal, progress) {
+                    GoalRow(look, goal, progress, onEdit = { editing = goal }) {
                         appScope.launch {
                             removeGoal(context, goal)
                             version++
@@ -188,7 +194,7 @@ fun GoalsScreen(state: LibraryState, header: HeaderActions) {
                 item {
                     Panel(look, "Finished Goals") {
                         finished.forEach { (goal, progress) ->
-                            GoalRow(look, goal, progress) {
+                            GoalRow(look, goal, progress, onEdit = { editing = goal }) {
                                 appScope.launch {
                                     removeGoal(context, goal)
                                     version++
@@ -208,19 +214,22 @@ private val COUNT_UNITS = listOf(GoalUnit.Stories, GoalUnit.Books, GoalUnit.Comi
 /** Builds a new goal. Each kind asks only for what it needs. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun GoalEditor(state: LibraryState, onDismiss: () -> Unit, onSave: (Goal) -> Unit) {
-    var kind by remember { mutableStateOf(GoalKind.Count) }
-    var unit by remember { mutableStateOf(GoalUnit.Books) }
-    var target by remember { mutableStateOf("4") }
-    var period by remember { mutableStateOf(GoalPeriod.Month) }
-    var start by remember { mutableStateOf<LocalDate?>(null) }
-    var end by remember { mutableStateOf<LocalDate?>(null) }
+fun GoalEditor(state: LibraryState, initial: Goal?, onDismiss: () -> Unit, onSave: (Goal) -> Unit) {
+    // An edited goal keeps its ID and start, so it stays one goal and its pace still counts from when it was set.
+    val id = remember(initial) { initial?.id ?: UUID.randomUUID().toString() }
+    val createdAt = remember(initial) { initial?.createdAt ?: System.currentTimeMillis() }
+    var kind by remember(initial) { mutableStateOf(initial?.kind ?: GoalKind.Count) }
+    var unit by remember(initial) { mutableStateOf(initial?.takeIf { it.kind == GoalKind.Count }?.unit ?: GoalUnit.Books) }
+    var target by remember(initial) { mutableStateOf(initial?.target?.toString() ?: "4") }
+    var period by remember(initial) { mutableStateOf(initial?.period ?: GoalPeriod.Month) }
+    var start by remember(initial) { mutableStateOf(initial?.start) }
+    var end by remember(initial) { mutableStateOf(initial?.end) }
     var search by remember { mutableStateOf("") }
-    var seriesTitle by remember { mutableStateOf<String?>(null) }
-    var bookHash by remember { mutableStateOf<String?>(null) }
-    var bookTitle by remember { mutableStateOf<String?>(null) }
-    var shelfName by remember { mutableStateOf<String?>(null) }
-    var habitDays by remember { mutableStateOf(false) }
+    var seriesTitle by remember(initial) { mutableStateOf(initial?.seriesTitle) }
+    var bookHash by remember(initial) { mutableStateOf(initial?.bookHash) }
+    var bookTitle by remember(initial) { mutableStateOf(initial?.bookTitle) }
+    var shelfName by remember(initial) { mutableStateOf(initial?.shelfName) }
+    var habitDays by remember(initial) { mutableStateOf(initial?.unit == GoalUnit.Days) }
     var pickingDate by remember { mutableStateOf<String?>(null) }
 
     pickingDate?.let { which ->
@@ -231,25 +240,26 @@ fun GoalEditor(state: LibraryState, onDismiss: () -> Unit, onSave: (Goal) -> Uni
     }
 
     val number = target.toIntOrNull()?.takeIf { it > 0 }
-    val goal: Goal? = when (kind) {
+    val draft: Goal? = when (kind) {
         GoalKind.Count -> number?.let {
-            Goal(UUID.randomUUID().toString(), kind, unit, it, period, start.takeIf { period == GoalPeriod.Dates }, end.takeIf { period == GoalPeriod.Dates })
+            Goal(id, kind, unit, it, period, start.takeIf { period == GoalPeriod.Dates }, end.takeIf { period == GoalPeriod.Dates })
         }?.takeIf { period != GoalPeriod.Dates || (it.start != null && it.end != null && !it.end.isBefore(it.start)) }
         GoalKind.Shelf -> if (number != null && shelfName != null) {
-            Goal(UUID.randomUUID().toString(), kind, GoalUnit.Books, number, period, start.takeIf { period == GoalPeriod.Dates }, end.takeIf { period == GoalPeriod.Dates }, shelfName = shelfName)
+            Goal(id, kind, GoalUnit.Books, number, period, start.takeIf { period == GoalPeriod.Dates }, end.takeIf { period == GoalPeriod.Dates }, shelfName = shelfName)
         } else {
             null
         }
-        GoalKind.Series -> seriesTitle?.let { Goal(UUID.randomUUID().toString(), kind, end = end, seriesTitle = it) }
-        GoalKind.Book -> bookHash?.let { Goal(UUID.randomUUID().toString(), kind, end = end, bookHash = it, bookTitle = bookTitle) }
+        GoalKind.Series -> seriesTitle?.let { Goal(id, kind, end = end, seriesTitle = it) }
+        GoalKind.Book -> bookHash?.let { Goal(id, kind, end = end, bookHash = it, bookTitle = bookTitle) }
         GoalKind.Habit -> number?.let {
-            Goal(UUID.randomUUID().toString(), kind, if (habitDays) GoalUnit.Days else GoalUnit.Minutes, if (habitDays) it.coerceAtMost(7) else it)
+            Goal(id, kind, if (habitDays) GoalUnit.Days else GoalUnit.Minutes, if (habitDays) it.coerceAtMost(7) else it)
         }
     }
+    val goal = draft?.copy(createdAt = createdAt)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New goal") },
+        title = { Text(if (initial == null) "New goal" else "Edit goal") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
