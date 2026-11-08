@@ -45,6 +45,7 @@ import com.tim.reader.data.LibraryState
 import com.tim.reader.data.ShelfItem
 import com.tim.reader.data.SortOrder
 import com.tim.reader.data.shelfItems
+import com.tim.reader.data.volumeOrder
 import com.tim.reader.engine.Kind
 import com.tim.reader.engine.PageSource
 import com.tim.reader.library.ImportItem
@@ -76,6 +77,8 @@ private sealed interface Route {
     data class PageSettings(val shelfId: String?, val seriesId: String?) : Route
     /** Makes a new shelf, or changes the books on one. */
     data class ShelfMaker(val shelfId: String?) : Route
+    /** Looks a book or a whole series up online. */
+    data class InfoLookup(val bookId: String?, val seriesId: String?) : Route
     data class Details(val bookId: String) : Route
     data class Reader(val book: Book) : Route
 }
@@ -245,6 +248,18 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
             onNewShelf = { push(Route.ShelfMaker(null)) },
             onChooseBooks = { push(Route.ShelfMaker(it)) },
         )
+        is Route.InfoLookup -> {
+            val series = route.seriesId?.let { state.seriesFor(it) }
+            val books = when {
+                series != null -> state.books.filter { it.seriesId == series.id }.sortedWith(volumeOrder)
+                else -> listOfNotNull(route.bookId?.let { state.book(it) })
+            }
+            if (books.isEmpty()) {
+                LaunchedEffect(route) { stack.remove(route) }
+            } else {
+                InfoLookupScreen(books, series?.title) { stack.remove(route) }
+            }
+        }
         is Route.ShelfMaker -> {
             val shelf = route.shelfId?.let { state.shelf(it) }
             ShelfMakerScreen(shelf, state) { stack.remove(route) }
@@ -295,6 +310,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
                     header,
                     actions,
                     onPageSettings = { push(Route.PageSettings(null, series.id)) },
+                    onFindInfo = { push(Route.InfoLookup(null, series.id)) },
                 ) {
                     push(Route.SeriesEditor(series.id))
                 }
@@ -305,7 +321,12 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
         is Route.SeriesEditor -> {
             val series = state.seriesFor(route.seriesId)
             if (series != null) {
-                SeriesEditScreen(series, state.books.filter { it.seriesId == series.id }, state) {
+                SeriesEditScreen(
+                    series,
+                    state.books.filter { it.seriesId == series.id },
+                    state,
+                    onFindInfo = { push(Route.InfoLookup(null, series.id)) },
+                ) {
                     stack.remove(route)
                 }
             } else {
@@ -319,6 +340,7 @@ private fun Library(repository: LibraryRepository, incoming: List<Uri>, onIncomi
                     book = book,
                     state = state,
                     onOpen = { scope.launch { openBook(context, book, ::push) } },
+                    onFindInfo = { push(Route.InfoLookup(book.id, null)) },
                     onGone = { stack.remove(route) },
                 )
             } else {

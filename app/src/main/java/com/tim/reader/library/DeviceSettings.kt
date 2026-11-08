@@ -20,6 +20,8 @@ object DeviceSettings {
     private const val KEY_TWO_PAGE = "two_page"
     private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
     private const val KEY_CAMERA_GAP = "camera_gap"
+    private const val KEY_GOOGLE_BOOKS = "google_books_key"
+    private const val KEY_COMIC_VINE = "comic_vine_key"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
     private var preferences: SharedPreferences? = null
     private val rows = mutableStateMapOf<String, Int>()
@@ -37,6 +39,22 @@ object DeviceSettings {
     var cameraGap by mutableStateOf(0)
         private set
 
+    /** Optional keys for online lookups. They stay on this device. */
+    var googleBooksKey by mutableStateOf("")
+        private set
+
+    var comicVineKey by mutableStateOf("")
+        private set
+
+    fun updateLookupKeys(googleBooks: String, comicVine: String) {
+        googleBooksKey = googleBooks.trim()
+        comicVineKey = comicVine.trim()
+        preferences?.edit {
+            putString(KEY_GOOGLE_BOOKS, googleBooksKey)
+            putString(KEY_COMIC_VINE, comicVineKey)
+        }
+    }
+
     fun load(context: Context) {
         val saved = context.applicationContext.getSharedPreferences("device", Context.MODE_PRIVATE)
         preferences = saved
@@ -44,6 +62,8 @@ object DeviceSettings {
         twoPage = TwoPageMode.entries.firstOrNull { it.name == saved.getString(KEY_TWO_PAGE, null) } ?: TwoPageMode.Auto
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
+        googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
+        comicVineKey = saved.getString(KEY_COMIC_VINE, null).orEmpty()
         rows.clear()
         saved.all.forEach { (key, value) ->
             if (key.startsWith(PREFIX_BOOKS_PER_ROW) && value is Int) {

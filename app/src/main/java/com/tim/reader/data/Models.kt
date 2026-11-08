@@ -185,9 +185,33 @@ data class Book(
     val direction: ReadDirection,
     val readerPrefs: ReaderPrefs = ReaderPrefs(),
     val spreadShift: Boolean = false,
+    val info: BookInfo = BookInfo(),
 ) {
     val displayCover get() = customCoverPath ?: coverPath
 }
+
+/** Details about a book beyond its title and author, from the file itself or an online lookup. */
+data class BookInfo(
+    val description: String = "",
+    val genres: List<String> = emptyList(),
+    val publisher: String = "",
+    val year: String = "",
+    /** Where these details came from, such as "Open Library" or "File". */
+    val source: String = "",
+) {
+    val isEmpty get() = description.isBlank() && genres.isEmpty() && publisher.isBlank() && year.isBlank()
+}
+
+/** The fields a lookup changes. A null field is left as it is. */
+class InfoUpdate(
+    val title: String? = null,
+    val author: String? = null,
+    val description: String? = null,
+    val genres: List<String>? = null,
+    val publisher: String? = null,
+    val year: String? = null,
+    val source: String,
+)
 
 data class Series(val id: String, val title: String, val updatedAt: Long)
 

@@ -26,6 +26,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
         Schema.UPGRADE_TO_2.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
         Schema.UPGRADE_TO_4.forEach { db.execSQL(it) }
+        Schema.UPGRADE_TO_5.forEach { db.execSQL(it) }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -35,6 +36,7 @@ private class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "libr
         }
         if (oldVersion < 3) Schema.UPGRADE_TO_3.forEach { db.execSQL(it) }
         if (oldVersion < 4) Schema.UPGRADE_TO_4.forEach { db.execSQL(it) }
+        if (oldVersion < 5) Schema.UPGRADE_TO_5.forEach { db.execSQL(it) }
     }
 
     /** Series used to be shared by every book with the same name, whatever its type. */
@@ -175,7 +177,60 @@ class LibraryRepository private constructor(context: Context) {
         direction = enumOr(getString(20), ReadDirection.LeftToRight),
         readerPrefs = readPrefs(getString(21)),
         spreadShift = getInt(22) != 0,
+        info = readInfo(if (isNull(23)) null else getString(23)),
     )
+
+    private fun readInfo(json: String?): BookInfo = try {
+        val root = JSONObject(json ?: "{}")
+        val genres = root.optJSONArray("genres")
+        BookInfo(
+            description = root.optString("description"),
+            genres = if (genres == null) emptyList() else List(genres.length()) { genres.optString(it) },
+            publisher = root.optString("publisher"),
+            year = root.optString("year"),
+            source = root.optString("source"),
+        )
+    } catch (_: JSONException) {
+        BookInfo()
+    }
+
+    private fun writeInfo(info: BookInfo): String = JSONObject().apply {
+        if (info.description.isNotBlank()) put("description", info.description)
+        if (info.genres.isNotEmpty()) put("genres", JSONArray(info.genres))
+        if (info.publisher.isNotBlank()) put("publisher", info.publisher)
+        if (info.year.isNotBlank()) put("year", info.year)
+        if (info.source.isNotBlank()) put("source", info.source)
+    }.toString()
+
+    /** Puts looked-up details on books. Fields left null in [update] keep their current value. */
+    suspend fun applyInfo(ids: Collection<String>, update: InfoUpdate) = write {
+        ids.forEach { id ->
+            val book = state.value.book(id) ?: return@forEach
+            val info = book.info.copy(
+                description = update.description ?: book.info.description,
+                genres = update.genres ?: book.info.genres,
+                publisher = update.publisher ?: book.info.publisher,
+                year = update.year ?: book.info.year,
+                source = update.source,
+            )
+            updateBookField(id) {
+                update.title?.takeIf { it.isNotBlank() }?.let { put("title", it) }
+                update.author?.takeIf { it.isNotBlank() }?.let { put("author", it) }
+                put("info", writeInfo(info))
+            }
+        }
+    }
+
+    suspend fun setCustomCover(id: String, path: String?) = write {
+        updateBookField(id) { put("custom_cover_path", path) }
+    }
+
+    /** Takes the books out of a series, which then disappears. The books stay. */
+    suspend fun ungroupSeries(seriesId: String) = write {
+        val time = now()
+        db.execSQL(Schema.UNGROUP_SERIES, arrayOf<Any>(time, seriesId))
+        db.execSQL(Schema.DELETE_EMPTY_SERIES, arrayOf<Any>(time, time))
+    }
 
     private fun readPrefs(json: String?): ReaderPrefs = try {
         val root = JSONObject(json ?: "{}")
@@ -625,6 +680,7 @@ class LibraryRepository private constructor(context: Context) {
             put("in_read_list", if (book.inReadList) 1 else 0)
             put("direction", direction.name)
             put("reader_prefs", writePrefs(prefs))
+            if (!book.info.isEmpty) put("info", writeInfo(book.info))
         }
         db.insertOrThrow("books", null, values)
         shelfIds.forEach { db.execSQL(Schema.UPSERT_SHELF_BOOK, arrayOf<Any>(it, book.id, now())) }

@@ -10,16 +10,20 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -32,6 +36,7 @@ import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.Series
 import com.tim.reader.data.SeriesEdit
 import com.tim.reader.library.LibraryOrganizer
+import com.tim.reader.library.deleteBooks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,7 +47,13 @@ private fun <T> common(volumes: List<Book>, read: (Book) -> T): T? =
 
 /** Changes every volume of a series in one save. */
 @Composable
-fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, onDone: () -> Unit) {
+fun SeriesEditScreen(
+    series: Series,
+    volumes: List<Book>,
+    state: LibraryState,
+    onFindInfo: () -> Unit,
+    onDone: () -> Unit,
+) {
     val context = LocalContext.current
     val repository = LibraryRepository.get(context)
     val startType = remember(series.id) { common(volumes) { it.type } }
@@ -58,6 +69,7 @@ fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, o
     var direction by remember(series.id) { mutableStateOf(startDirection) }
     val shelfIds = remember(series.id) { mutableStateListOf(*startShelves.toTypedArray()) }
     var saving by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -68,6 +80,7 @@ fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, o
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Edit series", style = MaterialTheme.typography.headlineMedium)
+        OutlinedButton(onFindInfo, Modifier.fillMaxWidth()) { Text("Find series info online") }
         Text("Changes apply to all ${volumes.size} volumes.")
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Series name") }, singleLine = true)
@@ -126,5 +139,41 @@ fun SeriesEditScreen(series: Series, volumes: List<Book>, state: LibraryState, o
             },
             enabled = !saving && title.isNotBlank(),
         ) { Text(if (saving) "Saving" else "Save") }
+        OutlinedButton({ removing = true }, Modifier.fillMaxWidth(), enabled = !saving) { Text("Remove series") }
+    }
+
+    if (removing) {
+        AlertDialog(
+            onDismissRequest = { removing = false },
+            title = { Text("Remove ${series.title}?") },
+            text = {
+                Text(
+                    "Ungroup keeps all ${volumes.size} books and only takes them out of the series. " +
+                        "Delete removes the books from your library and deletes their copies in your library folder.",
+                )
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton({
+                        removing = false
+                        saving = true
+                        appScope.launch {
+                            repository.ungroupSeries(series.id)
+                            LibraryOrganizer(context).place(volumes.map { it.id })
+                            withContext(Dispatchers.Main) { onDone() }
+                        }
+                    }) { Text("Ungroup, keep the books") }
+                    TextButton({
+                        removing = false
+                        saving = true
+                        appScope.launch {
+                            deleteBooks(context, volumes)
+                            withContext(Dispatchers.Main) { onDone() }
+                        }
+                    }) { Text("Delete the series and its ${volumes.size} books", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            dismissButton = { TextButton({ removing = false }) { Text("Cancel") } },
+        )
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +46,8 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit) {
     var organizing by remember { mutableStateOf(false) }
     var choosingRow by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
+    var googleKey by remember { mutableStateOf(DeviceSettings.googleBooksKey) }
+    var comicVineKey by remember { mutableStateOf(DeviceSettings.comicVineKey) }
     if (showLicenses) {
         val text = remember {
             runCatching { context.assets.open("font-licenses.txt").use { it.readBytes().decodeToString() } }.getOrDefault("")
@@ -91,6 +94,25 @@ fun SettingsScreen(onHomeStyle: () -> Unit, onTestTools: () -> Unit) {
         OutlinedButton({ choosingRow = true }, Modifier.fillMaxWidth()) { Text("Books per row on Home") }
         Text("Display", style = MaterialTheme.typography.titleMedium)
         ToggleRow("Split view on large screens", DeviceSettings.splitView) { DeviceSettings.updateSplitView(it) }
+        Text("Book info lookups", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Open Library and AniList need nothing. Google Books works without a key but allows more with one. " +
+                "Comic Vine needs a free key from comicvine.gamespot.com/api.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedTextField(
+            googleKey,
+            { googleKey = it },
+            Modifier.fillMaxWidth(),
+            label = { Text("Google Books key (optional)") },
+            singleLine = true,
+        )
+        OutlinedTextField(comicVineKey, { comicVineKey = it }, Modifier.fillMaxWidth(), label = { Text("Comic Vine key") }, singleLine = true)
+        OutlinedButton(
+            { DeviceSettings.updateLookupKeys(googleKey, comicVineKey) },
+            Modifier.fillMaxWidth(),
+            enabled = googleKey.trim() != DeviceSettings.googleBooksKey || comicVineKey.trim() != DeviceSettings.comicVineKey,
+        ) { Text("Save keys") }
         Text("About", style = MaterialTheme.typography.titleMedium)
         OutlinedButton({ showLicenses = true }, Modifier.fillMaxWidth()) { Text("Font licenses") }
         Text("Testing", style = MaterialTheme.typography.titleMedium)

@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import com.tim.reader.data.Book
+import com.tim.reader.data.BookInfo
 import com.tim.reader.data.BookType
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.ReadDirection
@@ -65,7 +66,11 @@ private data class Details(
     val pageCount: Int,
     val cover: android.graphics.Bitmap?,
     val rightToLeft: Boolean = false,
+    val info: BookInfo = BookInfo(),
 )
+
+/** EPUB descriptions are often HTML. */
+private fun plainText(html: String) = android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
 
 class Importer(context: Context) {
     private val appContext = context.applicationContext
@@ -271,6 +276,7 @@ class Importer(context: Context) {
                 progress = 0f,
                 inReadList = options.addToReadList,
                 direction = if (details.rightToLeft) ReadDirection.RightToLeft else type.direction,
+                info = details.info,
             )
             val shelves = options.shelfId?.let { listOf(it) }
                 ?: repository.state.value.shelves.filter { it.defaultType == type }.map { it.id }
@@ -304,6 +310,13 @@ class Importer(context: Context) {
                         number = series?.position ?: parsed.number,
                         pageCount = 0,
                         cover = runCatching { publication.cover() }.getOrNull(),
+                        info = BookInfo(
+                            description = metadata.description?.let { plainText(it) }.orEmpty(),
+                            genres = metadata.subjects.map { it.name.trim() }.filter { it.isNotEmpty() },
+                            publisher = metadata.publishers.firstOrNull()?.name.orEmpty(),
+                            year = metadata.published?.toString()?.take(4)?.takeIf { year -> year.all { it.isDigit() } }.orEmpty(),
+                            source = "File",
+                        ),
                     )
                 } finally {
                     publication.close()
@@ -322,6 +335,13 @@ class Importer(context: Context) {
                         pageCount = source.pageCount,
                         cover = firstPage(source),
                         rightToLeft = info?.rightToLeft == true,
+                        info = BookInfo(
+                            description = info?.summary.orEmpty(),
+                            genres = info?.genres.orEmpty(),
+                            publisher = info?.publisher.orEmpty(),
+                            year = info?.year.orEmpty(),
+                            source = if (info != null) "File" else "",
+                        ),
                     )
                 }
             null -> {

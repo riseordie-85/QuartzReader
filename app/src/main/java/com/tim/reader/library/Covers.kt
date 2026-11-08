@@ -51,6 +51,23 @@ object Covers {
         return target.path
     }
 
+    /** A cover the user picked. Each gets a new name, so the old one can't linger in memory. */
+    fun saveCustom(context: Context, bookId: String, cover: Bitmap): String {
+        val folder = File(context.filesDir, "custom-covers").apply { mkdirs() }
+        val target = File(folder, "$bookId-${System.currentTimeMillis()}.jpg")
+        val width = minOf(cover.width, COVER_WIDTH * 2).coerceAtLeast(1)
+        val height = (cover.height.toLong() * width / cover.width).toInt().coerceAtLeast(1)
+        val scaled = if (width == cover.width) cover else Bitmap.createScaledBitmap(cover, width, height, true)
+        target.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        return target.path
+    }
+
+    fun deleteCustom(path: String?) {
+        if (path == null) return
+        memory.remove(path)
+        File(path).delete()
+    }
+
     fun delete(context: Context, bookId: String) {
         val target = file(context, bookId)
         memory.remove(target.path)

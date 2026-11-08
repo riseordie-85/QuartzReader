@@ -5,7 +5,7 @@ package com.tim.reader.data
  * to this schema rather than replace it.
  */
 object Schema {
-    const val VERSION = 4
+    const val VERSION = 5
 
     const val CREATE_BOOKS = """
         CREATE TABLE books (
@@ -90,6 +90,8 @@ object Schema {
             deleted_at INTEGER
         )"""
 
+    const val ADD_BOOK_INFO = "ALTER TABLE books ADD COLUMN info TEXT"
+
     const val ADD_SHELF_READER_PREFS = "ALTER TABLE shelves ADD COLUMN reader_prefs TEXT"
     const val ADD_SHELF_DIRECTION = "ALTER TABLE shelves ADD COLUMN default_direction TEXT"
 
@@ -109,6 +111,7 @@ object Schema {
     val UPGRADE_TO_2 = listOf(ADD_BOOK_READER_PREFS, ADD_BOOK_SPREAD_SHIFT, CREATE_BOOKMARKS)
     val UPGRADE_TO_3 = listOf(CREATE_HIGHLIGHTS)
     val UPGRADE_TO_4 = listOf(ADD_SHELF_READER_PREFS, ADD_SHELF_DIRECTION)
+    val UPGRADE_TO_5 = listOf(ADD_BOOK_INFO)
 
     val CREATE_ALL = listOf(
         CREATE_BOOKS,
@@ -122,7 +125,7 @@ object Schema {
 
     const val BOOK_COLUMNS = "id, hash, type, format, title, author, series_id, series_number, document_uri, " +
         "is_folder, page_count, cover_path, custom_cover_path, added_at, updated_at, last_read_at, position, " +
-        "locator, progress, in_read_list, direction, reader_prefs, spread_shift"
+        "locator, progress, in_read_list, direction, reader_prefs, spread_shift, info"
 
     const val SELECT_BOOKS = "SELECT $BOOK_COLUMNS FROM books WHERE deleted_at IS NULL"
     const val SELECT_SERIES = "SELECT id, title, updated_at FROM series WHERE deleted_at IS NULL"
@@ -135,6 +138,7 @@ object Schema {
     const val SELECT_HIGHLIGHTS = "SELECT id, book_id, locator, text, note, created_at FROM highlights " +
         "WHERE deleted_at IS NULL ORDER BY created_at DESC"
     const val REMOVE_HIGHLIGHT = "UPDATE highlights SET deleted_at = ?, updated_at = ? WHERE id = ?"
+    const val UNGROUP_SERIES = "UPDATE books SET series_id = NULL, updated_at = ? WHERE series_id = ? AND deleted_at IS NULL"
     const val REMOVE_BOOKMARK = "UPDATE bookmarks SET deleted_at = ?, updated_at = ? WHERE id = ?"
     const val SELECT_SERIES_TYPES = "SELECT s.id, s.title, s.match_key, b.type FROM series s " +
         "JOIN books b ON b.series_id = s.id WHERE s.deleted_at IS NULL AND b.deleted_at IS NULL " +

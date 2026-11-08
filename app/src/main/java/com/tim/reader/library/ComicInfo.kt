@@ -10,6 +10,10 @@ data class ComicInfo(
     val number: Double?,
     val writer: String?,
     val rightToLeft: Boolean,
+    val summary: String? = null,
+    val genres: List<String> = emptyList(),
+    val publisher: String? = null,
+    val year: String? = null,
 )
 
 /** Reads the ComicInfo.xml that comic tools embed in archives. Returns null if it can't be read. */
@@ -31,6 +35,10 @@ fun parseComicInfo(bytes: ByteArray): ComicInfo? = try {
         number = (fields["Number"] ?: fields["Volume"])?.toDoubleOrNull(),
         writer = fields["Writer"]?.takeIf { it.isNotBlank() },
         rightToLeft = fields["Manga"].equals("YesAndRightToLeft", ignoreCase = true),
+        summary = fields["Summary"]?.takeIf { it.isNotBlank() },
+        genres = fields["Genre"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
+        publisher = fields["Publisher"]?.takeIf { it.isNotBlank() },
+        year = fields["Year"]?.takeIf { it.isNotBlank() },
     )
 } catch (_: Exception) {
     null

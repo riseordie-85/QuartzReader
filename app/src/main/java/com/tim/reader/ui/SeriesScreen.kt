@@ -44,6 +44,7 @@ fun SeriesScreen(
     header: HeaderActions,
     actions: BookActions,
     onPageSettings: () -> Unit,
+    onFindInfo: () -> Unit,
     onEdit: () -> Unit,
 ) {
     val ordered = volumes.sortedWith(volumeOrder)
@@ -72,6 +73,7 @@ fun SeriesScreen(
                 }
                 Button(onClick = onEdit) { Text("Edit series") }
                 Button(onClick = onPageSettings) { Text("Page settings") }
+                Button(onClick = onFindInfo) { Text("Find info") }
                 Button(onClick = { choosingRow = true }) { Text("Books per row") }
             }
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {

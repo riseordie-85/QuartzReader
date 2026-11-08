@@ -46,6 +46,7 @@ import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.library.Covers
+import com.tim.reader.library.deleteBooks
 import com.tim.reader.library.LibraryFolder
 import com.tim.reader.library.LibraryOrganizer
 import com.tim.reader.library.rememberCover
@@ -54,12 +55,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGone: () -> Unit) {
+fun BookDetailsScreen(
+    book: Book,
+    state: LibraryState,
+    onOpen: () -> Unit,
+    onFindInfo: () -> Unit,
+    onGone: () -> Unit,
+) {
     val context = LocalContext.current
     val repository = LibraryRepository.get(context)
     val scope = rememberCoroutineScope()
-    var title by remember(book.id) { mutableStateOf(book.title) }
-    var author by remember(book.id) { mutableStateOf(book.author) }
+    // Keyed on the values too, so a lookup that changes them shows here instead of being saved over.
+    var title by remember(book.id, book.title) { mutableStateOf(book.title) }
+    var author by remember(book.id, book.author) { mutableStateOf(book.author) }
     var series by remember(book.id) { mutableStateOf(state.seriesFor(book.seriesId)?.title.orEmpty()) }
     var number by remember(book.id) { mutableStateOf(book.seriesNumber?.let(::formatNumber).orEmpty()) }
     var type by remember(book.id) { mutableStateOf(book.type) }
@@ -88,8 +96,20 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
                 Text(book.title, style = MaterialTheme.typography.titleLarge)
                 Text("${(book.progress * 100).toInt()}% read")
                 Button(onOpen) { Text(if (book.progress > 0f) "Continue reading" else "Read") }
+                OutlinedButton(onFindInfo) { Text("Find info online") }
+                if (book.customCoverPath != null) {
+                    TextButton({
+                        val old = book.customCoverPath
+                        scope.launch {
+                            repository.setCustomCover(book.id, null)
+                            Covers.deleteCustom(old)
+                        }
+                    }) { Text("Use the original cover") }
+                }
             }
         }
+
+        BookInfoCard(book)
 
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") })
         OutlinedTextField(author, { author = it }, Modifier.fillMaxWidth(), label = { Text("Author") })
@@ -185,21 +205,39 @@ fun BookDetailsScreen(book: Book, state: LibraryState, onOpen: () -> Unit, onGon
                 TextButton({
                     confirmDelete = false
                     scope.launch {
-                        withContext(Dispatchers.IO) {
-                            val folder = LibraryFolder.get(context)
-                            val document = Uri.parse(book.documentUri)
-                            val parent = folder.parentOf(document)
-                            runCatching { folder.delete(document) }
-                            parent?.let { folder.removeIfEmpty(it) }
-                            Covers.delete(context, book.id)
-                        }
-                        repository.deleteBook(book.id)
+                        deleteBooks(context, listOf(book))
                         onGone()
                     }
                 }) { Text("Delete") }
             },
             dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/** What's known about the book beyond its title, with where it came from. */
+@Composable
+private fun BookInfoCard(book: Book) {
+    val info = book.info
+    if (info.isEmpty) return
+    var expanded by remember(book.id) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val facts = listOf(info.publisher, info.year).filter { it.isNotBlank() }
+        if (facts.isNotEmpty()) Text(facts.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+        if (info.genres.isNotEmpty()) {
+            Text(info.genres.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+        }
+        if (info.description.isNotBlank()) {
+            Text(
+                info.description,
+                maxLines = if (expanded) Int.MAX_VALUE else 5,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable { expanded = !expanded },
+            )
+        }
+        if (info.source.isNotBlank()) {
+            Text("From ${info.source}", style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
