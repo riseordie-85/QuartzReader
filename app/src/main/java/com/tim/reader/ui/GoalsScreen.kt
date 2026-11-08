@@ -395,7 +395,8 @@ private fun DateDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
 /** A strip of goal rings for Home, shown when switched on from the Goals page. */
 @Composable
 fun HomeGoalsStrip(state: LibraryState, look: BarLook, onGoals: () -> Unit) {
-    val history = rememberHistory(state.books.size) ?: return
+    // Reloads after reading in the EPUB reader, which leaves Home open behind it.
+    val history = rememberHistory(state.books.size to rememberResumeCount()) ?: return
     val today = LocalDate.now()
     val goals = history.goals.map { it to goalProgress(it, history, state, today) }
         .filterNot { (goal, progress) -> goal.hasDeadline && (progress.over || progress.done) }

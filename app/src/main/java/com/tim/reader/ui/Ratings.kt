@@ -1,6 +1,8 @@
 package com.tim.reader.ui
 
 import android.content.Context
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -31,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.tim.reader.appScope
 import com.tim.reader.data.Book
 import com.tim.reader.data.BookType
@@ -174,4 +180,17 @@ fun FinishedCard(bookId: String, state: LibraryState, onDone: () -> Unit) {
             }
         }
     }
+}
+
+/** Counts the times this screen's activity comes back, so a screen left open behind a reader can reload. */
+@Composable
+fun rememberResumeCount(): Int {
+    val owner = LocalActivity.current as? ComponentActivity
+    var count by remember { mutableIntStateOf(0) }
+    DisposableEffect(owner) {
+        val watcher = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) count++ }
+        owner?.lifecycle?.addObserver(watcher)
+        onDispose { owner?.lifecycle?.removeObserver(watcher) }
+    }
+    return count
 }

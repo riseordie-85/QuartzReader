@@ -800,11 +800,13 @@ class LibraryRepository private constructor(context: Context) {
     /** The reading history, sorted into sessions, reads, ratings, goals and unlocks. */
     suspend fun readingHistory(): ReadingHistory = ReadingHistory.from(events())
 
-    /** The read of this book that's under way, or null. */
-    private fun openRead(book: Book): String? =
-        db.rawQuery(Schema.SELECT_LAST_READ_EVENT, arrayOf(book.hash)).use { rows ->
-            if (rows.moveToFirst() && rows.getString(0) == EventKind.READ_STARTED) rows.getString(1) else null
+    /** The read of this book that's under way, as its ID and start time, or null. */
+    private fun openReadWithStart(book: Book): Pair<String, Long>? =
+        db.rawQuery(Schema.SELECT_OPEN_READ, arrayOf(book.hash)).use { rows ->
+            if (rows.moveToFirst() && !rows.isNull(0)) rows.getString(0) to rows.getLong(1) else null
         }
+
+    private fun openRead(book: Book): String? = openReadWithStart(book)?.first
 
     private fun hasFinished(book: Book): Boolean =
         db.rawQuery(
@@ -835,11 +837,15 @@ class LibraryRepository private constructor(context: Context) {
      * Marks a book as read at [at]. A read under way is finished; otherwise a new read starts and
      * finishes at once. [dateUnknown] reads count in totals but not by month or year.
      */
-    suspend fun markAsRead(book: Book, at: Long, dateUnknown: Boolean) = withContext(serial) {
+    suspend fun markAsRead(book: Book, requestedAt: Long, dateUnknown: Boolean) = withContext(serial) {
+        // A finish can't be in the future, or it would look newer than reading still to come.
+        val at = minOf(requestedAt, now())
         val data = JSONObject().put("source", "manual").put("dateUnknown", dateUnknown)
         db.beginTransaction()
         try {
-            val readId = openRead(book) ?: UUID.randomUUID().toString().also { id ->
+            // A read under way is finished, unless the chosen date is before it began: that's an earlier read.
+            val open = openReadWithStart(book)?.takeIf { (_, start) -> !dateUnknown && at >= start }
+            val readId = open?.first ?: UUID.randomUUID().toString().also { id ->
                 insertEvent(EventKind.READ_STARTED, book, id, at, null, JSONObject(data.toString()))
             }
             insertEvent(EventKind.READ_FINISHED, book, readId, at, null, data)
@@ -871,11 +877,13 @@ class LibraryRepository private constructor(context: Context) {
     suspend fun importReads(reads: List<ImportedRead>) = withContext(serial) {
         db.beginTransaction()
         try {
+            val latest = now()
             for (read in reads) {
                 val readId = UUID.randomUUID().toString()
-                insertEvent(EventKind.READ_STARTED, read.book, readId, read.at, null, JSONObject(read.data.toString()))
-                insertEvent(EventKind.READ_FINISHED, read.book, readId, read.at, null, read.data)
-                read.rating?.let { insertEvent(EventKind.RATING, read.book, null, read.at, null, it) }
+                val at = minOf(read.at, latest)
+                insertEvent(EventKind.READ_STARTED, read.book, readId, at, null, JSONObject(read.data.toString()))
+                insertEvent(EventKind.READ_FINISHED, read.book, readId, at, null, read.data)
+                read.rating?.let { insertEvent(EventKind.RATING, read.book, null, at, null, it) }
             }
             db.setTransactionSuccessful()
         } finally {

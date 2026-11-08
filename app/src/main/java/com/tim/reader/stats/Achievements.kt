@@ -93,7 +93,7 @@ class AchievementFacts(history: ReadingHistory, state: LibraryState, private val
         seriesFinished = complete.size.toLong()
         longSeriesFinished = complete.count { it.size >= 20 }.toLong()
 
-        binge = history.finished
+        binge = history.finished.filterNot { it.dateUnknown || it.manual }
             .mapNotNull { read -> read.bookHash?.let(byHash::get)?.seriesId?.let { series -> series to dateOf(read.at).toLocalDate() } }
             .groupingBy { it }.eachCount().values.maxOrNull()?.toLong() ?: 0L
 

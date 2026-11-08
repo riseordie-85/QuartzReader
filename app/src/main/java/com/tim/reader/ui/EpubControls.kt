@@ -63,7 +63,9 @@ import com.tim.reader.reader.epubPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
@@ -226,12 +228,15 @@ fun EpubControls(
     val pageCount = positions.size.coerceAtLeast(1)
     // Time left comes from this reader's own speed, worked out once when the book opens.
     val speeds by produceState(ReadingSpeeds.Default) { value = ReadingSpeeds.from(repository.readingHistory()) }
-    val chapterStarts = remember(positions, contents) {
-        contents.mapNotNull { (_, link) ->
-            val target = link.url()
-            positions.firstOrNull { it.href.isEquivalent(target) || it.href.isEquivalent(target.removeFragment()) }
-                ?.locations?.position
-        }.distinct().sorted()
+    // Each chapter's first position, found off the main thread with one pass over the positions.
+    val chapterStarts by produceState(emptyList<Int>(), positions, contents) {
+        value = withContext(Dispatchers.Default) {
+            val firstPosition = HashMap<String, Int>()
+            positions.forEach { located ->
+                located.locations.position?.let { firstPosition.putIfAbsent(located.href.toString().substringBefore('#'), it) }
+            }
+            contents.mapNotNull { (_, link) -> firstPosition[link.url().toString().substringBefore('#')] }.distinct().sorted()
+        }
     }
     val timeLeft = textTimeLeft(speeds, locator.locations.position ?: 0, positions.size, chapterStarts)
     val search = remember(publication) { SearchState() }

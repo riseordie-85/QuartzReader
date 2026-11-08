@@ -9,6 +9,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -31,6 +32,7 @@ import com.tim.reader.stats.formatMinutes
 import com.tim.reader.stats.openReadStart
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -96,7 +98,9 @@ fun ReadsSection(book: Book, history: ReadingHistory, onChanged: () -> Unit) {
 }
 
 private fun describe(read: FinishedRecord, history: ReadingHistory): String {
-    if (read.dateUnknown) return "Read, date unknown"
+    val from = if (read.source == "goodreads") " (from Goodreads)" else ""
+    if (read.dateUnknown) return "Read, date unknown$from"
+    if (read.source == "goodreads") return "Read on ${formatDay(read.at)}$from"
     if (read.manual) return "Marked as read on ${formatDay(read.at)}"
     val start = read.readId?.let(history.readStarts::get)
     val minutes = history.sessions
@@ -106,17 +110,25 @@ private fun describe(read: FinishedRecord, history: ReadingHistory): String {
     return if (minutes > 0) "$dates · ${formatMinutes(minutes)}" else dates
 }
 
+/** Days up to today, since a book can't be finished in the future. */
+@OptIn(ExperimentalMaterial3Api::class)
+private object PastDates : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= System.currentTimeMillis()
+
+    override fun isSelectableYear(year: Int) = year <= LocalDate.now().year
+}
+
 /** Today, a chosen day, or "I don't remember". */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MarkAsReadDialog(onDismiss: () -> Unit, onMark: (at: Long, dateUnknown: Boolean) -> Unit) {
     var picking by remember { mutableStateOf(false) }
     if (picking) {
-        val picker = rememberDatePickerState()
+        val picker = rememberDatePickerState(selectableDates = PastDates)
         DatePickerDialog(
             onDismissRequest = { picking = false },
             confirmButton = {
-                TextButton({
+                TextButton(enabled = picker.selectedDateMillis != null, onClick = {
                     picker.selectedDateMillis?.let { millis ->
                         // The picker gives midnight UTC. Noon on that day, here, keeps the date the same everywhere.
                         val day = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()

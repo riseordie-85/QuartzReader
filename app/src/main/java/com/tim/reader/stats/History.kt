@@ -45,6 +45,8 @@ data class FinishedRecord(
     /** The Goodreads book ID for imported reads, so importing again skips them. */
     val sourceId: String? = null,
     val eventId: String = "",
+    /** "reader", "manual" or "goodreads". */
+    val source: String = "reader",
 ) {
     /** Ratings and reviews for books read elsewhere are kept under this, since they have no hash. */
     val ratingKey get() = bookHash ?: title?.let { elsewhereKey(it, author.orEmpty()) }
@@ -128,6 +130,7 @@ class ReadingHistory(
                         type = BookType.entries.firstOrNull { it.name == data.optString("type") },
                         sourceId = data.optString("goodreads").takeIf { it.isNotEmpty() },
                         eventId = row.id,
+                        source = data.optString("source", "reader"),
                     )
                     EventKind.RATING -> (row.bookHash ?: data.optString("elsewhere").takeIf { it.isNotEmpty() })?.let { hash ->
                         val rating = Rating.fromJson(data, row.startedAt)

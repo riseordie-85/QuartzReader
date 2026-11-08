@@ -127,8 +127,11 @@ object Schema {
         )"""
     const val CREATE_EVENTS_TIME_INDEX = "CREATE INDEX events_time ON events (kind, started_at)"
     const val CREATE_EVENTS_BOOK_INDEX = "CREATE INDEX events_book ON events (book_hash, kind, started_at)"
-    const val SELECT_LAST_READ_EVENT = "SELECT kind, read_id FROM events WHERE book_hash = ? " +
-        "AND kind IN ('read_started', 'read_finished') AND deleted_at IS NULL ORDER BY started_at DESC, rowid DESC LIMIT 1"
+    /** The newest read of a book that has started and not finished. Matches what the stats page shows. */
+    const val SELECT_OPEN_READ = "SELECT read_id, started_at FROM events AS started WHERE book_hash = ? " +
+        "AND kind = 'read_started' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM events AS done " +
+        "WHERE done.read_id = started.read_id AND done.kind = 'read_finished' AND done.deleted_at IS NULL) " +
+        "ORDER BY started_at DESC, rowid DESC LIMIT 1"
 
     /** Each list brings a database from the version before it up to its version. */
     val UPGRADE_TO_2 = listOf(ADD_BOOK_READER_PREFS, ADD_BOOK_SPREAD_SHIFT, CREATE_BOOKMARKS)
