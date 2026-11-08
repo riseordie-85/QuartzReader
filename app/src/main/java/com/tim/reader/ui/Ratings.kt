@@ -156,6 +156,13 @@ fun FinishedCard(bookId: String, state: LibraryState, onDone: () -> Unit) {
         null
     }
     val cover by rememberCover(book.displayCover)
+    var sharing by remember { mutableStateOf(false) }
+    if (sharing) {
+        StatsShareOverlay(
+            StatsCard.Finished(book, seriesTitle.takeIf { inSeries }, saved, minutes, days),
+            state,
+        ) { sharing = false }
+    }
 
     Dialog(onDismissRequest = onDone) {
         Surface(shape = RoundedCornerShape(24.dp)) {
@@ -179,7 +186,10 @@ fun FinishedCard(bookId: String, state: LibraryState, onDone: () -> Unit) {
                     }
                     onDone()
                 }
-                TextButton(onDone) { Text("Not now") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton({ sharing = true }) { Text("Share") }
+                    TextButton(onDone) { Text("Not now") }
+                }
             }
         }
     }

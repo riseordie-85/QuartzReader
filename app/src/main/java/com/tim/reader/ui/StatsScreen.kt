@@ -7,6 +7,13 @@ import com.tim.reader.stats.GoalProgress
 import com.tim.reader.stats.Goal
 import com.tim.reader.stats.AchievementStatus
 import com.tim.reader.stats.AchievementCenter
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import java.time.YearMonth
+import com.tim.reader.stats.yearRecap
+import com.tim.reader.stats.monthRecap
+import com.tim.reader.stats.ReadingHistory
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -93,6 +100,7 @@ fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit 
                 goals = history.goals.map { it to goalProgress(it, history, state, today) }
                     .filterNot { (goal, progress) -> goal.hasDeadline && (progress.over || progress.done) },
                 achievements = evaluateAchievements(history, state),
+                history = history,
             )
         }
     }
@@ -141,6 +149,7 @@ fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit 
                     item { FinishedByMonth(look, current) }
                     item { TimeOfDay(look, current) }
                     if (current.recentlyFinished.isNotEmpty()) item { RecentlyFinished(look, current) }
+                    page?.history?.let { history -> item { SharePanel(look, history, state) } }
                 }
             }
             item { Spacer(Modifier.height(32.dp)) }
@@ -148,7 +157,26 @@ fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit 
     }
 }
 
-private class StatsPage(val stats: Stats, val goals: List<Pair<Goal, GoalProgress>>, val achievements: List<AchievementStatus>)
+private class StatsPage(
+    val stats: Stats,
+    val goals: List<Pair<Goal, GoalProgress>>,
+    val achievements: List<AchievementStatus>,
+    val history: ReadingHistory,
+)
+
+@Composable
+private fun SharePanel(look: BarLook, history: ReadingHistory, state: LibraryState) {
+    var card by remember { mutableStateOf<StatsCard?>(null) }
+    val today = LocalDate.now()
+    Panel(look, "Share") {
+        Body(look, "Make an image of your month or your year to share or save.")
+        PanelLink(look, "This month") { card = StatsCard.Month(monthRecap(history, YearMonth.from(today))) }
+        PanelLink(look, if (today.monthValue == 12) "${today.year} in Review" else "${today.year} so far") {
+            card = StatsCard.Year(yearRecap(history, state, today.year))
+        }
+    }
+    card?.let { StatsShareOverlay(it, state) { card = null } }
+}
 
 @Composable
 private fun GoalsPanel(look: BarLook, goals: List<Pair<Goal, GoalProgress>>, onGoals: () -> Unit) {

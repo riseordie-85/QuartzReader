@@ -17,6 +17,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -48,6 +52,9 @@ fun AchievementsScreen(state: LibraryState, header: HeaderActions) {
         }
     }
 
+    var sharing by remember { mutableStateOf<AchievementStatus?>(null) }
+    sharing?.let { StatsShareOverlay(StatsCard.Unlocked(it), state) { sharing = null } }
+
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier
@@ -70,7 +77,9 @@ fun AchievementsScreen(state: LibraryState, header: HeaderActions) {
                     }
                 }
                 items(loaded, key = { it.achievement.id }) { status ->
-                    Panel(look, null) { AchievementRow(look, status) }
+                    // An unlocked achievement opens its share card.
+                    val tap = if (status.tier >= 0) Modifier.clickable(onClickLabel = "Share") { sharing = status } else Modifier
+                    Box(tap) { Panel(look, null) { AchievementRow(look, status) } }
                 }
             }
             item { Spacer(Modifier.height(32.dp)) }

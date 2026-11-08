@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.ReadingTracker
+import com.tim.reader.stats.Reminders
 import com.tim.reader.theme.BookFonts
 import com.tim.reader.theme.ThemeFiles
 import com.tim.reader.ui.ReaderApp
@@ -28,6 +29,8 @@ class MainActivity : ComponentActivity() {
         ResultsLog.init(this)
         DeviceSettings.load(this)
         ThemeFiles.init(this)
+        // Alarms don't survive a phone update to the app, so the reminder is set again on every start.
+        Reminders.schedule(this)
         BookFonts.init(this)
         if (savedInstanceState == null) incoming.value = urisFrom(intent)
         setContent {

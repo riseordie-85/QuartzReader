@@ -3,6 +3,9 @@
 
     <!-- Readium's EPUB view expects it. Later phases use it for metadata lookups and sync. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The optional evening reading reminder, which is off until the reader turns it on. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:icon="@mipmap/ic_launcher"
@@ -56,5 +59,14 @@
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:exported="false" />
+
+        <receiver
+            android:name=".stats.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

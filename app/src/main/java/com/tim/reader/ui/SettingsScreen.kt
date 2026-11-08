@@ -96,6 +96,7 @@ fun SettingsScreen(
         ) { Text(if (organizing) "Organizing" else "Organize library folder") }
         Text("Reading", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onStats, Modifier.fillMaxWidth()) { Text("Reading stats") }
+        ReminderSetting()
         GoodreadsImportButton()
         Text(
             "On Goodreads, go to My Books, then Import and export, and choose Export Library. Pick the file it makes here.",

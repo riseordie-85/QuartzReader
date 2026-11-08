@@ -30,6 +30,7 @@ import com.tim.reader.stats.FinishedRecord
 import com.tim.reader.stats.ReadingHistory
 import com.tim.reader.stats.formatMinutes
 import com.tim.reader.stats.openReadStart
+import com.tim.reader.stats.readSummary
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -49,6 +50,7 @@ fun ReadsSection(book: Book, history: ReadingHistory, onChanged: () -> Unit) {
     val repository = LibraryRepository.get(context)
     var marking by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<FinishedRecord?>(null) }
+    var sharing by remember { mutableStateOf<FinishedRecord?>(null) }
     val reads = history.finished.filter { it.bookHash == book.hash }.sortedByDescending { it.at }
     val sessions = history.sessions.filter { it.bookHash == book.hash }
     val total = sessions.sumOf { it.activeMs } / 60_000
@@ -60,6 +62,7 @@ fun ReadsSection(book: Book, history: ReadingHistory, onChanged: () -> Unit) {
         reads.forEach { read ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(describe(read, history), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                if (!read.dateUnknown) TextButton({ sharing = read }) { Text("Share") }
                 if (read.readId != null) TextButton({ removing = read }) { Text("Remove") }
             }
         }
@@ -67,6 +70,13 @@ fun ReadsSection(book: Book, history: ReadingHistory, onChanged: () -> Unit) {
         OutlinedButton({ marking = true }) { Text("Mark as read") }
     }
 
+    sharing?.let { read ->
+        val (minutes, days) = readSummary(history, read)
+        StatsShareOverlay(
+            StatsCard.Finished(book, null, history.ratings[book.hash], minutes, days),
+            LibraryRepository.get(context).state.value,
+        ) { sharing = null }
+    }
     if (marking) {
         MarkAsReadDialog(onDismiss = { marking = false }) { at, unknown ->
             marking = false

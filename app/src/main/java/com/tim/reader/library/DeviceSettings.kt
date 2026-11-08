@@ -30,6 +30,8 @@ object DeviceSettings {
     private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
     private const val KEY_SHOW_TIME_LEFT = "show_time_left"
     private const val KEY_HOME_GOALS = "home_goals"
+    private const val KEY_REMINDER_ON = "reminder_on"
+    private const val KEY_REMINDER_MINUTES = "reminder_minutes"
     private const val KEY_CAMERA_GAP = "camera_gap"
     private const val KEY_GOOGLE_BOOKS = "google_books_key"
     private const val KEY_COMIC_VINE = "comic_vine_key"
@@ -64,6 +66,21 @@ object DeviceSettings {
     fun updateShowTimeLeft(enabled: Boolean) {
         showTimeLeft = enabled
         preferences?.edit { putBoolean(KEY_SHOW_TIME_LEFT, enabled) }
+    }
+
+    /** The evening reminder, and its time as minutes after midnight. */
+    var reminderOn by mutableStateOf(false)
+        private set
+    var reminderMinutes by mutableStateOf(20 * 60)
+        private set
+
+    fun updateReminder(enabled: Boolean, minutes: Int = reminderMinutes) {
+        reminderOn = enabled
+        reminderMinutes = minutes.coerceIn(0, 24 * 60 - 1)
+        preferences?.edit {
+            putBoolean(KEY_REMINDER_ON, enabled)
+            putInt(KEY_REMINDER_MINUTES, reminderMinutes)
+        }
     }
 
     fun updateHomeGoals(enabled: Boolean) {
@@ -101,6 +118,8 @@ object DeviceSettings {
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)
         showTimeLeft = saved.getBoolean(KEY_SHOW_TIME_LEFT, false)
         homeGoals = saved.getBoolean(KEY_HOME_GOALS, false)
+        reminderOn = saved.getBoolean(KEY_REMINDER_ON, false)
+        reminderMinutes = saved.getInt(KEY_REMINDER_MINUTES, 20 * 60)
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
         comicVineKey = saved.getString(KEY_COMIC_VINE, null).orEmpty()
