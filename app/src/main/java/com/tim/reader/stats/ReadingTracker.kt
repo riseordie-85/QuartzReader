@@ -1,6 +1,7 @@
 package com.tim.reader.stats
 
-import android.content.Context
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.Lifecycle
 import com.tim.reader.appScope
 import com.tim.reader.data.Book
 import com.tim.reader.data.EventKind
@@ -11,11 +12,11 @@ import org.json.JSONObject
 
 /**
  * Records reading sessions for the stats page. Both readers report the book they open and each
- * page turn, and the activities report when the app is paused and resumed.
+ * page turn, and their activity reports when it's paused and resumed.
  *
  * Only active time counts. The time spent on any one page is capped, so a book left open on the
  * nightstand doesn't count as hours of reading. A pause ends the session, and resuming starts a new
- * one from the same place.
+ * one from the same place. Calls from an activity other than the one reading are ignored.
  */
 object ReadingTracker {
     private const val PAGE_CAP_MS = 3 * 60_000L
@@ -34,6 +35,7 @@ object ReadingTracker {
         var turns = 0
     }
 
+    private var owner: ComponentActivity? = null
     private var repository: LibraryRepository? = null
     private var book: Book? = null
     private var total = 0
@@ -48,63 +50,94 @@ object ReadingTracker {
      * positions (about 1,000 characters each) for EPUBs.
      */
     @Synchronized
-    fun start(context: Context, book: Book, total: Int, position: Int, progress: Float) {
+    fun start(activity: ComponentActivity, book: Book, total: Int, position: Int, progress: Float) {
+        // A reader that finishes opening after it was closed must not start tracking.
+        if (activity.isFinishing || activity.isDestroyed) return
         endSession()
-        repository = LibraryRepository.get(context)
+        owner = activity
+        repository = LibraryRepository.get(activity)
         this.book = book
         this.total = total
         this.position = position
         this.progress = progress
         readChecked = false
-        // Opening a book that's already at its end doesn't finish it again.
-        finishLogged = progress >= FINISHED
-        session = Session(book, total, position, progress)
+        finishLogged = false
+        // A reader that finished opening while the app was in the background waits for resume.
+        session = if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            Session(book, total, position, progress)
+        } else {
+            null
+        }
+        // A one-page book has nothing to turn, so opening it is reading it.
+        if (total <= 1) {
+            checkRead(book, progress, System.currentTimeMillis())
+            finish(book, System.currentTimeMillis())
+        } else if (progress >= FINISHED) {
+            // Opening a book already at its end doesn't finish it again.
+            finishLogged = true
+        }
     }
 
     /** The page or position changed. Repeats of the same place are ignored. */
     @Synchronized
-    fun turn(position: Int, progress: Float) {
-        val current = session ?: return
+    fun turn(activity: ComponentActivity, position: Int, progress: Float, atEnd: Boolean = progress >= FINISHED) {
+        if (activity !== owner) return
         val book = book ?: return
-        if (position == current.to) return
+        if (position == this.position) return
         val now = System.currentTimeMillis()
-        current.activeMs += minOf(now - current.lastActivity, PAGE_CAP_MS)
-        current.lastActivity = now
-        current.turns++
-        current.to = position
-        current.toProgress = progress
+        session?.let { current ->
+            current.activeMs += minOf(now - current.lastActivity, PAGE_CAP_MS)
+            current.lastActivity = now
+            current.turns++
+            current.to = position
+            current.toProgress = progress
+        }
+        val before = this.progress
         this.position = position
         this.progress = progress
 
         // Going back to near the start of a finished book can begin a reread.
-        if (progress < EventKind.REREAD_BEFORE) finishLogged = false
-        if (!readChecked) {
-            readChecked = true
-            record { it.startReadIfNeeded(book, progress, now) }
-        }
-        if (!finishLogged && progress >= FINISHED) {
-            finishLogged = true
+        if (before >= EventKind.REREAD_BEFORE && progress < EventKind.REREAD_BEFORE) {
+            finishLogged = false
             readChecked = false
-            record { it.finishRead(book, now) }
         }
+        checkRead(book, progress, now)
+        if (!finishLogged && atEnd) finish(book, now)
     }
 
-    /** The app went to the background or the screen turned off. */
+    /** The activity went to the background or the screen turned off. */
     @Synchronized
-    fun pause() = endSession()
+    fun pause(activity: ComponentActivity) {
+        if (activity === owner) endSession()
+    }
 
-    /** The app came back, so reading carries on from the same place. */
+    /** The activity came back, so reading carries on from the same place. */
     @Synchronized
-    fun resume() {
+    fun resume(activity: ComponentActivity) {
+        if (activity !== owner) return
         val book = book ?: return
         if (session == null) session = Session(book, total, position, progress)
     }
 
     /** The reader closed. */
     @Synchronized
-    fun stop() {
+    fun stop(activity: ComponentActivity) {
+        if (activity !== owner) return
         endSession()
         book = null
+        owner = null
+    }
+
+    private fun checkRead(book: Book, progress: Float, now: Long) {
+        if (readChecked) return
+        readChecked = true
+        record { it.startReadIfNeeded(book, progress, now) }
+    }
+
+    private fun finish(book: Book, now: Long) {
+        finishLogged = true
+        readChecked = false
+        record { it.finishRead(book, now) }
     }
 
     private fun endSession() {

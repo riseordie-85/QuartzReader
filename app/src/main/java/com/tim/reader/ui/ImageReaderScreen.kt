@@ -347,8 +347,10 @@ fun ImageReaderScreen(
                     nav = nav,
                     // Only a real page turn moves the position, not rearranging the same page into new spreads.
                     onSpread = { spread ->
-                        if (currentPage !in spread.pages) {
-                            currentPage = if (spread == spreads.last()) spread.pages.last() else spread.pages.first()
+                        val isLast = spread == spreads.last()
+                        // The last spread always reports its last page, so a book can be finished.
+                        if (currentPage !in spread.pages || (isLast && currentPage != spread.pages.last())) {
+                            currentPage = if (isLast) spread.pages.last() else spread.pages.first()
                         }
                     },
                     onMenu = { controls = !controls },
@@ -961,7 +963,11 @@ private fun ContinuousReader(
     }
 
     LaunchedEffect(list) {
-        snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
+        // At the bottom, the last page counts as reached even when it's shorter than the screen.
+        snapshotFlow {
+            val laidOut = list.layoutInfo.visibleItemsInfo.isNotEmpty()
+            if (laidOut && !list.canScrollForward) rows.lastIndex else list.firstVisibleItemIndex
+        }.collect { index ->
             rows.getOrNull(index)?.let { onPage(it.page) }
         }
     }

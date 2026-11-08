@@ -40,12 +40,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        ReadingTracker.resume()
+        ReadingTracker.resume(this)
     }
 
     override fun onPause() {
         super.onPause()
-        ReadingTracker.pause()
+        ReadingTracker.pause(this)
     }
 
     override fun onNewIntent(intent: Intent) {

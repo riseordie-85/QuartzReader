@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -468,9 +470,10 @@ private fun BookReader(book: Book, repository: LibraryRepository) {
             DisposableEffect(source) {
                 onDispose { appScope.launch { source.close() } }
             }
-            DisposableEffect(source) {
-                ReadingTracker.start(context, book, source.pageCount, book.position, book.progress)
-                onDispose { ReadingTracker.stop() }
+            val activity = LocalActivity.current as? ComponentActivity
+            DisposableEffect(source, activity) {
+                activity?.let { ReadingTracker.start(it, book, source.pageCount, book.position, book.progress) }
+                onDispose { activity?.let { ReadingTracker.stop(it) } }
             }
             ImageReaderScreen(
                 source = source,
@@ -478,7 +481,7 @@ private fun BookReader(book: Book, repository: LibraryRepository) {
                 onPage = { page ->
                     val last = source.pageCount - 1
                     val progress = if (last <= 0) 1f else page.toFloat() / last
-                    ReadingTracker.turn(page, progress)
+                    activity?.let { ReadingTracker.turn(it, page, progress) }
                     // Starting right away keeps saves in page order.
                     appScope.launch(start = CoroutineStart.UNDISPATCHED) {
                         repository.savePosition(book.id, page, progress)

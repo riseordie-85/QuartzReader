@@ -179,11 +179,14 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                     val position = locator.locations.position ?: 0
                     val atEnd = positions > 0 && position >= positions
                     val progress = if (atEnd) 1f else locator.locations.totalProgression?.toFloat() ?: 0f
-                    if (!tracking && book != null) {
-                        tracking = true
-                        ReadingTracker.start(this@EpubActivity, book, positions, position, progress)
-                    } else {
-                        ReadingTracker.turn(position, progress)
+                    // Readium reports position 0 before the first page is laid out.
+                    if (position >= 1 && book != null) {
+                        if (!tracking) {
+                            tracking = true
+                            ReadingTracker.start(this@EpubActivity, book, positions, position, progress)
+                        } else {
+                            ReadingTracker.turn(this@EpubActivity, position, progress, atEnd)
+                        }
                     }
                     repository.savePosition(bookId, 0, progress, locator.toJSON().toString())
                 }
@@ -273,16 +276,17 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
 
     override fun onResume() {
         super.onResume()
-        ReadingTracker.resume()
+        ReadingTracker.resume(this)
     }
 
     override fun onPause() {
         super.onPause()
-        if (isFinishing) ReadingTracker.stop() else ReadingTracker.pause()
+        if (isFinishing) ReadingTracker.stop(this) else ReadingTracker.pause(this)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (isFinishing) ReadingTracker.stop(this)
         val mine = opened
         if (isFinishing && mine != null) {
             if (OpenEpub.publication === mine) OpenEpub.publication = null
