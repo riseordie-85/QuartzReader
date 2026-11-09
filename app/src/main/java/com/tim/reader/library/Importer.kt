@@ -145,8 +145,17 @@ class Importer(context: Context) {
      * file is one book. Numbered entries form a series named after their folder, while unnumbered
      * ones stand alone, so a folder of unrelated titles stays unrelated.
      */
-    private fun scanFolder(tree: Uri, items: MutableList<ImportItem>, skipped: MutableList<String>) {
-        val rootId = DocumentsContract.getTreeDocumentId(tree)
+    /**
+     * Walks a folder for books. [rootIsSeries] lets the top folder's own name be a series, which
+     * suits a picked series folder but not the library's Import folder.
+     */
+    private fun scanFolder(
+        tree: Uri,
+        items: MutableList<ImportItem>,
+        skipped: MutableList<String>,
+        rootId: String = DocumentsContract.getTreeDocumentId(tree),
+        rootIsSeries: Boolean = true,
+    ) {
         val rootName = rootId.substringAfterLast('/').substringAfterLast(':')
         val libraryRoot = folder.treeUri?.let { DocumentsContract.getTreeDocumentId(it) }
 
@@ -165,12 +174,12 @@ class Importer(context: Context) {
                     guess = guessType(path, null),
                     folderTree = tree,
                     folderDocumentId = documentId,
-                    seriesHint = parent?.takeIf { isNumbered(name) }?.let(::seriesName),
+                    seriesHint = parent?.takeIf { isNumbered(name) && (depth > 1 || rootIsSeries) }?.let(::seriesName),
                 )
                 return
             }
             others.forEach { file ->
-                val hint = if (isNumbered(file.name)) seriesName(name) else null
+                val hint = if (isNumbered(file.name) && (depth > 0 || rootIsSeries)) seriesName(name) else null
                 val uri = DocumentsContract.buildDocumentUriUsingTree(tree, file.documentId)
                 addFile(uri, file.name, hint, "$path ${file.name}", items, skipped)
             }
@@ -184,6 +193,15 @@ class Importer(context: Context) {
         }
 
         walk(rootId, rootName, null, rootName, 0)
+    }
+
+    /** Finds books dropped in the library's Import folder, to be sorted into place. */
+    suspend fun scanImportFolder(): Pair<List<ImportItem>, List<String>> = withContext(Dispatchers.IO) {
+        val items = ArrayList<ImportItem>()
+        val skipped = ArrayList<String>()
+        val tree = folder.treeUri ?: return@withContext items to skipped
+        scanFolder(tree, items, skipped, rootId = folder.importFolder(), rootIsSeries = false)
+        items to skipped
     }
 
     /**
@@ -249,6 +267,16 @@ class Importer(context: Context) {
     }
 
     suspend fun run(items: List<ImportItem>, options: ImportOptions, onProgress: (ImportProgress) -> Unit): ImportResult =
+        withContext(Dispatchers.IO) {
+            running.incrementAndGet()
+            try {
+                runAll(items, options, onProgress)
+            } finally {
+                running.decrementAndGet()
+            }
+        }
+
+    private suspend fun runAll(items: List<ImportItem>, options: ImportOptions, onProgress: (ImportProgress) -> Unit): ImportResult =
         withContext(Dispatchers.IO) {
             var imported = 0
             var duplicates = 0
@@ -427,6 +455,9 @@ class Importer(context: Context) {
         if (source.pageCount > 0) runCatching { source.render(0, COVER_WIDTH) }.getOrNull() else null
 
     companion object {
+        /** Imports under way anywhere in the app, so the folder watcher waits for them. */
+        val running = java.util.concurrent.atomic.AtomicInteger()
+
         const val FOLDER_FORMAT = "FOLDER"
         private const val MAX_DEPTH = 6
     }

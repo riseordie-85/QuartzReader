@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.LibrarySync
+import com.tim.reader.library.LibraryWatcher
 
 private fun ago(time: Long?) = time?.let { DateUtils.getRelativeTimeSpanString(it).toString() } ?: "not yet"
 
@@ -50,6 +51,41 @@ fun SyncSetting() {
                 OutlinedButton({ LibrarySync.save(context) }) { Text("Save now") }
                 OutlinedButton({ LibrarySync.check(context, force = true) }) { Text("Check other devices") }
             }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            Text(detail, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked, onChange)
+    }
+}
+
+/** Whether new files in the library folder are added on their own, and whether this device sorts the Import folder. */
+@Composable
+fun FolderWatchSettings() {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SwitchRow(
+            "Add new books automatically",
+            "When the app opens, books that have appeared in Books, Comics, Manga or Manhwa, such as from another device, are added.",
+            DeviceSettings.autoAdd,
+        ) { on ->
+            DeviceSettings.updateAutoAdd(on)
+            if (on) LibraryWatcher.check(context, force = true)
+        }
+        SwitchRow(
+            "Sort the Import folder on this device",
+            "Books dropped in the library's Import folder are sorted into place. Turn this on for one device only, so synced devices don't sort the same file.",
+            DeviceSettings.sortImport,
+        ) { on ->
+            DeviceSettings.updateSortImport(on)
+            if (on) LibraryWatcher.check(context, force = true)
         }
     }
 }

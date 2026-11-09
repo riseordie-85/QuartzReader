@@ -32,6 +32,8 @@ object DeviceSettings {
     private const val KEY_HOME_GOALS = "home_goals"
     private const val KEY_REMINDER_ON = "reminder_on"
     private const val KEY_SYNC_FOLDER = "sync_folder"
+    private const val KEY_AUTO_ADD = "auto_add"
+    private const val KEY_SORT_IMPORT = "sort_import"
     private const val KEY_REMINDER_MINUTES = "reminder_minutes"
     private const val KEY_CAMERA_GAP = "camera_gap"
     private const val KEY_GOOGLE_BOOKS = "google_books_key"
@@ -67,6 +69,24 @@ object DeviceSettings {
     fun updateShowTimeLeft(enabled: Boolean) {
         showTimeLeft = enabled
         preferences?.edit { putBoolean(KEY_SHOW_TIME_LEFT, enabled) }
+    }
+
+    /** Adds new files found in the type folders, such as books synced from another device. */
+    var autoAdd by mutableStateOf(true)
+        private set
+
+    /** Sorts books dropped in the Import folder. Only one synced device should do this. */
+    var sortImport by mutableStateOf(false)
+        private set
+
+    fun updateAutoAdd(enabled: Boolean) {
+        autoAdd = enabled
+        preferences?.edit { putBoolean(KEY_AUTO_ADD, enabled) }
+    }
+
+    fun updateSortImport(enabled: Boolean) {
+        sortImport = enabled
+        preferences?.edit { putBoolean(KEY_SORT_IMPORT, enabled) }
     }
 
     /** Keeps the library's data in the library folder, for backup and folder sync. */
@@ -135,6 +155,8 @@ object DeviceSettings {
         homeGoals = saved.getBoolean(KEY_HOME_GOALS, false)
         reminderOn = saved.getBoolean(KEY_REMINDER_ON, false)
         syncFolder = saved.getBoolean(KEY_SYNC_FOLDER, true)
+        autoAdd = saved.getBoolean(KEY_AUTO_ADD, true)
+        sortImport = saved.getBoolean(KEY_SORT_IMPORT, false)
         reminderMinutes = saved.getInt(KEY_REMINDER_MINUTES, 20 * 60).coerceIn(0, 24 * 60 - 1)
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()

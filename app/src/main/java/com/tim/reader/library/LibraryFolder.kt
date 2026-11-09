@@ -199,6 +199,12 @@ class LibraryFolder private constructor(context: Context) {
 
     // Library data for backup and sync lives in its own folder beside the books.
 
+    /** The Import folder at the top of the library, where books can be dropped to be sorted. Made when first needed. */
+    fun importFolder(): String {
+        val tree = requireTree()
+        return findOrCreateFolder(tree, DocumentsContract.getTreeDocumentId(tree), IMPORT_FOLDER)
+    }
+
     /** A file in a folder, with when it last changed. */
     class FileInfo(val documentId: String, val name: String, val lastModified: Long)
 
@@ -256,6 +262,7 @@ class LibraryFolder private constructor(context: Context) {
         private const val BUFFER = 256 * 1024
 private const val THEME_FOLDER = "Theme Files"
         private const val DATA_FOLDER = "Library Data"
+        private const val IMPORT_FOLDER = "Import"
 
         @Volatile
         private var instance: LibraryFolder? = null

@@ -94,6 +94,7 @@ fun SettingsScreen(
             enabled = !organizing,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (organizing) "Organizing" else "Organize library folder") }
+        FolderWatchSettings()
         Text("Backup and sync", style = MaterialTheme.typography.titleMedium)
         SyncSetting()
         Text("Reading", style = MaterialTheme.typography.titleMedium)

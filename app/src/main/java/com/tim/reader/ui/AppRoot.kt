@@ -53,6 +53,7 @@ import com.tim.reader.engine.PageSource
 import com.tim.reader.library.ImportItem
 import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
+import com.tim.reader.library.LibraryWatcher
 import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.ReadingTracker
 import com.tim.reader.openBookSource
@@ -438,6 +439,9 @@ private fun Library(
         if (!reading && stack.last() != target) push(target)
     }
     LaunchedEffect(Unit) { AchievementCenter.check(context) }
+    // New files in the library folder, from another device or the Import folder, come in when the app comes back.
+    val resumes = rememberResumeCount()
+    LaunchedEffect(resumes, state.books.isEmpty()) { LibraryWatcher.check(context) }
 }
 
 @Composable
