@@ -105,6 +105,13 @@ private class SearchState {
 }
 
 /** Matches the side padding Readium's stylesheet picks for a screen this wide. */
+// Readium's text is 16 CSS pixels at 100%, and about 36 ems is 70 characters of a typical book font.
+private const val BASE_FONT_DP = 16.0
+private const val MAX_COLUMN_EMS = 36.0
+
+// The space above and below the text, as a share of the side margin.
+private const val VERTICAL_SHARE = 0.75
+
 private fun pageGutter(widthDp: Int) = when {
     widthDp >= 1200 -> 50
     widthDp >= 720 -> 40
@@ -130,7 +137,7 @@ fun EpubControls(
     onShowControls: (Boolean) -> Unit,
     onAnimatedTurns: (Boolean) -> Unit,
     onPageColor: (Int) -> Unit,
-    onPagePadding: (outerMargin: Int, cameraGap: Int, cameraEdge: CameraEdge) -> Unit,
+    onPagePadding: (outerMargin: Int, verticalMargin: Int, cameraGap: Int, cameraEdge: CameraEdge) -> Unit,
 ) {
     val context = LocalContext.current
     val repository = remember { LibraryRepository.get(context) }
@@ -165,18 +172,28 @@ fun EpubControls(
     // Two pages share one margin in the middle, so each outer edge takes half of its own here.
     val density = LocalDensity.current.density
     val scrolling = look.scrolling ?: (direction == ReadDirection.Vertical)
+    val margins = look.pageMargins ?: 1.0
+    val gutter = pageGutter(screen.screenWidthDp)
     val outerMargin = if (twoColumns && !fixedLayout && !scrolling) {
-        (pageGutter(screen.screenWidthDp) * (look.pageMargins ?: 1.0) / 2 * density).roundToInt()
+        // On a wide screen two columns can get too long to read easily, so each is kept to about
+        // 70 characters at the chosen text size, and the spare width goes to the outer edges.
+        val outerDp = gutter * margins / 2
+        val columnDp = (screen.screenWidthDp - 2 * outerDp) / 2 - gutter * margins
+        val longestDp = MAX_COLUMN_EMS * BASE_FONT_DP * look.fontSize
+        val extraDp = (columnDp - longestDp).coerceAtLeast(0.0)
+        ((outerDp + extraDp) * density).roundToInt()
     } else {
         0
     }
+    // Readium leaves no space above and below the text in pages, so it comes from here.
+    val verticalMargin = if (!fixedLayout && !scrolling) (gutter * VERTICAL_SHARE * margins * density).roundToInt() else 0
     val screenKey = DeviceSettings.screenKey(screen.smallestScreenWidthDp, screen.screenWidthDp > screen.screenHeightDp)
     val cameraGap = (DeviceSettings.cameraGap(screenKey) * density).roundToInt()
     val cameraEdge = DeviceSettings.cameraEdge(screenKey)
     SideEffect {
         onAnimatedTurns(look.animation != PageAnimation.None)
         onPageColor(Color(look.pageBackground).toArgb())
-        onPagePadding(outerMargin, cameraGap, cameraEdge)
+        onPagePadding(outerMargin, verticalMargin, cameraGap, cameraEdge)
     }
 
     ReaderWindow(showControls || sheet != null, rotationLocked)

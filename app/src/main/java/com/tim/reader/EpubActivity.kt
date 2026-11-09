@@ -63,6 +63,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var pageContainer: FragmentContainerView? = null
     private var cutout = Insets.NONE
     private var outerMargin = 0
+    private var verticalMargin = 0
     private var cameraGap = 0
     private var cameraEdge = CameraEdge.Auto
 
@@ -160,8 +161,9 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                             onShowControls = { controls = it },
                             onAnimatedTurns = { animatedTurns = it },
                             onPageColor = container::setBackgroundColor,
-                            onPagePadding = { outer, gap, edge ->
+                            onPagePadding = { outer, vertical, gap, edge ->
                                 outerMargin = outer
+                                verticalMargin = vertical
                                 cameraGap = gap
                                 cameraEdge = edge
                                 updatePagePadding()
@@ -257,7 +259,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         val topGap = if (edge == CameraEdge.Top) cameraGap else 0
         val bottomGap = if (edge == CameraEdge.Bottom) cameraGap else 0
         val side = maxOf(cutout.left, cutout.right) + outerMargin + sideGap
-        pageContainer?.setPadding(side, cutout.top + topGap, side, cutout.bottom + bottomGap)
+        pageContainer?.setPadding(side, cutout.top + topGap + verticalMargin, side, cutout.bottom + bottomGap + verticalMargin)
     }
 
     /** Volume keys turn pages, as they do in the image reader. */
