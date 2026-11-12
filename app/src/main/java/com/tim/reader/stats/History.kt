@@ -45,7 +45,7 @@ data class FinishedRecord(
     /** The Goodreads book ID for imported reads, so importing again skips them. */
     val sourceId: String? = null,
     val eventId: String = "",
-    /** "reader", "manual" or "goodreads". */
+    /** "reader", "manual", "goodreads" or "eink" (imported from an e-reader). */
     val source: String = "reader",
 ) {
     /** Ratings and reviews for books read elsewhere are kept under this, since they have no hash. */

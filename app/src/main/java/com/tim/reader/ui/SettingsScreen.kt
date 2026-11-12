@@ -105,6 +105,11 @@ fun SettingsScreen(
             "On Goodreads, go to My Books, then Import and export, and choose Export Library. Pick the file it makes here.",
             style = MaterialTheme.typography.bodySmall,
         )
+        EreaderImportButton()
+        Text(
+            "Brings in reading time and finished books from an Xteink running QuartzInk.",
+            style = MaterialTheme.typography.bodySmall,
+        )
         Text("Home", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onHomeStyle, Modifier.fillMaxWidth()) { Text("Edit Home style") }
         OutlinedButton({ choosingRow = true }, Modifier.fillMaxWidth()) { Text("Books per row on Home") }

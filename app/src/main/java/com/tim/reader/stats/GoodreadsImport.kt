@@ -104,13 +104,13 @@ private val SERIES_SUFFIX = Regex("""\s*\([^()]*#\s*[\d.]+\)\s*$""")
 
 private fun cleanTitle(title: String) = title.replace(SERIES_SUFFIX, "").trim()
 
-private fun titleKey(title: String) = cleanTitle(title).lowercase()
+internal fun titleKey(title: String) = cleanTitle(title).lowercase()
     .replace(Regex("""^(the|a|an)\s+"""), "")
     .substringBefore(':')
     .filter { it.isLetterOrDigit() }
 
 /** Authors match on their last names, so "J.R.R. Tolkien" finds "Tolkien, J. R. R." too. */
-private fun sameAuthor(ours: String, theirs: String): Boolean {
+internal fun sameAuthor(ours: String, theirs: String): Boolean {
     fun lastName(name: String): String {
         val trimmed = name.trim()
         val last = if (',' in trimmed) trimmed.substringBefore(',') else trimmed.substringAfterLast(' ')

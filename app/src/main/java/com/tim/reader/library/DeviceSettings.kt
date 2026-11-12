@@ -39,6 +39,7 @@ object DeviceSettings {
     private const val KEY_GOOGLE_BOOKS = "google_books_key"
     private const val KEY_COMIC_VINE = "comic_vine_key"
     private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_EREADER_ADDRESS = "ereader_address"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
     private const val PREFIX_CAMERA_GAP = "camera_gap:"
     private const val PREFIX_CAMERA_EDGE = "camera_edge:"
@@ -138,6 +139,15 @@ object DeviceSettings {
         }
     }
 
+    /** The address an e-reader's File Transfer page showed last time stats were imported from it. */
+    var ereaderAddress by mutableStateOf("")
+        private set
+
+    fun updateEreaderAddress(address: String) {
+        ereaderAddress = address.trim()
+        preferences?.edit { putString(KEY_EREADER_ADDRESS, ereaderAddress) }
+    }
+
     /** Loads settings unless the app already has, for work that runs without the app open. */
     fun ensureLoaded(context: Context) {
         if (preferences == null) load(context)
@@ -161,6 +171,7 @@ object DeviceSettings {
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
         comicVineKey = saved.getString(KEY_COMIC_VINE, null).orEmpty()
+        ereaderAddress = saved.getString(KEY_EREADER_ADDRESS, null).orEmpty()
         rows.clear()
         saved.all.forEach { (key, value) ->
             if (key.startsWith(PREFIX_BOOKS_PER_ROW) && value is Int) {

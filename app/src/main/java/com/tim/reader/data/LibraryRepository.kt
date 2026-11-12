@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.library.seriesMatchKey
+import com.tim.reader.stats.EREADER_SOURCE
 import com.tim.reader.stats.EventRow
 import com.tim.reader.stats.ReadingHistory
 import com.tim.reader.theme.Presets
@@ -897,6 +898,33 @@ class LibraryRepository private constructor(context: Context) {
         } finally {
             db.endTransaction()
         }
+    }
+
+    /** One event to add in bulk, such as from an e-reader's stats. */
+    class PlannedEvent(val kind: String, val book: Book?, val readId: String?, val startedAt: Long, val endedAt: Long?, val data: JSONObject)
+
+    /**
+     * Replaces everything imported before from this e-reader with [events], in one go. The old rows
+     * are kept as deletions, so sync passes the replacement on to other devices.
+     */
+    suspend fun replaceEreaderImport(ereaderId: String, events: List<PlannedEvent>) = withContext(serial) {
+        db.beginTransaction()
+        try {
+            val time = now()
+            // Every imported row carries "eink":"<reader ID>" in its data. The ID is letters and digits only.
+            db.execSQL(
+                "UPDATE events SET deleted_at = ?, updated_at = ? WHERE deleted_at IS NULL AND data LIKE ?",
+                arrayOf<Any>(time, time, "%\"${EREADER_SOURCE}\":\"$ereaderId\"%"),
+            )
+            for (event in events) {
+                insertEvent(event.kind, event.book, event.readId, minOf(event.startedAt, time), event.endedAt?.let { minOf(it, time) }, event.data)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        editCount.value++
+        Unit
     }
 
     // Library-folder sync. A count that goes up with every change, so sync knows when to save.

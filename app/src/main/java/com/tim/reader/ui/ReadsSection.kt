@@ -26,6 +26,7 @@ import com.tim.reader.appScope
 import com.tim.reader.data.Book
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.stats.AchievementCenter
+import com.tim.reader.stats.EREADER_SOURCE
 import com.tim.reader.stats.FinishedRecord
 import com.tim.reader.stats.ReadingHistory
 import com.tim.reader.stats.formatMinutes
@@ -108,9 +109,13 @@ fun ReadsSection(book: Book, history: ReadingHistory, onChanged: () -> Unit) {
 }
 
 private fun describe(read: FinishedRecord, history: ReadingHistory): String {
-    val from = if (read.source == "goodreads") " (from Goodreads)" else ""
+    val from = when (read.source) {
+        "goodreads" -> " (from Goodreads)"
+        EREADER_SOURCE -> " (on e-reader)"
+        else -> ""
+    }
     if (read.dateUnknown) return "Read, date unknown$from"
-    if (read.source == "goodreads") return "Read on ${formatDay(read.at)}$from"
+    if (read.source == "goodreads" || read.source == EREADER_SOURCE) return "Read on ${formatDay(read.at)}$from"
     if (read.manual) return "Marked as read on ${formatDay(read.at)}"
     val start = read.readId?.let(history.readStarts::get)
     val minutes = history.sessions
