@@ -101,7 +101,7 @@ fun EreaderImportButton() {
                         { address = it },
                         Modifier.fillMaxWidth(),
                         label = { Text("Reader address") },
-                        placeholder = { Text("192.168.1.50") },
+                        placeholder = { Text("http://quartzink.local/") },
                         singleLine = true,
                         enabled = !working,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),

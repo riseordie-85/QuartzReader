@@ -40,6 +40,7 @@ object DeviceSettings {
     private const val KEY_COMIC_VINE = "comic_vine_key"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_EREADER_ADDRESS = "ereader_address"
+    const val DEFAULT_EREADER_ADDRESS = "http://quartzink.local/"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
     private const val PREFIX_CAMERA_GAP = "camera_gap:"
     private const val PREFIX_CAMERA_EDGE = "camera_edge:"
@@ -171,7 +172,11 @@ object DeviceSettings {
         cameraGap = saved.getInt(KEY_CAMERA_GAP, 0)
         googleBooksKey = saved.getString(KEY_GOOGLE_BOOKS, null).orEmpty()
         comicVineKey = saved.getString(KEY_COMIC_VINE, null).orEmpty()
+        // QuartzInk answers to quartzink.local (it used to be crosspoint.local), so an
+        // empty or old address points at the new name.
         ereaderAddress = saved.getString(KEY_EREADER_ADDRESS, null).orEmpty()
+            .replace("crosspoint.local", "quartzink.local", ignoreCase = true)
+            .ifBlank { DEFAULT_EREADER_ADDRESS }
         rows.clear()
         saved.all.forEach { (key, value) ->
             if (key.startsWith(PREFIX_BOOKS_PER_ROW) && value is Int) {
