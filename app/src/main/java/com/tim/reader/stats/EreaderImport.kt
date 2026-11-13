@@ -27,6 +27,11 @@ class EreaderExport(
     /** Every day the reader recorded reading, newest first. */
     val readingDays: List<LocalDate>,
     val books: List<EreaderBook>,
+    /**
+     * Seconds read on each day, from the reader's daily log (newer firmware, the last 400 days).
+     * Empty from older firmware, and missing for days before the log started.
+     */
+    val dailySeconds: Map<LocalDate, Long> = emptyMap(),
 )
 
 class EreaderBook(
@@ -59,8 +64,20 @@ fun parseEreaderExport(text: String): EreaderExport {
     fun date(value: Any?): LocalDate? = (value as? String)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
     val global = root.optJSONObject("global") ?: JSONObject()
+    val daily = global.optJSONArray("dailySeconds")
+    val dailySeconds = buildMap<LocalDate, Long> {
+        if (daily != null) for (i in 0 until daily.length()) {
+            val pair = daily.optJSONArray(i) ?: continue
+            val day = date(pair.opt(0)) ?: continue
+            val seconds = pair.optLong(1)
+            if (seconds > 0) put(day, seconds)
+        }
+    }
     val days = global.optJSONArray("readingDays")
-    val readingDays = buildList { if (days != null) for (i in 0 until days.length()) date(days.opt(i))?.let { add(it) } }
+    // Days in the daily log count as reading days too, in case the two lists ever disagree.
+    val readingDays = buildList {
+        if (days != null) for (i in 0 until days.length()) date(days.opt(i))?.let { add(it) }
+    }.plus(dailySeconds.keys).distinct().sortedDescending()
 
     val list = root.optJSONArray("books")
     val books = buildList {
@@ -87,7 +104,7 @@ fun parseEreaderExport(text: String): EreaderExport {
         }
     }
     val exportedAt = root.optString("exportedAt").takeIf { it.isNotEmpty() }?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
-    return EreaderExport(deviceId, device.optString("name").ifBlank { "E-reader" }, exportedAt, readingDays, books)
+    return EreaderExport(deviceId, device.optString("name").ifBlank { "E-reader" }, exportedAt, readingDays, books, dailySeconds)
 }
 
 /** Downloads the stats from a reader's File Transfer page, given its address as the reader shows it. */
@@ -124,10 +141,26 @@ class EreaderPlan(
 private val BUCKET_HOURS = intArrayOf(9, 14, 19, 23)
 
 /**
+ * Each day's share of a book's reading time. Days the reader logged weigh by the time read that day,
+ * so a long evening gets more of the book than a five-minute one. Days from before the reader kept
+ * its daily log weigh as an average logged day; with no log at all, every day gets the same share.
+ * The shares add up to 1.
+ */
+internal fun dayShares(days: List<LocalDate>, dailySeconds: Map<LocalDate, Long>): DoubleArray {
+    if (days.isEmpty()) return DoubleArray(0)
+    val logged = days.mapNotNull { dailySeconds[it]?.takeIf { seconds -> seconds > 0 } }
+    val fill = if (logged.isEmpty()) 1.0 else logged.average()
+    val weights = DoubleArray(days.size) { i -> dailySeconds[days[i]]?.takeIf { it > 0 }?.toDouble() ?: fill }
+    val total = weights.sum()
+    return DoubleArray(days.size) { i -> weights[i] / total }
+}
+
+/**
  * Turns an export into history events. The reader keeps only totals for each book, not its sessions,
  * so each book's time is spread over the days the reader recorded reading between its start and
- * finish, and split across the day the way the reader split it. Totals stay exact, and days, streaks
- * and time of day come out close to how the reading really went.
+ * finish (weighted by how long it read each day, when it logged that) and split across the day the
+ * way the reader split it. Totals stay exact, and days, streaks and time of day come out close to how
+ * the reading really went.
  */
 fun planEreaderImport(
     export: EreaderExport,
@@ -182,14 +215,16 @@ fun planEreaderImport(
             } else {
                 listOf(0.0, 0.0, 1.0, 0.0) // no split recorded: evening
             }
-            val slots = days.flatMap { day -> shares.indices.filter { shares[it] > 0 }.map { day to it } }
+            val dayShare = dayShares(days, export.dailySeconds)
+            val slots = days.indices.flatMap { d -> shares.indices.filter { shares[it] > 0 }.map { d to it } }
             val totalMs = entry.readingSeconds * 1000
             var msLeft = totalMs
             var turnsLeft = entry.pagesTurned
-            slots.forEachIndexed { index, (day, bucket) ->
+            slots.forEachIndexed { index, (d, bucket) ->
+                val day = days[d]
                 val lastSlot = index == slots.lastIndex
-                val ms = if (lastSlot) msLeft else (totalMs * shares[bucket] / days.size).toLong()
-                val turns = if (lastSlot) turnsLeft else (entry.pagesTurned * shares[bucket] / days.size).toInt()
+                val ms = if (lastSlot) msLeft else (totalMs * shares[bucket] * dayShare[d]).toLong()
+                val turns = if (lastSlot) turnsLeft else (entry.pagesTurned * shares[bucket] * dayShare[d]).toInt()
                 msLeft -= ms
                 turnsLeft -= turns
                 if (ms <= 0) return@forEachIndexed
