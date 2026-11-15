@@ -10,7 +10,8 @@
     <!-- Android's own backup is off: the library folder holds the backup, and a copied device ID would
          make two phones write the same sync file. -->
     <!-- usesCleartextTraffic: an e-reader's File Transfer page (stats import) is plain HTTP on the
-         local network, since the reader has no certificate to offer. -->
+         local network, since the reader has no certificate to offer, and so can a sync server the
+         reader runs at home. -->
     <application
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
@@ -18,8 +19,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="Quartz Reader"
         android:largeHeap="true"
-        android:theme="@style/Theme.Reader"
-        android:usesCleartextTraffic="true">
+        android:theme="@style/Theme.Reader">
 
         <activity
             android:name=".MainActivity"
