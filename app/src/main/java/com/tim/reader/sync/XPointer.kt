@@ -113,8 +113,10 @@ fun decodePercent(text: String): String {
                 continue
             }
         }
-        bytes.write(char.toString().toByteArray())
-        i++
+        // Copy everything up to the next escape as it is, keeping letters outside the basic plane whole.
+        val next = text.indexOf('%', i + 1).let { if (it < 0) text.length else it }
+        bytes.write(text.substring(i, next).toByteArray(Charsets.UTF_8))
+        i = next
     }
     return bytes.toString("UTF-8")
 }

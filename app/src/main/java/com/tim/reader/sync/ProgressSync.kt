@@ -21,8 +21,8 @@ data class LocalSpot(val progress: String, val percentage: Double)
 
 /** How another device's place compares with what's on screen here. */
 sealed interface Comparison {
-    /** The other device is further on. [go] moves there. */
-    class Ahead(val go: suspend () -> Unit) : Comparison
+    /** The other device is further on. [go] moves there, and says whether it could. */
+    class Ahead(val go: suspend () -> Boolean) : Comparison
     data object Same : Comparison
     data object Behind : Comparison
 }
@@ -54,7 +54,7 @@ class ProgressSync(
     private val context = context.applicationContext
     private val _offer = MutableStateFlow<SyncOffer?>(null)
     val offer: StateFlow<SyncOffer?> = _offer
-    @Volatile private var pendingGo: (suspend () -> Unit)? = null
+    @Volatile private var pendingGo: (suspend () -> Boolean)? = null
 
     /** True once this device may send its place. */
     @Volatile private var settled = false
@@ -66,8 +66,10 @@ class ProgressSync(
     /** After a jump, the place it lands on came from the other device, so it isn't sent back. */
     @Volatile private var landing: LocalSpot? = null
     @Volatile private var landingUntil = 0L
-    private var pushJob: Job? = null
+    @Volatile private var pushJob: Job? = null
+    @Volatile private var pullJob: Job? = null
     @Volatile private var pausedAt = 0L
+    @Volatile private var resumedAt = 0L
     private val lock = Mutex()
     @Volatile private var documentId: Pair<Boolean, String>? = null
 
@@ -94,8 +96,10 @@ class ProgressSync(
     }
 
     private fun pullLater(manual: Boolean) {
+        // One look at a time. A second would compare before the first one's jump has landed.
+        if (pullJob?.isActive == true) return
         lastPullAt = System.currentTimeMillis()
-        appScope.launch { pull(manual) }
+        pullJob = appScope.launch { pull(manual) }
     }
 
     /** Call whenever this device's place changes. */
@@ -114,7 +118,9 @@ class ProgressSync(
         if (!active) return
         if (!settled) {
             // The server's place hasn't been seen yet, perhaps because it couldn't be reached, so look again now and then.
-            if (_offer.value == null && System.currentTimeMillis() - lastPullAt > RETRY_AFTER_MS) pullLater(manual = false)
+            if (lastPullAt != 0L && _offer.value == null && System.currentTimeMillis() - lastPullAt > RETRY_AFTER_MS) {
+                pullLater(manual = false)
+            }
             return
         }
         if (newSpot == sent || newSpot == before && pushJob?.isActive == true) return
@@ -127,7 +133,19 @@ class ProgressSync(
 
     /** Call when the reader leaves the book or the screen goes off. */
     fun paused() {
+        pausing()
+        sendAfterPause()
+    }
+
+    /** The first half of [paused], for a reader that works out its place before sending it. */
+    fun pausing() {
         pausedAt = System.currentTimeMillis()
+        pushJob?.cancel()
+    }
+
+    /** The second half of [paused]. Does nothing if the reader has come back since. */
+    fun sendAfterPause() {
+        if (resumedAt > pausedAt) return
         pushJob?.cancel()
         if (!active) return
         if (settled) {
@@ -140,9 +158,14 @@ class ProgressSync(
 
     /** Call when the reader comes back. Another device may have moved on in the meantime. */
     fun resumed() {
+        resumedAt = System.currentTimeMillis()
         if (!active || pausedAt == 0L) return
-        if (System.currentTimeMillis() - pausedAt < RECHECK_AFTER_MS) return
-        if (_offer.value == null) pullLater(manual = false)
+        if (resumedAt - pausedAt < RECHECK_AFTER_MS) return
+        if (_offer.value != null) return
+        // Another device may be further on now, so nothing is sent until the server's place is seen again.
+        settled = false
+        pushJob?.cancel()
+        pullLater(manual = false)
     }
 
     /** The sync button: fetch the server's place, then go there or send this one. */
@@ -171,11 +194,13 @@ class ProgressSync(
         appScope.launch { push(force = true) }
     }
 
-    private fun jump(go: suspend () -> Unit) {
+    private fun jump(go: suspend () -> Boolean) {
         landing = spot
         landingUntil = System.currentTimeMillis() + LANDING_MS
         appScope.launch(Dispatchers.Main) {
-            runCatching { go() }.onFailure {
+            val moved = runCatching { go() }.getOrDefault(false)
+            if (!moved) {
+                // Nothing moved, so the next page turn is the reader's own.
                 landingUntil = 0
                 tell("Couldn't go to that place")
             }
@@ -223,7 +248,7 @@ class ProgressSync(
         } catch (error: SyncException) {
             ResultsLog.add("CrossPoint sync: ${error.message}")
             if (error.signInProblem) {
-                // Said once. Signing in again in Settings starts over.
+                // Said once. The sync button or a new password tries again.
                 if (refusedKey != key || manual) tell(error.message ?: "Sync didn't work")
                 refusedKey = key
             } else if (manual) {

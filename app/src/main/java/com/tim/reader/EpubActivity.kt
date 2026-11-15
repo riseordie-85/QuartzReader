@@ -348,15 +348,16 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
      */
     private fun sendPlace() {
         val sync = progressSync ?: return
+        sync.pausing()
         val reader = epubSync
         val locator = navigator?.currentLocator?.value
         if (reader == null || locator == null) {
-            sync.paused()
+            sync.sendAfterPause()
             return
         }
         appScope.launch(Dispatchers.Main) {
             withTimeoutOrNull(1_500) { reader.locate(locator) }?.let(sync::update)
-            sync.paused()
+            sync.sendAfterPause()
         }
     }
 

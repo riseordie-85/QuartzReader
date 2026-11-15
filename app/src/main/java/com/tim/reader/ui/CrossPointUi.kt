@@ -49,7 +49,8 @@ private fun SettingSwitch(title: String, detail: String, checked: Boolean, onCha
 @Composable
 fun CrossPointSetting() {
     val context = LocalContext.current
-    remember { CrossPointSettings.ensureLoaded(context) }
+    // Loads once, before the fields below read what's saved.
+    CrossPointSettings.ensureLoaded(context)
     val scope = rememberCoroutineScope()
     var server by remember { mutableStateOf(CrossPointSettings.server) }
     var username by remember { mutableStateOf(CrossPointSettings.username) }

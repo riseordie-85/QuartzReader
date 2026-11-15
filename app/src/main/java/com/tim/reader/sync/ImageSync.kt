@@ -23,7 +23,10 @@ class ImageSync(
         val target = page.coerceIn(0, pageCount - 1)
         val shown = shownPages().ifEmpty { listOf(currentPage()) }
         return when {
-            target > shown.max() -> Comparison.Ahead { goTo(target) }
+            target > shown.max() -> Comparison.Ahead {
+                goTo(target)
+                true
+            }
             target < shown.min() -> Comparison.Behind
             else -> Comparison.Same
         }

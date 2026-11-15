@@ -125,7 +125,7 @@ class EpubSync(
         val there = place(remote.progress)
         val here = screenStart?.let { place(it) }
         val hereEnd = screenEnd?.let { place(it) } ?: here
-        val go: suspend () -> Unit = { goTo(remote, there) }
+        val go: suspend () -> Boolean = { goTo(remote, there) }
         if (there == null || here == null || hereEnd == null) {
             // Without a path to follow, the percentages decide, allowing for each app counting a little differently.
             val difference = remote.percentage - percentage
@@ -145,11 +145,11 @@ class EpubSync(
         }
     }
 
-    private suspend fun goTo(remote: RemoteProgress, there: Pair<Int, XPointerTarget>?) {
+    private suspend fun goTo(remote: RemoteProgress, there: Pair<Int, XPointerTarget>?): Boolean {
         val locator = there?.let { (chapter, target) -> locatorFor(chapter, target) }
             ?: publication.locateProgression(remote.percentage)
-            ?: return
-        withContext(Dispatchers.Main) { navigator.go(locator) }
+            ?: return false
+        return withContext(Dispatchers.Main) { navigator.go(locator) }
     }
 
     private fun locatorFor(chapter: Int, target: XPointerTarget): Locator? {
@@ -185,6 +185,8 @@ private val ENTITIES = mapOf(
 
 private fun newParser(bytes: ByteArray): XmlPullParser {
     val parser = Xml.newPullParser()
+    // Android's parser reads the DOCTYPE by default, and then won't take the names below.
+    runCatching { parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false) }
     runCatching { parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false) }
     runCatching { parser.setFeature("http://xmlpull.org/v1/doc/features.html#relaxed", true) }
     parser.setInput(ByteArrayInputStream(bytes), null)
@@ -361,7 +363,8 @@ private const val SCREEN_SCRIPT = """(function (chapter, scroll, rtl) {
         if (c === node) index = count;
         else if (!index && !/\S/.test(c.data)) spacesBefore = true;
       }
-      if (spacesBefore) return base + '.0';
+      // Only a container drops that text from its count, so only there is the count unsure.
+      if (spacesBefore && /^(body|div|section|article|aside|header|footer|nav|main|ul|ol|dl|table|thead|tbody|tfoot|tr|figure|blockquote|hgroup|details)$/i.test(parent.localName)) return base + '.0';
       return base + '/text()' + (count > 1 ? '[' + index + ']' : '') + '.' + counted(node.data, at);
     }
     function firstElement(root) {
