@@ -628,6 +628,44 @@ class LibraryRepository private constructor(context: Context) {
         db.insertOrThrow("highlights", null, values)
     }
 
+    /** A book's highlights for sync, including removed ones, so their removal can be passed on. */
+    suspend fun highlightRecords(bookId: String): List<HighlightRecord> = withContext(serial) {
+        db.rawQuery(
+            "SELECT id, locator, text, note, created_at, deleted_at FROM highlights WHERE book_id = ?",
+            arrayOf(bookId),
+        ).use { rows ->
+            buildList {
+                while (rows.moveToNext()) {
+                    add(
+                        HighlightRecord(
+                            id = rows.getString(0),
+                            locator = rows.getString(1),
+                            text = rows.getString(2),
+                            note = rows.getString(3),
+                            createdAt = rows.getLong(4),
+                            removed = !rows.isNull(5),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Adds a highlight made on another device, keeping its ID so both sides know it's the same one. */
+    suspend fun addSyncedHighlight(id: String, bookId: String, locator: String, text: String, note: String, createdAt: Long) =
+        write {
+            val values = ContentValues().apply {
+                put("id", id)
+                put("book_id", bookId)
+                put("locator", locator)
+                put("text", text)
+                put("note", note)
+                put("created_at", createdAt)
+                put("updated_at", now())
+            }
+            db.insertWithOnConflict("highlights", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+        }
+
     suspend fun updateNote(id: String, note: String) = write {
         val values = ContentValues().apply {
             put("note", note)

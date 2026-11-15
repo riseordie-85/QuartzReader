@@ -3,10 +3,13 @@ package com.tim.reader.sync
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.tim.reader.data.HighlightRecord
+import com.tim.reader.data.LibraryRepository
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.preferences.ReadingProgression
 import org.readium.r2.shared.ExperimentalReadiumApi
+import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.indexOfFirstWithHref
@@ -150,6 +153,83 @@ class EpubSync(
             ?: publication.locateProgression(remote.percentage)
             ?: return false
         return withContext(Dispatchers.Main) { navigator.go(locator) }
+    }
+
+    /** The chapter's name from the contents, for clippings. */
+    private fun titleOf(chapter: Int): String {
+        val href = publication.readingOrder.getOrNull(chapter)?.url()?.path ?: return ""
+        fun search(links: List<Link>): String? {
+            for (link in links) {
+                if (link.url().removeFragment().path == href) link.title?.let { return it }
+                search(link.children)?.let { return it }
+            }
+            return null
+        }
+        return search(publication.tableOfContents).orEmpty()
+    }
+
+    /** Where a highlight sits, the way CrossPoint saves a clipping. */
+    suspend fun clipPlace(locatorJson: String, text: String): ClipPlace? {
+        val locator = runCatching { Locator.fromJSON(JSONObject(locatorJson)) }.getOrNull() ?: return null
+        val chapter = publication.readingOrder.indexOfFirstWithHref(locator.href) ?: return null
+        val spineIndex = spineIndexes().getOrElse(chapter) { chapter }
+        val title = locator.title?.takeIf { it.isNotBlank() } ?: titleOf(chapter)
+        val pieces = markup(chapter) ?: return ClipPlace(spineIndex, null, null, title)
+        val chapterText = withContext(Dispatchers.Default) { visibleText(pieces.asSequence()) }
+        val quote = locator.text.highlight?.takeIf { it.isNotEmpty() } ?: text
+        val range = findQuote(
+            chapterText,
+            quote,
+            locator.text.before.orEmpty(),
+            locator.text.after.orEmpty(),
+            locator.locations.progression,
+        )
+        return ClipPlace(
+            spine = spineIndex,
+            start = range?.let { codepointIndex(chapterText, it.first) },
+            end = range?.let { codepointIndex(chapterText, it.last + 1) },
+            chapter = title,
+        )
+    }
+
+    /** A locator for a clipping from another device, saved the way the reader saves its own highlights. */
+    suspend fun clippingLocator(spine: Int, start: Int?, end: Int?, text: String): String? {
+        val indexes = spineIndexes()
+        val chapter = readingIndexOf(spine, indexes)?.takeIf { indexes.getOrNull(it) == spine } ?: return null
+        val link = publication.readingOrder.getOrNull(chapter) ?: return null
+        val chapterText = markup(chapter)?.let { pieces -> withContext(Dispatchers.Default) { visibleText(pieces.asSequence()) } }
+        var range: IntRange? = null
+        if (chapterText != null) {
+            if (start != null && end != null) {
+                val from = utf16Index(chapterText, start)
+                val to = utf16Index(chapterText, end)
+                if (from != null && to != null && to > from) range = from until to
+            }
+            // Offsets from a different copy of the book can point at other words, so the words decide.
+            fun squeezed(value: String) = value.filterNot { it.isWhitespace() || it == '\u00AD' }
+            if (range == null || squeezed(chapterText.substring(range)) != squeezed(text)) {
+                range = findQuote(chapterText, text, "", "", range?.let { it.first.toDouble() / chapterText.length }) ?: range
+            }
+        }
+        val highlight = if (chapterText != null && range != null) chapterText.substring(range) else text
+        val before = if (chapterText != null && range != null) chapterText.substring(maxOf(0, range.first - 40), range.first) else null
+        val after = if (chapterText != null && range != null) {
+            chapterText.substring(range.last + 1, minOf(chapterText.length, range.last + 41))
+        } else {
+            null
+        }
+        val progression = if (chapterText != null && range != null && chapterText.isNotEmpty()) {
+            range.first.toDouble() / chapterText.length
+        } else {
+            0.0
+        }
+        return Locator(
+            href = link.url(),
+            mediaType = link.mediaType ?: MediaType.XHTML,
+            title = titleOf(chapter).ifBlank { null },
+            locations = Locator.Locations(progression = progression),
+            text = Locator.Text(before = before, highlight = highlight, after = after),
+        ).toJSON().toString()
     }
 
     private fun locatorFor(chapter: Int, target: XPointerTarget): Locator? {
@@ -386,3 +466,29 @@ private const val SCREEN_SCRIPT = """(function (chapter, scroll, rtl) {
     return null;
   }
 })"""
+
+/** The reader's highlights for one book, for [ClippingSync]. */
+class EpubHighlightBook(
+    private val repository: LibraryRepository,
+    private val bookId: String,
+    private val epub: EpubSync,
+) : HighlightBook {
+    override suspend fun records() = repository.highlightRecords(bookId)
+
+    override suspend fun add(id: String, locator: String, text: String, note: String, createdAt: Long) {
+        repository.addSyncedHighlight(id, bookId, locator, text, note, createdAt)
+    }
+
+    override suspend fun setNote(id: String, note: String) {
+        repository.updateNote(id, note)
+    }
+
+    override suspend fun remove(id: String) {
+        repository.removeHighlight(id)
+    }
+
+    override suspend fun placeOf(record: HighlightRecord) = epub.clipPlace(record.locator, record.text)
+
+    override suspend fun locatorFor(spine: Int, start: Int?, end: Int?, text: String) =
+        epub.clippingLocator(spine, start, end, text)
+}

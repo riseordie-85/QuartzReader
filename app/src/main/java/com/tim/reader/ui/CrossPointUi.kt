@@ -160,6 +160,12 @@ fun CrossPointSetting() {
             CrossPointSettings.autoJump,
         ) { CrossPointSettings.updateAutoJump(it) }
         SettingSwitch(
+            "Sync highlights and notes",
+            "Shares highlights in EPUBs with CrossPoint devices, along with their notes. Only CrossPoint's sync server keeps them, " +
+                "and they include the highlighted words. On CrossPoint, turn on Sync Clippings too.",
+            CrossPointSettings.syncHighlights,
+        ) { CrossPointSettings.updateSyncHighlights(it) }
+        SettingSwitch(
             "Send book titles",
             "Lets the server show which books you're reading. Off, it gets only a code made from each file and how far in you are.",
             CrossPointSettings.sendTitles,

@@ -27,7 +27,10 @@ import androidx.fragment.app.commitNow
 import androidx.lifecycle.lifecycleScope
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.stats.ReadingTracker
+import com.tim.reader.sync.ClippingSync
 import com.tim.reader.sync.CrossPointSettings
+import com.tim.reader.sync.EpubHighlightBook
+import com.tim.reader.sync.PrefsClipMemory
 import com.tim.reader.sync.EpubSync
 import com.tim.reader.sync.ProgressSync
 import com.tim.reader.ui.SyncOfferDialog
@@ -79,6 +82,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var cameraEdge = CameraEdge.Auto
     private var progressSync: ProgressSync? = null
     private var epubSync: EpubSync? = null
+    private var clippingSync: ClippingSync? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -154,6 +158,14 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
             }
         }
         progressSync = sync
+        val clippingSync = if (sync != null && book != null) {
+            ClippingSync(EpubHighlightBook(repository, book.id, epubSync), PrefsClipMemory(this), sync::documentId) { text ->
+                appScope.launch(Dispatchers.Main) { Toast.makeText(applicationContext, text, Toast.LENGTH_SHORT).show() }
+            }
+        } else {
+            null
+        }
+        this.clippingSync = clippingSync
         val animated = DirectionalNavigationAdapter(navigator, animatedTransition = true)
         val instant = DirectionalNavigationAdapter(navigator, animatedTransition = false)
         navigator.addInputListener(object : InputListener {
@@ -192,7 +204,12 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                                 cameraEdge = edge
                                 updatePagePadding()
                             },
-                            onSync = sync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow() } },
+                            onSync = sync?.takeIf { CrossPointSettings.enabled }?.let {
+                                {
+                                    it.syncNow()
+                                    clippingSync?.let { clips -> appScope.launch { clips.run(manual = true) } }
+                                }
+                            },
                         )
                         if (sync != null) {
                             val offer by sync.offer.collectAsState()
@@ -240,6 +257,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                     if (!started) {
                         started = true
                         sync.start()
+                        clippingSync?.let { clips -> appScope.launch { clips.run(manual = false) } }
                     }
                 }
             }
@@ -349,6 +367,8 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private fun sendPlace() {
         val sync = progressSync ?: return
         sync.pausing()
+        // Highlights made or changed while reading go out on leaving too.
+        clippingSync?.let { clips -> appScope.launch { clips.run(manual = false) } }
         val reader = epubSync
         val locator = navigator?.currentLocator?.value
         if (reader == null || locator == null) {

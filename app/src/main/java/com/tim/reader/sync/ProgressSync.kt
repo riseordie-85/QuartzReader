@@ -80,6 +80,9 @@ class ProgressSync(
 
     private val active get() = CrossPointSettings.isReady && refusedKey != CrossPointSettings.key
 
+    /** The book's code on the sync server. */
+    suspend fun documentId(): String? = document()
+
     private suspend fun document(): String? {
         val byName = CrossPointSettings.matchByName
         documentId?.takeIf { it.first == byName }?.let { return it.second }

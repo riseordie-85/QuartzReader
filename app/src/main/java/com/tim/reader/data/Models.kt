@@ -149,6 +149,16 @@ data class Highlight(
     val createdAt: Long,
 )
 
+/** A highlight as sync sees it, including whether it was removed. */
+data class HighlightRecord(
+    val id: String,
+    val locator: String,
+    val text: String,
+    val note: String,
+    val createdAt: Long,
+    val removed: Boolean,
+)
+
 /** The three views the grid icon cycles through. */
 enum class ViewMode { Shelf, Grid, List }
 

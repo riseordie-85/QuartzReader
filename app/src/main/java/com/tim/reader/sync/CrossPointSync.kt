@@ -13,6 +13,7 @@ import androidx.core.content.edit
 import com.tim.reader.library.DeviceSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -35,6 +36,7 @@ object CrossPointSettings {
     private const val KEY_SEND_TITLES = "send_titles"
     private const val KEY_AUTO_JUMP = "auto_jump"
     private const val KEY_BY_NAME = "by_name"
+    private const val KEY_HIGHLIGHTS = "highlights"
     private var preferences: SharedPreferences? = null
 
     var enabled by mutableStateOf(false)
@@ -63,6 +65,10 @@ object CrossPointSettings {
     var matchByName by mutableStateOf(false)
         private set
 
+    /** Shares highlights and notes too. Only CrossPoint's server keeps them. */
+    var syncHighlights by mutableStateOf(false)
+        private set
+
     val isSignedIn get() = username.isNotBlank() && key.isNotBlank()
     val isReady get() = enabled && isSignedIn
     val baseUrl get() = normalizeServer(server)
@@ -78,6 +84,12 @@ object CrossPointSettings {
         sendTitles = saved.getBoolean(KEY_SEND_TITLES, false)
         autoJump = saved.getBoolean(KEY_AUTO_JUMP, false)
         matchByName = saved.getBoolean(KEY_BY_NAME, false)
+        syncHighlights = saved.getBoolean(KEY_HIGHLIGHTS, false)
+    }
+
+    fun updateSyncHighlights(on: Boolean) {
+        syncHighlights = on
+        preferences?.edit { putBoolean(KEY_HIGHLIGHTS, on) }
     }
 
     fun updateEnabled(on: Boolean) {
@@ -249,6 +261,31 @@ object KoSyncClient {
             )
         }
 
+    /** One page of a book's clippings after [cursor], or null when the server doesn't keep clippings. */
+    suspend fun fetchClippings(base: String, username: String, key: String, document: String, cursor: Long): ClippingPage? =
+        withContext(Dispatchers.IO) {
+            val path = "/api/v1/clippings/" + URLEncoder.encode(document, "UTF-8") + "?cursor=$cursor&limit=100"
+            val reply = call(base, path, "GET", username, key)
+            if (reply.code == 401) throw failure(reply)
+            if (reply.code !in 200..299) return@withContext null
+            val json = runCatching { JSONObject(reply.text) }.getOrNull() ?: return@withContext null
+            if (json.optInt("sync_version", 0) < 2) return@withContext null
+            val items = json.optJSONArray("items")
+            ClippingPage(
+                items = (0 until (items?.length() ?: 0)).mapNotNull { items?.optJSONObject(it) },
+                cursor = json.optLong("cursor", cursor),
+                more = json.optBoolean("more", false),
+            )
+        }
+
+    /** Sends up to 50 clippings, or removals of them. */
+    suspend fun pushClippings(base: String, username: String, key: String, document: String, items: JSONArray) =
+        withContext(Dispatchers.IO) {
+            val path = "/api/v1/clippings/" + URLEncoder.encode(document, "UTF-8")
+            val reply = call(base, path, "PUT", username, key, JSONObject().put("items", items))
+            if (reply.code !in 200..299) throw failure(reply)
+        }
+
     /** Saves this device's place in a book. */
     suspend fun push(
         base: String,
@@ -275,6 +312,30 @@ object KoSyncClient {
         if (reply.code !in 200..299) throw failure(reply)
     }
 }
+
+/** Remembers, per book, how far through the server's clippings this device has read and what it has sent. */
+class PrefsClipMemory(context: Context) : ClipMemory {
+    private val saved = context.applicationContext.getSharedPreferences("crosspoint_clippings", Context.MODE_PRIVATE)
+
+    override fun cursor(document: String) = saved.getLong("cursor:$document", 0L)
+
+    override fun sent(document: String): MutableMap<String, String> {
+        val json = runCatching { JSONObject(saved.getString("sent:$document", null) ?: "{}") }.getOrNull() ?: JSONObject()
+        val map = HashMap<String, String>()
+        json.keys().forEach { key -> map[key] = json.optString(key) }
+        return map
+    }
+
+    override fun save(document: String, cursor: Long, sent: Map<String, String>) {
+        saved.edit {
+            putLong("cursor:$document", cursor)
+            putString("sent:$document", JSONObject(sent.toMap()).toString())
+        }
+    }
+}
+
+/** A page of clippings from the server, and where the next page starts. */
+class ClippingPage(val items: List<JSONObject>, val cursor: Long, val more: Boolean)
 
 /**
  * The code KOReader and CrossPoint name a book by: an MD5 of 1 KB samples from the start of the file
