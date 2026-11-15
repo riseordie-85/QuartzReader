@@ -266,8 +266,9 @@ object KoSyncClient {
         withContext(Dispatchers.IO) {
             val path = "/api/v1/clippings/" + URLEncoder.encode(document, "UTF-8") + "?cursor=$cursor&limit=100"
             val reply = call(base, path, "GET", username, key)
-            if (reply.code == 401) throw failure(reply)
-            if (reply.code !in 200..299) return@withContext null
+            // Only a missing route means the server doesn't keep clippings. Anything else is a passing problem.
+            if (reply.code == 404) return@withContext null
+            if (reply.code !in 200..299) throw failure(reply)
             val json = runCatching { JSONObject(reply.text) }.getOrNull() ?: return@withContext null
             if (json.optInt("sync_version", 0) < 2) return@withContext null
             val items = json.optJSONArray("items")
@@ -317,19 +318,24 @@ object KoSyncClient {
 class PrefsClipMemory(context: Context) : ClipMemory {
     private val saved = context.applicationContext.getSharedPreferences("crosspoint_clippings", Context.MODE_PRIVATE)
 
-    override fun cursor(document: String) = saved.getLong("cursor:$document", 0L)
-
-    override fun sent(document: String): MutableMap<String, String> {
-        val json = runCatching { JSONObject(saved.getString("sent:$document", null) ?: "{}") }.getOrNull() ?: JSONObject()
+    private fun map(text: String?): MutableMap<String, String> {
+        val json = runCatching { JSONObject(text ?: "{}") }.getOrNull() ?: JSONObject()
         val map = HashMap<String, String>()
         json.keys().forEach { key -> map[key] = json.optString(key) }
         return map
     }
 
-    override fun save(document: String, cursor: Long, sent: Map<String, String>) {
+    override fun load(slot: String) = ClipState(
+        cursor = saved.getLong("cursor:$slot", 0L),
+        sent = map(saved.getString("sent:$slot", null)),
+        remote = map(saved.getString("remote:$slot", null)),
+    )
+
+    override fun save(slot: String, state: ClipState) {
         saved.edit {
-            putLong("cursor:$document", cursor)
-            putString("sent:$document", JSONObject(sent.toMap()).toString())
+            putLong("cursor:$slot", state.cursor)
+            putString("sent:$slot", JSONObject(state.sent.toMap()).toString())
+            putString("remote:$slot", JSONObject(state.remote.toMap()).toString())
         }
     }
 }

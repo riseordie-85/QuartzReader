@@ -44,6 +44,8 @@ import com.tim.reader.reader.epubPreferences
 import com.tim.reader.ui.EpubControls
 import com.tim.reader.ui.showsTwoPages
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.collectLatest
@@ -83,6 +85,8 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var progressSync: ProgressSync? = null
     private var epubSync: EpubSync? = null
     private var clippingSync: ClippingSync? = null
+    /** The latest highlight sync, which the book stays open for. */
+    private var clippingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -159,8 +163,9 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         }
         progressSync = sync
         val clippingSync = if (sync != null && book != null) {
-            ClippingSync(EpubHighlightBook(repository, book.id, epubSync), PrefsClipMemory(this), sync::documentId) { text ->
-                appScope.launch(Dispatchers.Main) { Toast.makeText(applicationContext, text, Toast.LENGTH_SHORT).show() }
+            val app = applicationContext
+            ClippingSync(EpubHighlightBook(repository, book.id, epubSync), PrefsClipMemory(app), sync::documentId) { text ->
+                appScope.launch(Dispatchers.Main) { Toast.makeText(app, text, Toast.LENGTH_SHORT).show() }
             }
         } else {
             null
@@ -207,7 +212,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                             onSync = sync?.takeIf { CrossPointSettings.enabled }?.let {
                                 {
                                     it.syncNow()
-                                    clippingSync?.let { clips -> appScope.launch { clips.run(manual = true) } }
+                                    syncClippings(manual = true)
                                 }
                             },
                         )
@@ -257,7 +262,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                     if (!started) {
                         started = true
                         sync.start()
-                        clippingSync?.let { clips -> appScope.launch { clips.run(manual = false) } }
+                        syncClippings(manual = false)
                     }
                 }
             }
@@ -360,6 +365,15 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         }
     }
 
+    private fun syncClippings(manual: Boolean) {
+        val clips = clippingSync ?: return
+        val previous = clippingJob
+        clippingJob = appScope.launch {
+            previous?.join()
+            clips.run(manual)
+        }
+    }
+
     /**
      * Sends this page's place on leaving. A page turned just before may not have been worked out
      * yet, so it's worked out now, while the page is still there.
@@ -368,7 +382,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         val sync = progressSync ?: return
         sync.pausing()
         // Highlights made or changed while reading go out on leaving too.
-        clippingSync?.let { clips -> appScope.launch { clips.run(manual = false) } }
+        syncClippings(manual = false)
         val reader = epubSync
         val locator = navigator?.currentLocator?.value
         if (reader == null || locator == null) {
@@ -400,7 +414,12 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         val mine = opened
         if (isFinishing && mine != null) {
             if (OpenEpub.publication === mine) OpenEpub.publication = null
-            appScope.launch { mine.close() }
+            val clips = clippingJob
+            appScope.launch {
+                // A highlight sync still reading chapters keeps the book open until it's done.
+                runCatching { withTimeout(30_000) { clips?.join() } }
+                mine.close()
+            }
         }
     }
 }

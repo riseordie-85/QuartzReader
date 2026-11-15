@@ -651,20 +651,43 @@ class LibraryRepository private constructor(context: Context) {
         }
     }
 
-    /** Adds a highlight made on another device, keeping its ID so both sides know it's the same one. */
-    suspend fun addSyncedHighlight(id: String, bookId: String, locator: String, text: String, note: String, createdAt: Long) =
+    /**
+     * Adds highlights made on other devices, keeping their IDs so every side knows they're the same.
+     * One left behind by a removed copy of the book moves to this one. Returns the IDs now here.
+     */
+    suspend fun addSyncedHighlights(bookId: String, highlights: List<HighlightRecord>): Set<String> {
+        val added = HashSet<String>()
         write {
-            val values = ContentValues().apply {
-                put("id", id)
-                put("book_id", bookId)
-                put("locator", locator)
-                put("text", text)
-                put("note", note)
-                put("created_at", createdAt)
-                put("updated_at", now())
+            val liveBooks = state.value.books.mapTo(HashSet()) { it.id }
+            for (highlight in highlights) {
+                val values = ContentValues().apply {
+                    put("id", highlight.id)
+                    put("book_id", bookId)
+                    put("locator", highlight.locator)
+                    put("text", highlight.text)
+                    put("note", highlight.note)
+                    put("created_at", highlight.createdAt)
+                    put("updated_at", now())
+                }
+                val owner = db.rawQuery("SELECT book_id, deleted_at FROM highlights WHERE id = ?", arrayOf(highlight.id)).use { rows ->
+                    if (rows.moveToFirst()) rows.getString(0) to rows.isNull(1) else null
+                }
+                when {
+                    owner == null -> {
+                        db.insertOrThrow("highlights", null, values)
+                        added += highlight.id
+                    }
+                    // Kept by a copy of the book that's gone: it belongs to this one now.
+                    owner.first != bookId && owner.first !in liveBooks -> {
+                        values.putNull("deleted_at")
+                        db.update("highlights", values, "id = ?", arrayOf(highlight.id))
+                        added += highlight.id
+                    }
+                }
             }
-            db.insertWithOnConflict("highlights", null, values, SQLiteDatabase.CONFLICT_IGNORE)
         }
+        return added
+    }
 
     suspend fun updateNote(id: String, note: String) = write {
         val values = ContentValues().apply {

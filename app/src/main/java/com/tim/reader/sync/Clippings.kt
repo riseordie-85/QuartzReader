@@ -58,11 +58,33 @@ fun utf16Index(text: String, codepoints: Int): Int? {
 /** How many characters, as CrossPoint counts them, come before a place in a Kotlin string. */
 fun codepointIndex(text: String, utf16: Int): Int = text.codePointCount(0, utf16.coerceIn(0, text.length))
 
+/** True for characters that the page and the file may space differently. */
+private fun isLoose(char: Char) = char.isWhitespace() || char == '\u00AD'
+
 /**
  * Finds a highlight's words in a chapter. The words around it settle which copy when a phrase
  * comes up more than once, and failing that, the one nearest [near], a fraction of the chapter.
+ *
+ * The page spaces words its own way, joining lines and putting breaks between paragraphs, so when
+ * the words aren't found as they are, they're looked for again with all spacing left out.
  */
 fun findQuote(text: String, quote: String, before: String, after: String, near: Double?): IntRange? {
+    exactQuote(text, quote, before, after, near)?.let { return it }
+    // Without spacing, keeping where each remaining letter was in the original.
+    val positions = ArrayList<Int>(text.length)
+    val squeezed = StringBuilder(text.length)
+    text.forEachIndexed { index, char ->
+        if (!isLoose(char)) {
+            squeezed.append(char)
+            positions += index
+        }
+    }
+    fun squeeze(value: String) = value.filterNot(::isLoose)
+    val found = exactQuote(squeezed.toString(), squeeze(quote), squeeze(before), squeeze(after), near) ?: return null
+    return positions[found.first]..positions[found.last]
+}
+
+private fun exactQuote(text: String, quote: String, before: String, after: String, near: Double?): IntRange? {
     if (quote.isEmpty()) return null
     val hits = ArrayList<Int>()
     var from = text.indexOf(quote)
@@ -106,25 +128,42 @@ fun clipText(text: String, maxBytes: Int = 4000): String {
 
 /** What sync does to the reader's highlights, kept apart so it can be tried without a phone. */
 interface HighlightBook {
+    /** Names this book, so a copy imported again keeps its own sync state. */
+    val key: String
     suspend fun records(): List<HighlightRecord>
-    suspend fun add(id: String, locator: String, text: String, note: String, createdAt: Long)
+    /** Adds highlights from other devices. Returns the IDs it could add. */
+    suspend fun add(highlights: List<HighlightRecord>): Set<String>
     suspend fun setNote(id: String, note: String)
     suspend fun remove(id: String)
-    /** Where a saved highlight sits, for sending. Null when its chapter can't be found. */
+    /** Where a saved highlight sits, for sending. Null when the book can't be read just now. */
     suspend fun placeOf(record: HighlightRecord): ClipPlace?
     /** A saved locator for a highlight from another device, or null when it can't be placed. */
     suspend fun locatorFor(spine: Int, start: Int?, end: Int?, text: String): String?
 }
 
-/** What's been sent or seen for each highlight, so only changes go out. Kept per book. */
+/** What sync remembers between runs, for one book on one account. */
+class ClipState(
+    var cursor: Long = 0,
+    /** What each highlight looked like on the server when last sent or seen: "x" removed, or "n:" and its note. */
+    val sent: MutableMap<String, String> = HashMap(),
+    /** The server's own copy of each live clipping, so a note edit keeps the rest as CrossPoint saved it. */
+    val remote: MutableMap<String, String> = HashMap(),
+)
+
 interface ClipMemory {
-    fun cursor(document: String): Long
-    fun sent(document: String): MutableMap<String, String>
-    fun save(document: String, cursor: Long, sent: Map<String, String>)
+    fun load(slot: String): ClipState
+    fun save(slot: String, state: ClipState)
 }
 
+/** The longest note the server keeps. Longer ones are cut, so both sides compare the same text. */
+private const val NOTE_BYTES = 4000
+
 /** The state of a highlight on the server: removed, or there with this note. */
-private fun signature(removed: Boolean, note: String?) = if (removed) "x" else "n:" + md5Hex(note.orEmpty().toByteArray())
+private fun signature(removed: Boolean, note: String?) =
+    if (removed) "x" else "n:" + md5Hex(clipText(note.orEmpty(), NOTE_BYTES).toByteArray())
+
+/** Fields the server adds that aren't part of a clipping sent back. */
+private val SERVER_FIELDS = listOf("revision", "updated_at", "deleted", "color", "document")
 
 class ClippingSync(
     private val book: HighlightBook,
@@ -132,102 +171,127 @@ class ClippingSync(
     private val document: suspend () -> String?,
     private val tell: (String) -> Unit,
 ) {
-    private val lock = Mutex()
     @Volatile private var unsupported = false
 
     /** Fetches highlights from other devices, then sends this device's changes. */
-    suspend fun run(manual: Boolean) = lock.withLock {
-        if (!CrossPointSettings.isReady || !CrossPointSettings.syncHighlights) return@withLock
-        if (unsupported && !manual) return@withLock
-        val doc = document() ?: return@withLock
+    suspend fun run(manual: Boolean) {
+        if (!CrossPointSettings.isReady || !CrossPointSettings.syncHighlights) return
+        if (unsupported && !manual) return
+        val doc = document() ?: return
         val base = CrossPointSettings.baseUrl
         val user = CrossPointSettings.username
         val key = CrossPointSettings.key
-        try {
-            var cursor = memory.cursor(doc)
-            val sent = memory.sent(doc)
-            val local = book.records().associateBy { it.id }
-            var added = 0
-            while (true) {
-                val page = KoSyncClient.fetchClippings(base, user, key, doc, cursor) ?: run {
-                    unsupported = true
-                    if (manual) tell("This sync server doesn't keep highlights. CrossPoint's does.")
-                    return@withLock
-                }
-                for (item in page.items) {
-                    if (applyRemote(item, local, sent)) added++
-                }
-                if (page.cursor <= cursor && page.more) break
-                cursor = page.cursor
-                if (!page.more) break
+        // State belongs to one account on one server, for one copy of the book.
+        val slot = md5Hex("$base\n$user\n$doc\n${book.key}".toByteArray())
+        // Two screens on the same book share one turn at a time, so neither loses the other's work.
+        lockFor(slot).withLock {
+            try {
+                sync(manual, base, user, key, doc, slot)
+            } catch (error: SyncException) {
+                ResultsLog.add("CrossPoint highlights: ${error.message}")
+                if (manual) tell(error.message ?: "Highlights didn't sync")
             }
-            unsupported = false
-            memory.save(doc, cursor, sent)
-
-            // Changes made here: new highlights, edited notes and removals not yet on the server.
-            val outgoing = ArrayList<Pair<String, JSONObject>>()
-            for (record in book.records()) {
-                val state = signature(record.removed, record.note)
-                if (sent[record.id] == state) continue
-                if (record.removed) {
-                    // A highlight removed before it was ever sent has nothing to remove there.
-                    if (sent.containsKey(record.id)) outgoing += state to JSONObject().put("id", record.id).put("deleted", 1)
-                    else sent[record.id] = state
-                    continue
-                }
-                val item = encode(record) ?: continue
-                outgoing += state to item
-            }
-            for (batch in outgoing.chunked(50)) {
-                KoSyncClient.pushClippings(base, user, key, doc, JSONArray(batch.map { it.second }))
-                batch.forEach { (state, item) -> sent[item.getString("id")] = state }
-                memory.save(doc, cursor, sent)
-            }
-            if (manual && added > 0) tell(if (added == 1) "Added a highlight from another device" else "Added $added highlights from other devices")
-        } catch (error: SyncException) {
-            ResultsLog.add("CrossPoint highlights: ${error.message}")
-            if (manual) tell(error.message ?: "Highlights didn't sync")
         }
     }
 
-    /** Applies one clipping from the server. Returns true when it added a highlight here. */
-    private suspend fun applyRemote(item: JSONObject, local: Map<String, HighlightRecord>, sent: MutableMap<String, String>): Boolean {
-        val id = item.optString("id").takeIf { it.isNotBlank() } ?: return false
+    private suspend fun sync(manual: Boolean, base: String, user: String, key: String, doc: String, slot: String) {
+        val state = memory.load(slot)
+        val local = book.records().associateBy { it.id }
+        while (true) {
+            val page = KoSyncClient.fetchClippings(base, user, key, doc, state.cursor) ?: run {
+                unsupported = true
+                if (manual) tell("This sync server doesn't keep highlights. CrossPoint's does.")
+                return
+            }
+            page.items.forEach { item -> applyRemote(item, local, state) }
+            val moved = page.cursor > state.cursor
+            state.cursor = maxOf(state.cursor, page.cursor)
+            if (!page.more || !moved) break
+        }
+        unsupported = false
+        memory.save(slot, state)
+
+        // Clippings not here yet, including ones that couldn't be placed before, are tried now.
+        val adding = ArrayList<HighlightRecord>()
+        for ((id, json) in state.remote) {
+            if (local.containsKey(id)) continue
+            val item = runCatching { JSONObject(json) }.getOrNull() ?: continue
+            val text = item.optString("text").takeIf { it.isNotBlank() } ?: continue
+            val spine = item.optInt("spine", -1).takeIf { it >= 0 } ?: continue
+            val start = (item.opt("start_offset") as? Number)?.toInt()
+            val end = (item.opt("end_offset") as? Number)?.toInt()
+            val locator = book.locatorFor(spine, start, end, text) ?: continue
+            val note = item.opt("note")?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
+            val created = item.optLong("created_at", 0L).takeIf { it > 0 }?.times(1000) ?: System.currentTimeMillis()
+            adding += HighlightRecord(id, locator, text, note, created, removed = false)
+        }
+        val added = if (adding.isEmpty()) emptySet() else book.add(adding)
+        adding.filter { it.id in added }.forEach { state.sent[it.id] = signature(false, it.note) }
+        memory.save(slot, state)
+
+        // Changes made here: new highlights, edited notes and removals not yet on the server.
+        val outgoing = ArrayList<Pair<String, JSONObject>>()
+        for (record in book.records()) {
+            val now = signature(record.removed, record.note)
+            if (state.sent[record.id] == now) continue
+            if (record.removed) {
+                // A highlight removed before it was ever sent has nothing to remove there.
+                if (state.sent.containsKey(record.id) || state.remote.containsKey(record.id)) {
+                    outgoing += now to JSONObject().put("id", record.id).put("deleted", 1)
+                } else {
+                    state.sent[record.id] = now
+                }
+                continue
+            }
+            val item = encode(record, state.remote[record.id]) ?: continue
+            outgoing += now to item
+        }
+        for (batch in outgoing.chunked(50)) {
+            KoSyncClient.pushClippings(base, user, key, doc, JSONArray(batch.map { it.second }))
+            batch.forEach { (now, item) -> state.sent[item.getString("id")] = now }
+            memory.save(slot, state)
+        }
+        if (manual && added.isNotEmpty()) {
+            tell(if (added.size == 1) "Added a highlight from another device" else "Added ${added.size} highlights from other devices")
+        }
+    }
+
+    /** Takes in one clipping from the server: a removal, a note changed elsewhere, or one to add. */
+    private suspend fun applyRemote(item: JSONObject, local: Map<String, HighlightRecord>, state: ClipState) {
+        val id = item.optString("id").takeIf { it.isNotBlank() } ?: return
         val mine = local[id]
         if (item.optInt("deleted", 0) == 1) {
             if (mine != null && !mine.removed) book.remove(id)
-            sent[id] = signature(true, null)
-            return false
+            state.sent[id] = signature(true, null)
+            state.remote.remove(id)
+            return
         }
+        state.remote[id] = item.toString()
         val note = item.opt("note")?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
         val remoteState = signature(false, note)
-        if (mine != null) {
-            // Removed here: the removal goes to the server next.
-            if (mine.removed) return false
-            val mineState = signature(false, mine.note)
-            when {
-                mineState == remoteState -> sent[id] = remoteState
-                // Unchanged here since the last sync, so the other device's edit wins.
-                sent[id] == mineState -> {
-                    book.setNote(id, note)
-                    sent[id] = remoteState
-                }
+        // Removed here, so the removal goes to the server next. Not here yet, so it's added below.
+        if (mine == null || mine.removed) return
+        val mineState = signature(false, mine.note)
+        when {
+            mineState == remoteState -> state.sent[id] = remoteState
+            // Unchanged here since the last sync, so the other device's edit wins.
+            state.sent[id] == mineState -> {
+                book.setNote(id, note)
+                state.sent[id] = remoteState
             }
-            return false
         }
-        val text = item.optString("text")
-        if (text.isBlank()) return false
-        val spine = item.optInt("spine", -1).takeIf { it >= 0 } ?: return false
-        val start = item.opt("start_offset")?.takeIf { it is Number }?.let { (it as Number).toInt() }
-        val end = item.opt("end_offset")?.takeIf { it is Number }?.let { (it as Number).toInt() }
-        val locator = book.locatorFor(spine, start, end, text) ?: return false
-        val created = item.optLong("created_at", 0L).takeIf { it > 0 }?.times(1000) ?: System.currentTimeMillis()
-        book.add(id, locator, text, note, created)
-        sent[id] = remoteState
-        return true
     }
 
-    private suspend fun encode(record: HighlightRecord): JSONObject? {
+    /**
+     * A clipping to send. One that came from the server goes back as it was with only the note
+     * changed, so CrossPoint keeps its own page details. A new one is placed in its chapter.
+     */
+    private suspend fun encode(record: HighlightRecord, remote: String?): JSONObject? {
+        val note: Any = clipText(record.note, NOTE_BYTES).ifBlank { null } ?: JSONObject.NULL
+        remote?.let { saved -> runCatching { JSONObject(saved) }.getOrNull() }?.let { item ->
+            SERVER_FIELDS.forEach { item.remove(it) }
+            return item.put("note", note)
+        }
         val place = book.placeOf(record) ?: return null
         val text = clipText(record.text.ifBlank { return null })
         val item = JSONObject()
@@ -241,12 +305,17 @@ class ClippingSync(
             .put("words", text.split(Regex("\\s+")).count { it.isNotEmpty() }.coerceAtMost(65_535))
             .put("chapter", place.chapter.take(47))
             .put("text", text)
-            .put("note", record.note.ifBlank { null } ?: JSONObject.NULL)
+            .put("note", note)
             .put("created_at", record.createdAt / 1000)
             .put("layout_signature", 0)
         if (place.start != null && place.end != null && place.end > place.start) {
             item.put("start_offset", place.start).put("end_offset", place.end)
         }
         return item
+    }
+
+    private companion object {
+        val locks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+        fun lockFor(slot: String): Mutex = locks.getOrPut(slot) { Mutex() }
     }
 }

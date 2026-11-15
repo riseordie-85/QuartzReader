@@ -39,7 +39,8 @@ class EpubSync(
     @Volatile private var percentage = 0.0
     /** For each chapter Readium shows, its place in the full spine. */
     @Volatile private var spine: List<Int>? = null
-    private val parsed = LinkedHashMap<Int, List<Markup>>()
+    /** The last few chapters read, the least recently used first. */
+    private val parsed = LinkedHashMap<Int, List<Markup>>(8, 0.75f, true)
 
     /** Works out this page's place. Call on the main thread after the page settles. */
     suspend fun locate(locator: Locator): LocalSpot? {
@@ -58,8 +59,9 @@ class EpubSync(
 
     private suspend fun spineIndexes(): List<Int> {
         spine?.let { return it }
+        // Only a spine that was read is kept. The book may just be closing, and next time it can be read.
         val found = withContext(Dispatchers.IO) { runCatching { readSpine() }.getOrNull() }
-            ?: publication.readingOrder.indices.toList()
+            ?: return publication.readingOrder.indices.toList()
         spine = found
         return found
     }
@@ -174,7 +176,8 @@ class EpubSync(
         val chapter = publication.readingOrder.indexOfFirstWithHref(locator.href) ?: return null
         val spineIndex = spineIndexes().getOrElse(chapter) { chapter }
         val title = locator.title?.takeIf { it.isNotBlank() } ?: titleOf(chapter)
-        val pieces = markup(chapter) ?: return ClipPlace(spineIndex, null, null, title)
+        // Unreadable now, perhaps because the book is closing, so it waits for the next sync.
+        val pieces = markup(chapter)?.takeIf { it.isNotEmpty() } ?: return null
         val chapterText = withContext(Dispatchers.Default) { visibleText(pieces.asSequence()) }
         val quote = locator.text.highlight?.takeIf { it.isNotEmpty() } ?: text
         val range = findQuote(
@@ -197,7 +200,9 @@ class EpubSync(
         val indexes = spineIndexes()
         val chapter = readingIndexOf(spine, indexes)?.takeIf { indexes.getOrNull(it) == spine } ?: return null
         val link = publication.readingOrder.getOrNull(chapter) ?: return null
-        val chapterText = markup(chapter)?.let { pieces -> withContext(Dispatchers.Default) { visibleText(pieces.asSequence()) } }
+        // Unreadable now, perhaps because the book is closing, so it waits for the next sync.
+        val pieces = markup(chapter)?.takeIf { it.isNotEmpty() } ?: return null
+        val chapterText: String? = withContext(Dispatchers.Default) { visibleText(pieces.asSequence()) }
         var range: IntRange? = null
         if (chapterText != null) {
             if (start != null && end != null) {
@@ -206,8 +211,9 @@ class EpubSync(
                 if (from != null && to != null && to > from) range = from until to
             }
             // Offsets from a different copy of the book can point at other words, so the words decide.
+            // A long clipping's words may have been cut short, so they only need to start the same.
             fun squeezed(value: String) = value.filterNot { it.isWhitespace() || it == '\u00AD' }
-            if (range == null || squeezed(chapterText.substring(range)) != squeezed(text)) {
+            if (range == null || !squeezed(chapterText.substring(range)).startsWith(squeezed(text).take(200))) {
                 range = findQuote(chapterText, text, "", "", range?.let { it.first.toDouble() / chapterText.length }) ?: range
             }
         }
@@ -473,11 +479,11 @@ class EpubHighlightBook(
     private val bookId: String,
     private val epub: EpubSync,
 ) : HighlightBook {
+    override val key = bookId
+
     override suspend fun records() = repository.highlightRecords(bookId)
 
-    override suspend fun add(id: String, locator: String, text: String, note: String, createdAt: Long) {
-        repository.addSyncedHighlight(id, bookId, locator, text, note, createdAt)
-    }
+    override suspend fun add(highlights: List<HighlightRecord>) = repository.addSyncedHighlights(bookId, highlights)
 
     override suspend fun setNote(id: String, note: String) {
         repository.updateNote(id, note)
