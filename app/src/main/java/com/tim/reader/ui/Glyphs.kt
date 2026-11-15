@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tim.reader.theme.StrokeLook
 
-enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search, Notes, Share }
+enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search, Notes, Share, Sync }
 
 private fun DrawScope.drawPlus(color: Color) {
     val width = size.minDimension * 0.14f
@@ -116,6 +116,26 @@ private fun DrawScope.drawShare(color: Color) {
     listOf(top, left, bottom).forEach { drawCircle(color, unit * 0.15f, it) }
 }
 
+/** Two arrows chasing each other round a circle. */
+private fun DrawScope.drawSync(color: Color) {
+    val unit = size.minDimension
+    val width = unit * 0.09f
+    val middle = Offset(size.width / 2, size.height / 2)
+    val radius = unit * 0.32f
+    val box = Size(radius * 2, radius * 2)
+    val corner = Offset(middle.x - radius, middle.y - radius)
+    listOf(200f, 20f).forEach { start ->
+        drawArc(color, start, 130f, false, corner, box, style = Stroke(width, cap = StrokeCap.Round))
+        // The arrowhead sits where the arc ends, pointing along it.
+        val end = Math.toRadians((start + 130f).toDouble())
+        val tip = Offset(middle.x + radius * kotlin.math.cos(end).toFloat(), middle.y + radius * kotlin.math.sin(end).toFloat())
+        rotate(start + 130f + 90f, tip) {
+            drawLine(color, tip, Offset(tip.x - unit * 0.13f, tip.y - unit * 0.1f), width, StrokeCap.Round)
+            drawLine(color, tip, Offset(tip.x - unit * 0.13f, tip.y + unit * 0.1f), width, StrokeCap.Round)
+        }
+    }
+}
+
 private fun DrawScope.ribbon(): Path {
     val unit = size.minDimension
     return Path().apply {
@@ -159,6 +179,7 @@ fun GlyphButton(
             Glyph.Search -> drawSearch(color)
             Glyph.Notes -> drawNotes(color)
             Glyph.Share -> drawShare(color)
+            Glyph.Sync -> drawSync(color)
             Glyph.Bookmark -> drawPath(ribbon(), color)
             Glyph.BookmarkOutline -> drawPath(ribbon(), color, style = Stroke(size.minDimension * 0.09f))
         }

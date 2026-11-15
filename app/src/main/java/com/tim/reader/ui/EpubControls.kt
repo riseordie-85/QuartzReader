@@ -138,6 +138,7 @@ fun EpubControls(
     onAnimatedTurns: (Boolean) -> Unit,
     onPageColor: (Int) -> Unit,
     onPagePadding: (outerMargin: Int, verticalMargin: Int, cameraGap: Int, cameraEdge: CameraEdge) -> Unit,
+    onSync: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val repository = remember { LibraryRepository.get(context) }
@@ -384,6 +385,7 @@ fun EpubControls(
         },
         onShare = { startShare(null) },
         onSeek = ::goToPosition,
+        onSync = onSync,
     ) { open ->
         when (open) {
             ReaderSheet.Settings -> QuickSettings(

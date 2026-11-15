@@ -75,6 +75,8 @@ fun ReaderChrome(
     onBookmark: () -> Unit,
     onShare: () -> Unit,
     onSeek: (Int) -> Unit,
+    /** Syncs progress with CrossPoint and KOReader devices, when that's turned on. */
+    onSync: (() -> Unit)? = null,
     sheetContent: @Composable ColumnScope.(ReaderSheet) -> Unit,
 ) {
     CompositionLocalProvider(LocalContentColor provides Color.White) {
@@ -92,6 +94,7 @@ fun ReaderChrome(
                 if (hasSearch) GlyphButton(Glyph.Search, Color.White, "Search", iconSize = 30.dp) { toggle(ReaderSheet.Search) }
                 if (hasNotes) GlyphButton(Glyph.Notes, Color.White, "Highlights and notes", iconSize = 30.dp) { toggle(ReaderSheet.Notes) }
                 GlyphButton(Glyph.Share, Color.White, "Share this page", iconSize = 30.dp, onClick = onShare)
+                if (onSync != null) GlyphButton(Glyph.Sync, Color.White, "Sync progress", iconSize = 30.dp, onClick = onSync)
                 GlyphButton(Glyph.Gear, Color.White, "Reader settings", iconSize = 30.dp) { toggle(ReaderSheet.Settings) }
                 if (isBookmarked != null) {
                     GlyphButton(

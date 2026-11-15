@@ -97,6 +97,8 @@ fun SettingsScreen(
         FolderWatchSettings()
         Text("Backup and sync", style = MaterialTheme.typography.titleMedium)
         SyncSetting()
+        Text("CrossPoint and KOReader", style = MaterialTheme.typography.titleMedium)
+        CrossPointSetting()
         Text("Reading", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onStats, Modifier.fillMaxWidth()) { Text("Reading stats") }
         ReminderSetting()

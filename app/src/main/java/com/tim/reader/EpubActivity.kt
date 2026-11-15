@@ -9,9 +9,11 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -25,6 +27,10 @@ import androidx.fragment.app.commitNow
 import androidx.lifecycle.lifecycleScope
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.stats.ReadingTracker
+import com.tim.reader.sync.CrossPointSettings
+import com.tim.reader.sync.EpubSync
+import com.tim.reader.sync.ProgressSync
+import com.tim.reader.ui.SyncOfferDialog
 import com.tim.reader.theme.BookFonts
 import com.tim.reader.data.ReadDirection
 import com.tim.reader.data.ReaderLook
@@ -34,6 +40,8 @@ import com.tim.reader.library.LibrarySync
 import com.tim.reader.reader.epubPreferences
 import com.tim.reader.ui.EpubControls
 import com.tim.reader.ui.showsTwoPages
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
@@ -51,6 +59,7 @@ import org.readium.r2.shared.util.AbsoluteUrl
 
 /** The text reader: Readium draws the book, and floating Compose controls sit over it. */
 private const val MENU_COPY = 1
+private const val SPOT_DELAY_MS = 700L
 
 @OptIn(ExperimentalReadiumApi::class)
 class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
@@ -66,6 +75,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var verticalMargin = 0
     private var cameraGap = 0
     private var cameraEdge = CameraEdge.Auto
+    private var progressSync: ProgressSync? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -130,6 +140,12 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         }
         val navigator = supportFragmentManager.findFragmentByTag(tag) as EpubNavigatorFragment
         this.navigator = navigator
+        CrossPointSettings.ensureLoaded(this)
+        val epubSync = EpubSync(publication, navigator)
+        val sync = book?.takeIf { it.documentUri.isNotBlank() && !it.isFolder }?.let { syncedBook ->
+            ProgressSync(this, syncedBook, epubSync) { text -> runOnUiThread { Toast.makeText(this, text, Toast.LENGTH_SHORT).show() } }
+        }
+        progressSync = sync
         val animated = DirectionalNavigationAdapter(navigator, animatedTransition = true)
         val instant = DirectionalNavigationAdapter(navigator, animatedTransition = false)
         navigator.addInputListener(object : InputListener {
@@ -168,7 +184,12 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                                 cameraEdge = edge
                                 updatePagePadding()
                             },
+                            onSync = sync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow(lifecycleScope) } },
                         )
+                        if (sync != null) {
+                            val offer by sync.offer.collectAsState()
+                            offer?.let { SyncOfferDialog(it, onGo = sync::accept, onStay = sync::decline) }
+                        }
                     }
                 }
             },
@@ -195,6 +216,23 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                         }
                     }
                     repository.savePosition(bookId, 0, progress, locator.toJSON().toString())
+                }
+            }
+        }
+
+        if (sync != null) {
+            lifecycleScope.launch {
+                var started = false
+                // Working out the place on screen waits for the page to settle after each turn.
+                navigator.currentLocator.collectLatest { locator ->
+                    if ((locator.locations.position ?: 0) < 1) return@collectLatest
+                    delay(SPOT_DELAY_MS)
+                    val spot = epubSync.locate(locator) ?: return@collectLatest
+                    sync.update(spot)
+                    if (!started) {
+                        started = true
+                        sync.start(lifecycleScope)
+                    }
                 }
             }
         }
@@ -299,10 +337,12 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     override fun onResume() {
         super.onResume()
         ReadingTracker.resume(this)
+        progressSync?.resumed(lifecycleScope)
     }
 
     override fun onPause() {
         super.onPause()
+        progressSync?.paused()
         if (isFinishing) ReadingTracker.stop(this) else ReadingTracker.pause(this)
         LibrarySync.save(this)
     }

@@ -76,6 +76,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.tim.reader.sync.CrossPointSettings
+import com.tim.reader.sync.ImageSync
+import com.tim.reader.sync.ProgressSync
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -265,6 +270,45 @@ fun ImageReaderScreen(
 
     ReaderWindow(controls || sheet != null, rotationLocked)
     LaunchedEffect(currentPage) { onPage(currentPage) }
+
+    // Progress sync with CrossPoint and KOReader, for books that are one file.
+    val latestPage by rememberUpdatedState(currentPage)
+    val imageSync = remember(source) { ImageSync(source.pageCount, { latestPage }) { page -> nav.goTo(page) } }
+    val progressSync = remember(source, book?.id) {
+        book?.takeIf { !it.isFolder && it.documentUri.isNotBlank() }?.let { syncedBook ->
+            ProgressSync(context, syncedBook, imageSync) { text ->
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    if (progressSync != null) {
+        LaunchedEffect(progressSync) {
+            CrossPointSettings.ensureLoaded(context)
+            progressSync.update(imageSync.spot(currentPage))
+            progressSync.start(this)
+        }
+        LaunchedEffect(progressSync, currentPage) { progressSync.update(imageSync.spot(currentPage)) }
+        val lifecycle = (LocalActivity.current as? androidx.activity.ComponentActivity)?.lifecycle
+        DisposableEffect(progressSync, lifecycle) {
+            val watcher = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_PAUSE -> progressSync.paused()
+                    Lifecycle.Event.ON_RESUME -> progressSync.resumed(scope)
+                    else -> Unit
+                }
+            }
+            lifecycle?.addObserver(watcher)
+            onDispose {
+                lifecycle?.removeObserver(watcher)
+                // Leaving the book counts as stepping away from it.
+                progressSync.paused()
+            }
+        }
+        val offer by progressSync.offer.collectAsState()
+        offer?.let { SyncOfferDialog(it, onGo = progressSync::accept, onStay = progressSync::decline) }
+    }
     // Keys go to this screen, and a closed sheet can leave them with nowhere to go.
     LaunchedEffect(sheet) {
         if (sheet == null) focus.requestFocus()
@@ -401,6 +445,7 @@ fun ImageReaderScreen(
                     }
                 },
                 onSeek = { target -> scope.launch { nav.goTo(target) } },
+                onSync = progressSync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow(scope) } },
             ) { open ->
                 when (open) {
                     ReaderSheet.Settings -> ReaderSettings(

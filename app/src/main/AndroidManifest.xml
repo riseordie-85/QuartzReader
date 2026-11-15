@@ -18,7 +18,8 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="Quartz Reader"
         android:largeHeap="true"
-        android:theme="@style/Theme.Reader">
+        android:theme="@style/Theme.Reader"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
