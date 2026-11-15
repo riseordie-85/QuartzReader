@@ -11,6 +11,7 @@ import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.indexOfFirstWithHref
 import org.readium.r2.shared.publication.services.locateProgression
+import org.readium.r2.shared.util.Url
 import org.readium.r2.shared.util.mediatype.MediaType
 import org.xmlpull.v1.XmlPullParser
 import java.io.ByteArrayInputStream
@@ -19,6 +20,10 @@ import java.io.ByteArrayInputStream
  * Sync for the EPUB reader. Places go out as KOReader paths, worked out in the page from the
  * first and last letters on screen. Places coming in are followed through the chapter's file
  * and handed to Readium as a quote to find, so they land on the same words.
+ *
+ * KOReader numbers chapters across the book's whole spine, including pages marked as outside
+ * the reading order, like many covers, which Readium leaves out. So chapter numbers are mapped
+ * between the two.
  */
 @OptIn(ExperimentalReadiumApi::class)
 class EpubSync(
@@ -26,40 +31,94 @@ class EpubSync(
     private val navigator: EpubNavigatorFragment,
 ) : SyncReader {
     /** The first and last letters on screen, as paths, from the latest page. */
-    private var screenStart: String? = null
-    private var screenEnd: String? = null
-    private var percentage = 0.0
+    @Volatile private var screenStart: String? = null
+    @Volatile private var screenEnd: String? = null
+    @Volatile private var percentage = 0.0
+    /** For each chapter Readium shows, its place in the full spine. */
+    @Volatile private var spine: List<Int>? = null
+    private val parsed = LinkedHashMap<Int, List<Markup>>()
 
     /** Works out this page's place. Call on the main thread after the page settles. */
     suspend fun locate(locator: Locator): LocalSpot? {
         val chapter = publication.readingOrder.indexOfFirstWithHref(locator.href) ?: return null
+        val fragment = spineIndexes().getOrElse(chapter) { chapter } + 1
         percentage = locator.locations.totalProgression ?: percentage
         val overflow = navigator.overflow.value
         val rtl = overflow.readingProgression == ReadingProgression.RTL
-        val script = "$SCREEN_SCRIPT(${chapter + 1}, ${overflow.scroll}, $rtl)"
+        val script = "$SCREEN_SCRIPT($fragment, ${overflow.scroll}, $rtl)"
         val answer = runCatching { navigator.evaluateJavascript(script) }.getOrNull()
         val json = answer?.takeIf { it.startsWith("{") }?.let { runCatching { JSONObject(it) }.getOrNull() }
         screenStart = json?.optString("start")?.takeIf { it.startsWith("/body/") }
         screenEnd = json?.optString("end")?.takeIf { it.startsWith("/body/") }
-        return LocalSpot(screenStart ?: "/body/DocFragment[${chapter + 1}]/body", percentage)
+        return LocalSpot(screenStart ?: "/body/DocFragment[$fragment]/body", percentage)
     }
 
-    /** The chapter's markup, read the way KOReader's engine sees it. */
-    private suspend fun markup(chapter: Int): List<Markup>? = withContext(Dispatchers.IO) {
-        val link = publication.readingOrder.getOrNull(chapter) ?: return@withContext null
-        val resource = publication.get(link) ?: return@withContext null
-        val bytes = try {
+    private suspend fun spineIndexes(): List<Int> {
+        spine?.let { return it }
+        val found = withContext(Dispatchers.IO) { runCatching { readSpine() }.getOrNull() }
+            ?: publication.readingOrder.indices.toList()
+        spine = found
+        return found
+    }
+
+    private suspend fun readFile(path: String): ByteArray? {
+        val url = Url.fromDecodedPath(path) ?: return null
+        val resource = publication.get(url) ?: return null
+        return try {
             resource.read().getOrNull()
         } finally {
             resource.close()
         }
-        bytes?.let(::parseMarkup)
     }
 
+    /** Finds each reading-order chapter in the full spine, from the book's package file. */
+    private suspend fun readSpine(): List<Int>? {
+        val container = readFile("META-INF/container.xml") ?: return null
+        val packagePath = firstAttribute(container, "rootfile", "full-path") ?: return null
+        val opf = readFile(packagePath) ?: return null
+        val (hrefs, order) = readPackage(opf)
+        val folder = packagePath.substringBeforeLast('/', "")
+        val spinePaths = order.mapNotNull { id -> hrefs[id] }.map { href -> joinBookPath(folder, decodePercent(href.substringBefore('#'))) }
+        val readingPaths = publication.readingOrder.map { link -> link.url().path?.trimStart('/') }
+        return readingPaths.map { path -> spinePaths.indexOf(path).takeIf { it >= 0 } ?: return null }
+    }
+
+    /** The chapter Readium shows for a spine number. A page outside the reading order goes to the next chapter. */
+    private fun readingIndexOf(spineIndex: Int, indexes: List<Int>): Int? {
+        indexes.indexOf(spineIndex).takeIf { it >= 0 }?.let { return it }
+        return indexes.indexOfFirst { it > spineIndex }.takeIf { it >= 0 }
+    }
+
+    /** The chapter's markup, read the way KOReader's engine sees it. A few chapters are kept. */
+    private suspend fun markup(chapter: Int): List<Markup>? {
+        synchronized(parsed) { parsed[chapter] }?.let { return it }
+        val link = publication.readingOrder.getOrNull(chapter) ?: return null
+        val pieces = withContext(Dispatchers.IO) {
+            val resource = publication.get(link) ?: return@withContext null
+            val bytes = try {
+                resource.read().getOrNull()
+            } finally {
+                resource.close()
+            }
+            bytes?.let(::parseMarkup)
+        } ?: return null
+        synchronized(parsed) {
+            parsed[chapter] = pieces
+            while (parsed.size > 3) parsed.remove(parsed.keys.first())
+        }
+        return pieces
+    }
+
+    /** Follows a path to a chapter Readium shows, and a spot in it. */
     private suspend fun place(path: String): Pair<Int, XPointerTarget>? {
         val pointer = XPointer.parse(path) ?: return null
-        val pieces = markup(pointer.chapter) ?: return null
-        return pointer.chapter to withContext(Dispatchers.Default) { resolveXPointer(pointer, pieces.asSequence()) }
+        val chapter = readingIndexOf(pointer.chapter, spineIndexes()) ?: return null
+        if (spineIndexes().getOrNull(chapter) != pointer.chapter) {
+            // The path is in a page outside the reading order, so it lands at the next chapter's start.
+            return chapter to XPointerTarget(0, 1, null, "", "", "", exact = false)
+        }
+        val pieces = markup(chapter) ?: return null
+        return chapter to withContext(Dispatchers.Default) { resolveXPointer(pointer, pieces.asSequence()) }
     }
 
     override suspend fun compare(remote: RemoteProgress): Comparison {
@@ -124,15 +183,62 @@ private val ENTITIES = mapOf(
     "frac34" to "¾", "larr" to "←", "rarr" to "→",
 )
 
-/** Reads a chapter file into pieces. Broken markup ends the list where it breaks. */
-internal fun parseMarkup(bytes: ByteArray): List<Markup> {
-    val pieces = ArrayList<Markup>()
+private fun newParser(bytes: ByteArray): XmlPullParser {
     val parser = Xml.newPullParser()
     runCatching { parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false) }
     runCatching { parser.setFeature("http://xmlpull.org/v1/doc/features.html#relaxed", true) }
     parser.setInput(ByteArrayInputStream(bytes), null)
     ENTITIES.forEach { (name, value) -> runCatching { parser.defineEntityReplacementText(name, value) } }
+    return parser
+}
+
+private fun XmlPullParser.attribute(name: String): String? =
+    (0 until attributeCount).firstOrNull { attributeName(it) == name }?.let { getAttributeValue(it) }
+
+private fun XmlPullParser.attributeName(index: Int) = getAttributeName(index).substringAfter(':')
+
+/** The first [attribute] on a [tag] element, ignoring namespace prefixes. */
+private fun firstAttribute(bytes: ByteArray, tag: String, attribute: String): String? = runCatching {
+    val parser = newParser(bytes)
+    var event = parser.next()
+    while (event != XmlPullParser.END_DOCUMENT) {
+        if (event == XmlPullParser.START_TAG && parser.name.substringAfter(':') == tag) {
+            parser.attribute(attribute)?.let { return@runCatching it }
+        }
+        event = parser.next()
+    }
+    null
+}.getOrNull()
+
+/** A package file's manifest, as ids to paths, and its spine as ids in order, every page included. */
+private fun readPackage(bytes: ByteArray): Pair<Map<String, String>, List<String>> {
+    val hrefs = HashMap<String, String>()
+    val order = ArrayList<String>()
+    runCatching {
+        val parser = newParser(bytes)
+        var event = parser.next()
+        while (event != XmlPullParser.END_DOCUMENT) {
+            if (event == XmlPullParser.START_TAG) {
+                when (parser.name.substringAfter(':')) {
+                    "item" -> {
+                        val id = parser.attribute("id")
+                        val href = parser.attribute("href")
+                        if (id != null && href != null) hrefs[id] = href
+                    }
+                    "itemref" -> parser.attribute("idref")?.let { order += it }
+                }
+            }
+            event = parser.next()
+        }
+    }
+    return hrefs to order
+}
+
+/** Reads a chapter file into pieces. Broken markup ends the list where it breaks. */
+internal fun parseMarkup(bytes: ByteArray): List<Markup> {
+    val pieces = ArrayList<Markup>()
     try {
+        val parser = newParser(bytes)
         var event = parser.next()
         while (event != XmlPullParser.END_DOCUMENT) {
             when (event) {
@@ -160,11 +266,17 @@ private const val SCREEN_SCRIPT = """(function (chapter, scroll, rtl) {
     function isBefore(r) { return scroll ? r.bottom <= 1 : (rtl ? r.left >= W - 1 : r.right <= 1); }
     function isAfter(r) { return scroll ? r.top >= H - 1 : (rtl ? r.right <= 1 : r.left >= W - 1); }
     var range = document.createRange();
-    function charRect(node, i) {
+    function rectAt(node, i) {
       range.setStart(node, i);
       range.setEnd(node, i + 1);
       var r = range.getClientRects();
       return r.length ? r[0] : null;
+    }
+    // A collapsed space has no box, so the nearest letter that has one stands in for it.
+    function charRect(node, i) {
+      for (var j = i; j < node.data.length && j < i + 16; j++) { var a = rectAt(node, j); if (a) return a; }
+      for (var k = i - 1; k >= 0 && k > i - 16; k--) { var b = rectAt(node, k); if (b) return b; }
+      return null;
     }
     function nodeState(node) {
       range.selectNodeContents(node);

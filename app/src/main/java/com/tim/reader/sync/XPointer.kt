@@ -89,6 +89,50 @@ data class XPointerTarget(
 
 private val HIDDEN = setOf("head", "style", "script", "title", "rp")
 
+/**
+ * Elements that hold other blocks rather than text. KOReader drops text that's only spaces from
+ * these when it counts, but keeps it inside a paragraph, between words in different styles.
+ */
+private val CONTAINERS = setOf(
+    "body", "div", "section", "article", "aside", "header", "footer", "nav", "main", "ul", "ol", "dl",
+    "table", "thead", "tbody", "tfoot", "tr", "figure", "blockquote", "hgroup", "details",
+)
+
+/** Undoes %20 and the like in a path from a book's package file. */
+fun decodePercent(text: String): String {
+    if (!text.contains('%')) return text
+    val bytes = java.io.ByteArrayOutputStream()
+    var i = 0
+    while (i < text.length) {
+        val char = text[i]
+        if (char == '%' && i + 2 <= text.lastIndex) {
+            val value = text.substring(i + 1, i + 3).toIntOrNull(16)
+            if (value != null) {
+                bytes.write(value)
+                i += 3
+                continue
+            }
+        }
+        bytes.write(char.toString().toByteArray())
+        i++
+    }
+    return bytes.toString("UTF-8")
+}
+
+/** Joins a path inside a book to the folder it's relative to, settling any "." and "..". */
+fun joinBookPath(folder: String, relative: String): String {
+    val parts = ArrayList<String>()
+    val all = if (relative.startsWith("/")) relative.split('/') else folder.split('/') + relative.split('/')
+    for (part in all) {
+        when (part) {
+            "", "." -> Unit
+            ".." -> if (parts.isNotEmpty()) parts.removeAt(parts.lastIndex)
+            else -> parts += part
+        }
+    }
+    return parts.joinToString("/")
+}
+
 /** Spaces as KOReader's engine sees them: a run of these is one character. */
 private fun isSpace(char: Char) = char == ' ' || char == '\n' || char == '\r' || char == '\t'
 
@@ -129,6 +173,7 @@ fun resolveXPointer(pointer: XPointer, markup: Sequence<Markup>): XPointerTarget
     var chars = 0
     var matched = 0
     var targetDepth = -1
+    var targetName = ""
     var targetStart = 0
     var targetClosed = false
     var bestStart = 0
@@ -151,6 +196,7 @@ fun resolveXPointer(pointer: XPointer, markup: Sequence<Markup>): XPointerTarget
                         bodyDepth = stack.size
                         if (pointer.steps.isEmpty()) {
                             targetDepth = stack.size
+                            targetName = "body"
                             targetStart = chars
                         }
                     }
@@ -182,6 +228,7 @@ fun resolveXPointer(pointer: XPointer, markup: Sequence<Markup>): XPointerTarget
                     bestSelector = if (selectorOk) (listOf("body") + selectorParts).joinToString(" > ") else null
                     if (matched == pointer.steps.size) {
                         targetDepth = stack.size
+                        targetName = lower
                         targetStart = chars
                     }
                 }
@@ -229,10 +276,11 @@ fun resolveXPointer(pointer: XPointer, markup: Sequence<Markup>): XPointerTarget
     var inElement = 0
     val wanted = pointer.textIndex
     if (wanted != null) {
-        // KOReader skips text that's only spaces when it counts, at least between paragraphs, so
-        // that count is tried first.
+        // Inside a container KOReader skips text that's only spaces when it counts. Inside a
+        // paragraph it keeps it.
         val written = runs.filter { !it.spaceOnly }
-        val run = written.getOrNull(wanted - 1) ?: runs.getOrNull(wanted - 1) ?: written.firstOrNull()
+        val counted = if (targetName in CONTAINERS) written else runs
+        val run = counted.getOrNull(wanted - 1) ?: runs.getOrNull(wanted - 1) ?: written.firstOrNull()
         if (run != null) inElement = run.start + rawIndexOf(text.substring(run.start, run.end), pointer.offset)
     }
     return quoteAt(text, inElement, targetStart, total, bestSelector)

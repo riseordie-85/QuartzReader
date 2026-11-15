@@ -13,7 +13,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +25,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.tim.reader.sync.CrossPointSettings
 import com.tim.reader.sync.KoSyncClient
 import com.tim.reader.sync.SyncException
@@ -49,7 +49,7 @@ private fun SettingSwitch(title: String, detail: String, checked: Boolean, onCha
 @Composable
 fun CrossPointSetting() {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { CrossPointSettings.ensureLoaded(context) }
+    remember { CrossPointSettings.ensureLoaded(context) }
     val scope = rememberCoroutineScope()
     var server by remember { mutableStateOf(CrossPointSettings.server) }
     var username by remember { mutableStateOf(CrossPointSettings.username) }
@@ -176,7 +176,9 @@ fun CrossPointSetting() {
 @Composable
 fun SyncOfferDialog(offer: SyncOffer, onGo: () -> Unit, onStay: () -> Unit) {
     AlertDialog(
+        // A stray tap beside the question shouldn't answer it. Back still means stay.
         onDismissRequest = onStay,
+        properties = DialogProperties(dismissOnClickOutside = false),
         title = { Text("Go to ${offer.percent}%?") },
         text = { Text("${offer.device} is further on in this book.") },
         confirmButton = { TextButton(onGo) { Text("Go there") } },

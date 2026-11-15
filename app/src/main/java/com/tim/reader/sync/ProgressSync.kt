@@ -5,7 +5,7 @@ import android.net.Uri
 import com.tim.reader.ResultsLog
 import com.tim.reader.appScope
 import com.tim.reader.data.Book
-import kotlinx.coroutines.CoroutineScope
+import com.tim.reader.library.DeviceSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -40,8 +40,9 @@ data class SyncOffer(val device: String, val percent: Int, val manual: Boolean)
  * opens and when the reader comes back to it, and sends this device's place a little after the
  * pages stop turning and when the reader leaves.
  *
- * It won't send anything until it knows the server's place, so opening a book here can't
- * overwrite further progress made on the Kindle.
+ * It sends nothing until it has seen the server's place and settled it: nothing saved there, this
+ * device further on, or the reader choosing here or there. So reading offline, or leaving a
+ * question unanswered, can't overwrite further progress made on another device.
  */
 class ProgressSync(
     context: Context,
@@ -53,48 +54,70 @@ class ProgressSync(
     private val context = context.applicationContext
     private val _offer = MutableStateFlow<SyncOffer?>(null)
     val offer: StateFlow<SyncOffer?> = _offer
-    private var pendingGo: (suspend () -> Unit)? = null
+    @Volatile private var pendingGo: (suspend () -> Unit)? = null
 
-    /** True once this device may send its place: the server's has been seen and settled. */
+    /** True once this device may send its place. */
     @Volatile private var settled = false
-    @Volatile private var pullFailed = false
+    @Volatile private var lastPullAt = 0L
+    /** The server turned down the sign-in, so asking again won't help until it changes. */
+    @Volatile private var refusedKey: String? = null
     @Volatile private var spot: LocalSpot? = null
     @Volatile private var sent: LocalSpot? = null
-    /** After jumping to another device's place, that device already has it, so it isn't sent back. */
-    @Volatile private var skipNext = false
+    /** After a jump, the place it lands on came from the other device, so it isn't sent back. */
+    @Volatile private var landing: LocalSpot? = null
+    @Volatile private var landingUntil = 0L
     private var pushJob: Job? = null
-    private var pausedAt = 0L
+    @Volatile private var pausedAt = 0L
     private val lock = Mutex()
-    private var documentId: String? = null
+    @Volatile private var documentId: Pair<Boolean, String>? = null
 
-    private val active get() = CrossPointSettings.isReady
+    init {
+        CrossPointSettings.ensureLoaded(context)
+        DeviceSettings.ensureLoaded(context)
+    }
 
-    private suspend fun document(): String? = documentId ?: withContext(Dispatchers.IO) {
-        val uri = Uri.parse(book.documentUri)
-        (if (CrossPointSettings.matchByName) fileNameDocumentId(context, uri) else koreaderDocumentId(context, uri))
-            .also { documentId = it }
+    private val active get() = CrossPointSettings.isReady && refusedKey != CrossPointSettings.key
+
+    private suspend fun document(): String? {
+        val byName = CrossPointSettings.matchByName
+        documentId?.takeIf { it.first == byName }?.let { return it.second }
+        return withContext(Dispatchers.IO) {
+            val uri = Uri.parse(book.documentUri)
+            (if (byName) fileNameDocumentId(context, uri) else koreaderDocumentId(context, uri))
+                ?.also { documentId = byName to it }
+        }
     }
 
     /** Call once the book is open and its first page is showing. */
-    fun start(scope: CoroutineScope) {
-        CrossPointSettings.ensureLoaded(context)
-        if (!active) return
-        scope.launch { pull(manual = false) }
+    fun start() {
+        if (active) pullLater(manual = false)
+    }
+
+    private fun pullLater(manual: Boolean) {
+        lastPullAt = System.currentTimeMillis()
+        appScope.launch { pull(manual) }
     }
 
     /** Call whenever this device's place changes. */
     fun update(newSpot: LocalSpot) {
+        val before = spot
         spot = newSpot
-        if (skipNext) {
-            skipNext = false
-            sent = newSpot
+        if (landingUntil > 0) {
+            if (System.currentTimeMillis() < landingUntil && newSpot != landing) {
+                // The jump has landed. The other device already has this place.
+                sent = newSpot
+                landingUntil = 0
+                return
+            }
+            if (System.currentTimeMillis() >= landingUntil) landingUntil = 0
+        }
+        if (!active) return
+        if (!settled) {
+            // The server's place hasn't been seen yet, perhaps because it couldn't be reached, so look again now and then.
+            if (_offer.value == null && System.currentTimeMillis() - lastPullAt > RETRY_AFTER_MS) pullLater(manual = false)
             return
         }
-        if (pullFailed && !settled && sent == null) {
-            // The server couldn't be reached at open. Reading on means this device's place is the one to keep.
-            settled = true
-        }
-        if (!active || !settled || newSpot == sent) return
+        if (newSpot == sent || newSpot == before && pushJob?.isActive == true) return
         pushJob?.cancel()
         pushJob = appScope.launch {
             delay(PUSH_DELAY_MS)
@@ -106,24 +129,30 @@ class ProgressSync(
     fun paused() {
         pausedAt = System.currentTimeMillis()
         pushJob?.cancel()
-        if (active && settled) appScope.launch { push() }
+        if (!active) return
+        if (settled) {
+            appScope.launch { push() }
+        } else if (_offer.value == null) {
+            // Still unsettled: one more look, which sends this place if the server's isn't further on.
+            pullLater(manual = false)
+        }
     }
 
     /** Call when the reader comes back. Another device may have moved on in the meantime. */
-    fun resumed(scope: CoroutineScope) {
+    fun resumed() {
         if (!active || pausedAt == 0L) return
         if (System.currentTimeMillis() - pausedAt < RECHECK_AFTER_MS) return
-        scope.launch { pull(manual = false) }
+        if (_offer.value == null) pullLater(manual = false)
     }
 
     /** The sync button: fetch the server's place, then go there or send this one. */
-    fun syncNow(scope: CoroutineScope) {
-        CrossPointSettings.ensureLoaded(context)
-        if (!active) {
+    fun syncNow() {
+        if (!CrossPointSettings.isReady) {
             tell("Sign in to CrossPoint sync in Settings first")
             return
         }
-        scope.launch { pull(manual = true) }
+        refusedKey = null
+        pullLater(manual = true)
     }
 
     fun accept() {
@@ -131,15 +160,7 @@ class ProgressSync(
         _offer.value = null
         pendingGo = null
         settled = true
-        if (go != null) {
-            skipNext = true
-            appScope.launch(Dispatchers.Main) {
-                runCatching { go() }.onFailure {
-                    skipNext = false
-                    tell("Couldn't go to that place")
-                }
-            }
-        }
+        if (go != null) jump(go)
     }
 
     /** Stays here. This device's place goes to the server, so the other device can follow. */
@@ -150,23 +171,29 @@ class ProgressSync(
         appScope.launch { push(force = true) }
     }
 
+    private fun jump(go: suspend () -> Unit) {
+        landing = spot
+        landingUntil = System.currentTimeMillis() + LANDING_MS
+        appScope.launch(Dispatchers.Main) {
+            runCatching { go() }.onFailure {
+                landingUntil = 0
+                tell("Couldn't go to that place")
+            }
+        }
+    }
+
     private suspend fun pull(manual: Boolean) = lock.withLock {
-        val base = CrossPointSettings.baseUrl
-        val user = CrossPointSettings.username
+        if (!CrossPointSettings.isReady) return@withLock
         val key = CrossPointSettings.key
         try {
             val document = document() ?: run {
                 if (manual) tell("Couldn't read this book's file to match it")
-                pullFailed = true
                 return@withLock
             }
-            val remote = KoSyncClient.fetch(base, user, key, document)
-            pullFailed = false
+            val remote = KoSyncClient.fetch(CrossPointSettings.baseUrl, CrossPointSettings.username, key, document)
             if (remote == null || remote.deviceId.equals(KoSyncClient.deviceId, ignoreCase = true)) {
                 settled = true
-                if (manual) {
-                    if (push(force = true)) tell("Sent your place to the sync server")
-                }
+                if (push(force = manual) && manual) tell("Sent your place to the sync server")
                 return@withLock
             }
             when (val comparison = reader.compare(remote)) {
@@ -174,10 +201,12 @@ class ProgressSync(
                     val percent = (remote.percentage * 100).toInt()
                     if (CrossPointSettings.autoJump && !manual) {
                         settled = true
-                        skipNext = true
-                        withContext(Dispatchers.Main) { comparison.go() }
+                        jump(comparison.go)
                         tell("Moved to $percent% from ${remote.device}")
                     } else {
+                        // Nothing is sent while the question is open.
+                        settled = false
+                        pushJob?.cancel()
                         pendingGo = comparison.go
                         _offer.value = SyncOffer(remote.device, percent, manual)
                     }
@@ -188,13 +217,18 @@ class ProgressSync(
                 }
                 Comparison.Behind -> {
                     settled = true
-                    if (manual && push(force = true)) tell("Sent your place. ${remote.device} was behind.")
+                    if (push(force = manual) && manual) tell("Sent your place. ${remote.device} was behind.")
                 }
             }
         } catch (error: SyncException) {
-            pullFailed = true
             ResultsLog.add("CrossPoint sync: ${error.message}")
-            if (manual || error.signInProblem) tell(error.message ?: "Sync didn't work")
+            if (error.signInProblem) {
+                // Said once. Signing in again in Settings starts over.
+                if (refusedKey != key || manual) tell(error.message ?: "Sync didn't work")
+                refusedKey = key
+            } else if (manual) {
+                tell(error.message ?: "Sync didn't work")
+            }
         }
     }
 
@@ -223,7 +257,12 @@ class ProgressSync(
             true
         } catch (error: SyncException) {
             ResultsLog.add("CrossPoint sync: ${error.message}")
-            if (force || error.signInProblem) tell(error.message ?: "Sync didn't work")
+            if (error.signInProblem) {
+                if (refusedKey != CrossPointSettings.key) tell(error.message ?: "Sync didn't work")
+                refusedKey = CrossPointSettings.key
+            } else if (force) {
+                tell(error.message ?: "Sync didn't work")
+            }
             false
         }
     }
@@ -231,5 +270,7 @@ class ProgressSync(
     private companion object {
         const val PUSH_DELAY_MS = 20_000L
         const val RECHECK_AFTER_MS = 30_000L
+        const val RETRY_AFTER_MS = 60_000L
+        const val LANDING_MS = 5_000L
     }
 }

@@ -40,7 +40,9 @@ import com.tim.reader.library.LibrarySync
 import com.tim.reader.reader.epubPreferences
 import com.tim.reader.ui.EpubControls
 import com.tim.reader.ui.showsTwoPages
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -76,6 +78,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
     private var cameraGap = 0
     private var cameraEdge = CameraEdge.Auto
     private var progressSync: ProgressSync? = null
+    private var epubSync: EpubSync? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val publication = OpenEpub.publication
@@ -142,8 +145,13 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         this.navigator = navigator
         CrossPointSettings.ensureLoaded(this)
         val epubSync = EpubSync(publication, navigator)
+        this.epubSync = epubSync
         val sync = book?.takeIf { it.documentUri.isNotBlank() && !it.isFolder }?.let { syncedBook ->
-            ProgressSync(this, syncedBook, epubSync) { text -> runOnUiThread { Toast.makeText(this, text, Toast.LENGTH_SHORT).show() } }
+            // Messages can arrive after the reader has closed, so they use the app rather than this screen.
+            val app = applicationContext
+            ProgressSync(app, syncedBook, epubSync) { text ->
+                appScope.launch(Dispatchers.Main) { Toast.makeText(app, text, Toast.LENGTH_SHORT).show() }
+            }
         }
         progressSync = sync
         val animated = DirectionalNavigationAdapter(navigator, animatedTransition = true)
@@ -184,7 +192,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                                 cameraEdge = edge
                                 updatePagePadding()
                             },
-                            onSync = sync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow(lifecycleScope) } },
+                            onSync = sync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow() } },
                         )
                         if (sync != null) {
                             val offer by sync.offer.collectAsState()
@@ -231,7 +239,7 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
                     sync.update(spot)
                     if (!started) {
                         started = true
-                        sync.start(lifecycleScope)
+                        sync.start()
                     }
                 }
             }
@@ -334,15 +342,33 @@ class EpubActivity : AppCompatActivity(), EpubNavigatorFragment.Listener {
         }
     }
 
+    /**
+     * Sends this page's place on leaving. A page turned just before may not have been worked out
+     * yet, so it's worked out now, while the page is still there.
+     */
+    private fun sendPlace() {
+        val sync = progressSync ?: return
+        val reader = epubSync
+        val locator = navigator?.currentLocator?.value
+        if (reader == null || locator == null) {
+            sync.paused()
+            return
+        }
+        appScope.launch(Dispatchers.Main) {
+            withTimeoutOrNull(1_500) { reader.locate(locator) }?.let(sync::update)
+            sync.paused()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         ReadingTracker.resume(this)
-        progressSync?.resumed(lifecycleScope)
+        progressSync?.resumed()
     }
 
     override fun onPause() {
         super.onPause()
-        progressSync?.paused()
+        sendPlace()
         if (isFinishing) ReadingTracker.stop(this) else ReadingTracker.pause(this)
         LibrarySync.save(this)
     }

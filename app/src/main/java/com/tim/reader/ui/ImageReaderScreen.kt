@@ -273,21 +273,23 @@ fun ImageReaderScreen(
 
     // Progress sync with CrossPoint and KOReader, for books that are one file.
     val latestPage by rememberUpdatedState(currentPage)
-    val imageSync = remember(source) { ImageSync(source.pageCount, { latestPage }) { page -> nav.goTo(page) } }
+    var shownPages by remember(source) { mutableStateOf<List<Int>>(emptyList()) }
+    val latestShown by rememberUpdatedState(shownPages)
+    val imageSync = remember(source) { ImageSync(source.pageCount, { latestPage }, { latestShown }) { page -> nav.goTo(page) } }
     val progressSync = remember(source, book?.id) {
         book?.takeIf { !it.isFolder && it.documentUri.isNotBlank() }?.let { syncedBook ->
-            ProgressSync(context, syncedBook, imageSync) { text ->
+            val appContext = context.applicationContext
+            ProgressSync(appContext, syncedBook, imageSync) { text ->
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
     if (progressSync != null) {
         LaunchedEffect(progressSync) {
-            CrossPointSettings.ensureLoaded(context)
             progressSync.update(imageSync.spot(currentPage))
-            progressSync.start(this)
+            progressSync.start()
         }
         LaunchedEffect(progressSync, currentPage) { progressSync.update(imageSync.spot(currentPage)) }
         val lifecycle = (LocalActivity.current as? androidx.activity.ComponentActivity)?.lifecycle
@@ -295,7 +297,7 @@ fun ImageReaderScreen(
             val watcher = LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_PAUSE -> progressSync.paused()
-                    Lifecycle.Event.ON_RESUME -> progressSync.resumed(scope)
+                    Lifecycle.Event.ON_RESUME -> progressSync.resumed()
                     else -> Unit
                 }
             }
@@ -380,6 +382,7 @@ fun ImageReaderScreen(
         }
 
         if (direction == ReadDirection.Vertical) {
+            LaunchedEffect(Unit) { shownPages = emptyList() }
             ContinuousReader(source, loader, width, height, currentPage, look, nav, { currentPage = it }) { controls = !controls }
         } else {
             key(spreads) {
@@ -396,6 +399,7 @@ fun ImageReaderScreen(
                     nav = nav,
                     // Only a real page turn moves the position, not rearranging the same page into new spreads.
                     onSpread = { spread ->
+                        shownPages = spread.pages
                         val isLast = spread == spreads.last()
                         // The last spread always reports its last page, so a book can be finished.
                         if (currentPage !in spread.pages || (isLast && currentPage != spread.pages.last())) {
@@ -445,7 +449,7 @@ fun ImageReaderScreen(
                     }
                 },
                 onSeek = { target -> scope.launch { nav.goTo(target) } },
-                onSync = progressSync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow(scope) } },
+                onSync = progressSync?.takeIf { CrossPointSettings.enabled }?.let { { it.syncNow() } },
             ) { open ->
                 when (open) {
                     ReaderSheet.Settings -> ReaderSettings(

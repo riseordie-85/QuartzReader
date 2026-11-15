@@ -7,6 +7,8 @@ package com.tim.reader.sync
 class ImageSync(
     private val pageCount: Int,
     private val currentPage: () -> Int,
+    /** The pages on screen, which can be two side by side. Empty means just the current page. */
+    private val shownPages: () -> List<Int> = { emptyList() },
     private val goTo: suspend (Int) -> Unit,
 ) : SyncReader {
     fun spot(page: Int) = LocalSpot(
@@ -19,10 +21,10 @@ class ImageSync(
         val page = remote.progress.trim().toIntOrNull()?.minus(1)
             ?: ((remote.percentage * pageCount).toInt() - 1)
         val target = page.coerceIn(0, pageCount - 1)
-        val current = currentPage()
+        val shown = shownPages().ifEmpty { listOf(currentPage()) }
         return when {
-            target > current -> Comparison.Ahead { goTo(target) }
-            target < current -> Comparison.Behind
+            target > shown.max() -> Comparison.Ahead { goTo(target) }
+            target < shown.min() -> Comparison.Behind
             else -> Comparison.Same
         }
     }

@@ -90,18 +90,20 @@ fun ReaderChrome(
         ) {
             val icons: @Composable () -> Unit = {
                 fun toggle(target: ReaderSheet) = onSheet(if (sheet == target) null else target)
-                if (hasChapters) GlyphButton(Glyph.List, Color.White, "Contents", iconSize = 30.dp) { toggle(ReaderSheet.Chapters) }
-                if (hasSearch) GlyphButton(Glyph.Search, Color.White, "Search", iconSize = 30.dp) { toggle(ReaderSheet.Search) }
-                if (hasNotes) GlyphButton(Glyph.Notes, Color.White, "Highlights and notes", iconSize = 30.dp) { toggle(ReaderSheet.Notes) }
-                GlyphButton(Glyph.Share, Color.White, "Share this page", iconSize = 30.dp, onClick = onShare)
-                if (onSync != null) GlyphButton(Glyph.Sync, Color.White, "Sync progress", iconSize = 30.dp, onClick = onSync)
-                GlyphButton(Glyph.Gear, Color.White, "Reader settings", iconSize = 30.dp) { toggle(ReaderSheet.Settings) }
+                // Seven icons need to be a little smaller to fit across a phone.
+                val iconSize = if (onSync != null && hasSearch && hasNotes) 26.dp else 30.dp
+                if (hasChapters) GlyphButton(Glyph.List, Color.White, "Contents", iconSize = iconSize) { toggle(ReaderSheet.Chapters) }
+                if (hasSearch) GlyphButton(Glyph.Search, Color.White, "Search", iconSize = iconSize) { toggle(ReaderSheet.Search) }
+                if (hasNotes) GlyphButton(Glyph.Notes, Color.White, "Highlights and notes", iconSize = iconSize) { toggle(ReaderSheet.Notes) }
+                GlyphButton(Glyph.Share, Color.White, "Share this page", iconSize = iconSize, onClick = onShare)
+                if (onSync != null) GlyphButton(Glyph.Sync, Color.White, "Sync progress", iconSize = iconSize, onClick = onSync)
+                GlyphButton(Glyph.Gear, Color.White, "Reader settings", iconSize = iconSize) { toggle(ReaderSheet.Settings) }
                 if (isBookmarked != null) {
                     GlyphButton(
                         glyph = if (isBookmarked) Glyph.Bookmark else Glyph.BookmarkOutline,
                         color = Color.White,
                         description = if (isBookmarked) "Remove bookmark" else "Add bookmark",
-                        iconSize = 30.dp,
+                        iconSize = iconSize,
                         onLongClick = { onSheet(ReaderSheet.Bookmarks) },
                         onClick = onBookmark,
                     )

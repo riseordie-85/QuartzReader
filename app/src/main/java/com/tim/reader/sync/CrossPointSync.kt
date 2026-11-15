@@ -140,6 +140,10 @@ data class RemoteProgress(
     val timestamp: Long,
 )
 
+/** A string field, or null when it's missing, empty or null. */
+private fun JSONObject.text(key: String): String? =
+    opt(key)?.takeIf { it != JSONObject.NULL }?.toString()?.takeIf { it.isNotBlank() }
+
 /** The book's name and author, sent only when the reader allows it. */
 data class SyncTitles(val fileName: String, val title: String, val author: String)
 
@@ -200,7 +204,7 @@ object KoSyncClient {
     }
 
     private fun failure(reply: Reply): SyncException = when (reply.code) {
-        401, 403 -> SyncException("The server didn't accept that username and password", signInProblem = true)
+        401 -> SyncException("The server didn't accept that username and password", signInProblem = true)
         else -> SyncException("The sync server answered ${reply.code}")
     }
 
@@ -216,8 +220,10 @@ object KoSyncClient {
         val reply = call(base, "/users/create", "POST", null, null, body)
         when {
             reply.code in 200..299 -> Unit
-            reply.code == 402 -> throw SyncException("That username is taken on this server. If it's yours, sign in instead.")
-            reply.code == 403 -> throw SyncException("This server isn't taking new accounts")
+            // Servers answer 402 both when the name is taken and when they aren't taking new accounts.
+            reply.code == 402 -> throw SyncException(
+                "This server didn't make the account. The username may be taken, so if it's yours, sign in instead.",
+            )
             else -> throw failure(reply)
         }
     }
@@ -237,8 +243,8 @@ object KoSyncClient {
             RemoteProgress(
                 progress = progress,
                 percentage = json.optDouble("percentage", 0.0).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
-                device = json.optString("device").ifBlank { "another device" },
-                deviceId = json.optString("device_id"),
+                device = json.text("device") ?: "another device",
+                deviceId = json.text("device_id").orEmpty(),
                 timestamp = json.optLong("timestamp", 0L),
             )
         }
