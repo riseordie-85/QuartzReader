@@ -118,7 +118,7 @@ private suspend fun removeGoal(context: android.content.Context, goal: Goal) {
 @Composable
 fun GoalsScreen(state: LibraryState, header: HeaderActions) {
     val theme = state.homeTheme ?: return
-    val look = theme.header
+    val look = theme.cardLook
     val context = LocalContext.current
     var version by remember { mutableStateOf(0) }
     var adding by remember { mutableStateOf(false) }
@@ -145,7 +145,7 @@ fun GoalsScreen(state: LibraryState, header: HeaderActions) {
                 .windowInsetsPadding(WindowInsets.safeDrawing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item { LibraryHeader(look, header) }
+            item { LibraryHeader(theme.header, header) }
             item {
                 Box(Modifier.widthIn(max = MAX_WIDTH).fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                     ThemedText("Goals", theme.title)
@@ -164,7 +164,14 @@ fun GoalsScreen(state: LibraryState, header: HeaderActions) {
                 Panel(look, null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Body(look, "Show goals on Home", Modifier.weight(1f))
-                        Switch(DeviceSettings.homeGoals, { DeviceSettings.updateHomeGoals(it) })
+                        Switch(HomeSection.Goals.key in homeSections(state), { on ->
+                            DeviceSettings.updateHomeGoals(on)
+                            // Home's sections, once arranged, carry goals like any other section.
+                            DeviceSettings.homeSections?.let { list ->
+                                val goals = HomeSection.Goals.key
+                                DeviceSettings.updateHomeSections(if (on) listOf(goals) + (list - goals) else list - goals)
+                            }
+                        })
                     }
                 }
             }

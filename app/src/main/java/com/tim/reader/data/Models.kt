@@ -163,6 +163,7 @@ data class HighlightRecord(
 enum class ViewMode { Shelf, Grid, List }
 
 enum class SortOrder(val label: String) {
+    FileName("File name"),
     Title("Title"),
     Author("Author"),
     Series("Series"),
@@ -198,6 +199,10 @@ data class Book(
     val info: BookInfo = BookInfo(),
 ) {
     val displayCover get() = customCoverPath ?: coverPath
+
+    /** The file or folder's own name, from the end of its location. */
+    val fileName: String
+        get() = android.net.Uri.decode(documentUri).substringAfterLast('/').substringAfterLast(':')
 }
 
 /** Details about a book beyond its title and author, from the file itself or an online lookup. */
@@ -301,6 +306,7 @@ val volumeOrder: Comparator<Book> =
 fun sortBooks(books: List<Book>, sort: SortOrder, state: LibraryState): List<Book> {
     fun seriesTitle(book: Book) = state.seriesFor(book.seriesId)?.title ?: book.title
     return when (sort) {
+        SortOrder.FileName -> books.sortedWith(compareBy(NaturalOrder) { it.fileName })
         SortOrder.Title -> books.sortedWith(compareBy(NaturalOrder) { it.title })
         SortOrder.Author -> books.sortedWith(compareBy({ it.author.lowercase() }, { it.title.lowercase() }))
         SortOrder.Series -> books.sortedWith(compareBy<Book> { seriesTitle(it).lowercase() }.then(volumeOrder))

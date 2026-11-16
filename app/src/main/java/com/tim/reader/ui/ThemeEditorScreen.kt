@@ -55,6 +55,7 @@ import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
 import com.tim.reader.data.Shelf
 import com.tim.reader.data.ShelfItem
+import com.tim.reader.theme.BarLook
 import com.tim.reader.theme.Fill
 import com.tim.reader.theme.GradientFill
 import com.tim.reader.theme.LedgeAlign
@@ -82,6 +83,7 @@ private enum class ThemePart(val label: String) {
     Controls("Sort and view icons"),
     Bottom("Bottom bar"),
     Button("Home button"),
+    Cards("Stats cards"),
 }
 
 private const val MIN_CONTRAST = 3.0
@@ -235,7 +237,10 @@ fun ThemeEditorScreen(
     var showMore by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
     var copying by remember { mutableStateOf(false) }
-    val parts = ThemePart.entries.filter { !isHome || (it != ThemePart.Button && it != ThemePart.Bottom) }
+    // Home has no bottom bar or button of its own, and only Home has stats cards.
+    val parts = ThemePart.entries.filter {
+        if (isHome) it != ThemePart.Button && it != ThemePart.Bottom else it != ThemePart.Cards
+    }
 
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) {
@@ -452,24 +457,32 @@ private fun TextLookEditor(look: TextLook, behind: Fill, onChange: (TextLook) ->
 
 private fun dpLabel(value: Float) = "${value.roundToInt()} dp"
 
+/** Fill, colors, corners, outline and shadow for a bar or a card. */
+@Composable
+private fun BarLookEditor(look: BarLook, onChange: (BarLook) -> Unit) {
+    FillEditor("Fill Style", look.fill) { onChange(look.copy(fill = it)) }
+    EditorCard("Text and Icons") {
+        ColorRow("Text", look.textColor) { onChange(look.copy(textColor = it)) }
+        ContrastWarning(look.textColor, look.fill)
+        EditorDivider()
+        ColorRow("Icons", look.iconColor) { onChange(look.copy(iconColor = it)) }
+    }
+    EditorCard("Shape") {
+        EditorSlider("Corners", look.cornerDp, 0f..40f, ::dpLabel) { onChange(look.copy(cornerDp = it)) }
+    }
+    StrokeEditor(look.stroke) { onChange(look.copy(stroke = it)) }
+    ShadowEditor(look.shadow, showDirection = false) { onChange(look.copy(shadow = it)) }
+}
+
 @Composable
 private fun PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme) -> Unit) {
     when (part) {
         ThemePart.Background -> FillEditor("Fill Style", theme.background) { onChange(theme.copy(background = it)) }
-        ThemePart.Header -> {
-            val look = theme.header
-            FillEditor("Fill Style", look.fill) { onChange(theme.copy(header = look.copy(fill = it))) }
-            EditorCard("Text and Icons") {
-                ColorRow("Text", look.textColor) { onChange(theme.copy(header = look.copy(textColor = it))) }
-                ContrastWarning(look.textColor, look.fill)
-                EditorDivider()
-                ColorRow("Icons", look.iconColor) { onChange(theme.copy(header = look.copy(iconColor = it))) }
-            }
-            EditorCard("Shape") {
-                EditorSlider("Corners", look.cornerDp, 0f..40f, ::dpLabel) { onChange(theme.copy(header = look.copy(cornerDp = it))) }
-            }
-            StrokeEditor(look.stroke) { onChange(theme.copy(header = look.copy(stroke = it))) }
-            ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(header = look.copy(shadow = it))) }
+        ThemePart.Header -> BarLookEditor(theme.header) { onChange(theme.copy(header = it)) }
+        ThemePart.Cards -> {
+            val look = theme.cardLook
+            EditorOutlineButton("Match the header", Modifier.fillMaxWidth()) { onChange(theme.copy(card = null)) }
+            BarLookEditor(look) { onChange(theme.copy(card = it)) }
         }
         ThemePart.Title -> TextLookEditor(theme.title, theme.background) { onChange(theme.copy(title = it)) }
         ThemePart.Ledge -> {

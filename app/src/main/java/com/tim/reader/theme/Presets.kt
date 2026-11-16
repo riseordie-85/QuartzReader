@@ -149,6 +149,13 @@ object Presets {
         controls = ControlsLook(color = 0xFF000000, fill = SolidFill(0xFF000000), textColor = 0xFFFFFFFF),
         bottom = BottomLook(fadeColor = 0xFFFFFFFF, labelColor = 0xFF000000),
         button = ButtonLook(fill = SolidFill(0xFF000000), cornerDp = 32f, font = "pack:Libron", bold = true, textColor = 0xFFFFFFFF),
+        card = BarLook(
+            fill = SolidFill(0xFFFFFFFF),
+            cornerDp = 28f,
+            stroke = StrokeLook(0xFF000000, 2.5f),
+            textColor = 0xFF000000,
+            iconColor = 0xFF000000,
+        ),
     )
 
     /** What Home and new shelves start with. */

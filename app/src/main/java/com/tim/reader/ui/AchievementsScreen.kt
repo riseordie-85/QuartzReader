@@ -42,7 +42,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AchievementsScreen(state: LibraryState, header: HeaderActions) {
     val theme = state.homeTheme ?: return
-    val look = theme.header
+    val look = theme.cardLook
     val history = rememberHistory(state.books.size)
     val statuses by produceState<List<AchievementStatus>?>(null, history, state) {
         val loaded = history ?: return@produceState
@@ -62,7 +62,7 @@ fun AchievementsScreen(state: LibraryState, header: HeaderActions) {
                 .windowInsetsPadding(WindowInsets.safeDrawing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item { LibraryHeader(look, header) }
+            item { LibraryHeader(theme.header, header) }
             item {
                 Box(Modifier.widthIn(max = MAX_WIDTH).fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                     ThemedText("Achievements", theme.title)

@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,6 +54,8 @@ import com.tim.reader.engine.PageSource
 import com.tim.reader.library.ImportItem
 import com.tim.reader.library.Importer
 import com.tim.reader.library.LibraryFolder
+import com.tim.reader.library.DeviceSettings
+import com.tim.reader.library.LibrarySync
 import com.tim.reader.library.LibraryWatcher
 import com.tim.reader.stats.AchievementCenter
 import com.tim.reader.stats.ReadingTracker
@@ -85,6 +88,7 @@ private sealed interface Route {
     /** Looks a book or a whole series up online. */
     data class InfoLookup(val bookId: String?, val seriesId: String?) : Route
     data object Search : Route
+    data object Files : Route
     data object Stats : Route
     data object Goals : Route
     data object Achievements : Route
@@ -247,7 +251,44 @@ private fun Library(
         onShelves = { push(Route.Shelves) },
         onSettings = { push(Route.Settings) },
         onSearch = { if (stack.last() != Route.Search) push(Route.Search) },
+        onSync = {
+            // Library data and new files come in now, rather than when the app next opens.
+            LibraryWatcher.check(context, force = true)
+            if (DeviceSettings.syncFolder) {
+                LibrarySync.save(context)
+                LibrarySync.check(context, force = true)
+                Toast.makeText(context, "Syncing with the library folder", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    context,
+                    "Checked for new books. Turn on library data sync in Settings to keep progress in step across devices.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        },
     )
+
+    /** The page the bottom bar has open, or null when this page has no bottom bar. */
+    fun tabOf(route: Route): NavTab? = when (route) {
+        Route.Files -> NavTab.Files
+        Route.AllBooks -> NavTab.Library
+        Route.Search -> NavTab.Search
+        Route.Stats -> NavTab.Stats
+        else -> null
+    }
+
+    fun openTab(tab: NavTab) {
+        val target = when (tab) {
+            NavTab.Files -> Route.Files
+            NavTab.Library -> Route.AllBooks
+            NavTab.Search -> Route.Search
+            NavTab.Stats -> Route.Stats
+        }
+        if (stack.last() == target) return
+        // Moving between tabs replaces the open one, so Back always goes to where the tabs were opened from.
+        if (tabOf(stack.last()) != null) stack.removeAt(stack.lastIndex)
+        push(target)
+    }
     val actions = BookActions(
         onOpen = { book -> scope.launch { openBook(context, book, ::push) } },
         onDetails = { book -> push(Route.Details(book.id)) },
@@ -258,7 +299,11 @@ private fun Library(
 
     BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
 
-    when (val route = stack.last()) {
+    val top = stack.last()
+    val showNav = top == Route.Home || tabOf(top) != null
+    Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalBottomBarSpace provides if (showNav) BOTTOM_BAR_SPACE else 0.dp) {
+    when (val route = top) {
         Route.Home -> HomeScreen(
             state = state,
             header = header,
@@ -268,6 +313,7 @@ private fun Library(
             onShelf = { push(Route.ShelfPages(it)) },
             onStats = { push(Route.Stats) },
             onGoals = { push(Route.Goals) },
+            onAchievements = { push(Route.Achievements) },
         )
         is Route.ShelfPages -> ShelfPager(
             state,
@@ -285,7 +331,8 @@ private fun Library(
         }
         Route.RecentlyRead -> SystemList("Recently Read", state.recentlyRead, state, header, actions, keepOrder = true)
         Route.ReadList -> SystemList("Read List", state.readList, state, header, actions, keepOrder = true)
-        Route.AllBooks -> SystemList("All Books", state.books, state, header, actions, keepOrder = false)
+        Route.AllBooks -> state.homeTheme?.let { theme -> LibraryPage(state, theme, header, actions) }
+        Route.Files -> FilesScreen(state, header, actions) { uri -> scan(listOf(uri), emptyList()) }
         Route.Shelves -> ShelvesListScreen(
             state = state,
             onAllBooks = { push(Route.AllBooks) },
@@ -297,7 +344,7 @@ private fun Library(
         Route.Stats -> StatsScreen(state, header, onGoals = { push(Route.Goals) }, onAchievements = { push(Route.Achievements) })
         Route.Goals -> GoalsScreen(state, header)
         Route.Achievements -> AchievementsScreen(state, header)
-        Route.Search -> LibrarySearchScreen(state, actions) { stack.removeAt(stack.lastIndex) }
+        Route.Search -> LibrarySearchScreen(state, header, actions)
         is Route.InfoLookup -> {
             val series = route.seriesId?.let { state.seriesFor(it) }
             val books = when {
@@ -400,6 +447,12 @@ private fun Library(
             }
         }
         is Route.Reader -> BookReader(route.book, repository)
+    }
+    }
+    val homeTheme = state.homeTheme
+    if (showNav && homeTheme != null) {
+        BottomNav(homeTheme.header, tabOf(top), ::openTab, Modifier.align(Alignment.BottomCenter))
+    }
     }
 
     if (chooser) {

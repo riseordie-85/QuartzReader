@@ -190,6 +190,12 @@ private fun ReadingTab(onStats: () -> Unit, onGoals: () -> Unit) {
             SettingsButton("Goals", Modifier.weight(1f), onClick = onGoals)
         }
         ReminderSetting()
+        SettingsDivider()
+        SettingsSwitch(
+            "Weekday chart starts on Sunday",
+            "For Home's finished-by-weekday chart. Off starts it on Monday.",
+            DeviceSettings.chartStartsSunday,
+        ) { DeviceSettings.updateChartStartsSunday(it) }
     }
     SettingsCard("While reading") {
         SettingsSwitch(

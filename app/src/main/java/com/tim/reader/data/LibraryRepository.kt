@@ -436,6 +436,12 @@ class LibraryRepository private constructor(context: Context) {
         }
     }
 
+    /** Puts the shelves in this order, as dragged on the Shelves page. Shelves not listed keep their place after. */
+    suspend fun setShelfOrder(ids: List<String>) = write {
+        val rest = state.value.shelves.map { it.id }.filter { it !in ids }
+        (ids + rest).forEachIndexed { index, shelfId -> updateShelfField(shelfId) { put("sort_position", index) } }
+    }
+
     /** Removes a shelf. Its books stay in the library. */
     suspend fun deleteShelf(id: String) = write {
         val time = now()

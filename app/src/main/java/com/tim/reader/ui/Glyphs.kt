@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -19,7 +20,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tim.reader.theme.StrokeLook
 
-enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search, Notes, Share, Sync }
+enum class Glyph { Plus, Book, Gear, Grid, List, Bookmark, BookmarkOutline, Search, Notes, Share, Sync, Download, Shelves, Folder, Library, Chart, Handle, Close }
 
 private fun DrawScope.drawPlus(color: Color) {
     val width = size.minDimension * 0.14f
@@ -116,6 +117,80 @@ private fun DrawScope.drawShare(color: Color) {
     listOf(top, left, bottom).forEach { drawCircle(color, unit * 0.15f, it) }
 }
 
+/** An arrow down into a tray, for bringing books in. */
+private fun DrawScope.drawDownload(color: Color) {
+    val unit = size.minDimension
+    val width = unit * 0.1f
+    val middle = size.width / 2
+    drawLine(color, Offset(middle, unit * 0.06f), Offset(middle, unit * 0.62f), width, StrokeCap.Round)
+    drawLine(color, Offset(middle, unit * 0.64f), Offset(middle - unit * 0.22f, unit * 0.42f), width, StrokeCap.Round)
+    drawLine(color, Offset(middle, unit * 0.64f), Offset(middle + unit * 0.22f, unit * 0.42f), width, StrokeCap.Round)
+    val tray = Path().apply {
+        moveTo(unit * 0.1f, unit * 0.62f)
+        lineTo(unit * 0.1f, unit * 0.9f)
+        lineTo(unit * 0.9f, unit * 0.9f)
+        lineTo(unit * 0.9f, unit * 0.62f)
+    }
+    drawPath(tray, color, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+/** A bookcase: a frame with a shelf across it and books on both levels. */
+private fun DrawScope.drawShelves(color: Color) {
+    val unit = size.minDimension
+    val width = unit * 0.09f
+    drawRoundRect(color, Offset(unit * 0.1f, unit * 0.08f), Size(unit * 0.8f, unit * 0.84f), CornerRadius(unit * 0.12f), style = Stroke(width))
+    drawLine(color, Offset(unit * 0.1f, unit * 0.5f), Offset(unit * 0.9f, unit * 0.5f), width)
+    listOf(0.28f, 0.42f).forEach { x -> drawLine(color, Offset(unit * x, unit * 0.2f), Offset(unit * x, unit * 0.42f), width, StrokeCap.Round) }
+    drawLine(color, Offset(unit * 0.56f, unit * 0.22f), Offset(unit * 0.68f, unit * 0.42f), width, StrokeCap.Round)
+    listOf(0.3f, 0.66f).forEach { x -> drawLine(color, Offset(unit * x, unit * 0.6f), Offset(unit * x, unit * 0.82f), width, StrokeCap.Round) }
+}
+
+private fun DrawScope.drawFolder(color: Color) {
+    val unit = size.minDimension
+    val folder = Path().apply {
+        moveTo(unit * 0.08f, unit * 0.22f)
+        lineTo(unit * 0.38f, unit * 0.22f)
+        lineTo(unit * 0.48f, unit * 0.32f)
+        lineTo(unit * 0.92f, unit * 0.32f)
+        lineTo(unit * 0.92f, unit * 0.84f)
+        lineTo(unit * 0.08f, unit * 0.84f)
+        close()
+    }
+    drawPath(folder, color, style = Stroke(unit * 0.1f, join = StrokeJoin.Round))
+}
+
+/** Three spines, the last leaning, for everything in the library. */
+private fun DrawScope.drawLibrary(color: Color) {
+    val unit = size.minDimension
+    val width = unit * 0.16f
+    listOf(0.16f, 0.4f).forEach { x -> drawLine(color, Offset(unit * x, unit * 0.1f), Offset(unit * x, unit * 0.9f), width, StrokeCap.Round) }
+    drawLine(color, Offset(unit * 0.62f, unit * 0.14f), Offset(unit * 0.84f, unit * 0.88f), width, StrokeCap.Round)
+}
+
+/** Bars of different heights. */
+private fun DrawScope.drawChart(color: Color) {
+    val unit = size.minDimension
+    val width = unit * 0.15f
+    listOf(0.16f to 0.6f, 0.39f to 0.3f, 0.62f to 0.08f, 0.85f to 0.4f).forEach { (x, top) ->
+        drawLine(color, Offset(unit * x, unit * top), Offset(unit * x, unit * 0.9f), width, StrokeCap.Round)
+    }
+}
+
+/** Three lines to grab and drag. */
+private fun DrawScope.drawHandle(color: Color) {
+    val unit = size.minDimension
+    listOf(0.3f, 0.5f, 0.7f).forEach { y ->
+        drawLine(color, Offset(unit * 0.14f, unit * y), Offset(unit * 0.86f, unit * y), unit * 0.1f, StrokeCap.Round)
+    }
+}
+
+private fun DrawScope.drawClose(color: Color) {
+    val unit = size.minDimension
+    val width = unit * 0.13f
+    drawLine(color, Offset(unit * 0.2f, unit * 0.2f), Offset(unit * 0.8f, unit * 0.8f), width, StrokeCap.Round)
+    drawLine(color, Offset(unit * 0.8f, unit * 0.2f), Offset(unit * 0.2f, unit * 0.8f), width, StrokeCap.Round)
+}
+
 /** Two arrows chasing each other round a circle. */
 private fun DrawScope.drawSync(color: Color) {
     val unit = size.minDimension
@@ -164,12 +239,21 @@ fun GlyphButton(
     outline: StrokeLook? = null,
     onClick: () -> Unit,
 ) {
-    Canvas(
+    GlyphIcon(
+        glyph,
+        color,
         Modifier
             .combinedClickable(onClickLabel = description, onLongClick = onLongClick, onClick = onClick)
             .padding(8.dp)
             .size(iconSize),
-    ) {
+        outline,
+    )
+}
+
+/** Just the drawing, for places that handle their own taps. */
+@Composable
+fun GlyphIcon(glyph: Glyph, color: Color, modifier: Modifier, outline: StrokeLook? = null) {
+    Canvas(modifier) {
         when (glyph) {
             Glyph.Plus -> drawPlus(color)
             Glyph.Book -> drawBook(color)
@@ -180,6 +264,13 @@ fun GlyphButton(
             Glyph.Notes -> drawNotes(color)
             Glyph.Share -> drawShare(color)
             Glyph.Sync -> drawSync(color)
+            Glyph.Download -> drawDownload(color)
+            Glyph.Shelves -> drawShelves(color)
+            Glyph.Folder -> drawFolder(color)
+            Glyph.Library -> drawLibrary(color)
+            Glyph.Chart -> drawChart(color)
+            Glyph.Handle -> drawHandle(color)
+            Glyph.Close -> drawClose(color)
             Glyph.Bookmark -> drawPath(ribbon(), color)
             Glyph.BookmarkOutline -> drawPath(ribbon(), color, style = Stroke(size.minDimension * 0.09f))
         }

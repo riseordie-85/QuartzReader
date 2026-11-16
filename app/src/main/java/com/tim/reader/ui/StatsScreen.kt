@@ -105,7 +105,7 @@ fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit 
         }
     }
     val stats = page?.stats
-    val look = theme.header
+    val look = theme.cardLook
 
     ThemedBackground(theme.background, Modifier.fillMaxSize()) {
         LazyColumn(
@@ -114,7 +114,7 @@ fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit 
                 .windowInsetsPadding(WindowInsets.safeDrawing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item { LibraryHeader(look, header) }
+            item { LibraryHeader(theme.header, header) }
             item {
                 Box(Modifier.widthIn(max = MAX_WIDTH).fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                     ThemedText("Your Reading", theme.title)
@@ -153,6 +153,7 @@ fun StatsScreen(state: LibraryState, header: HeaderActions, onGoals: () -> Unit 
                 }
             }
             item { Spacer(Modifier.height(32.dp)) }
+            item { BottomBarSpacer() }
         }
     }
 }
@@ -179,7 +180,7 @@ private fun SharePanel(look: BarLook, history: ReadingHistory, state: LibrarySta
 }
 
 @Composable
-private fun GoalsPanel(look: BarLook, goals: List<Pair<Goal, GoalProgress>>, onGoals: () -> Unit) {
+internal fun GoalsPanel(look: BarLook, goals: List<Pair<Goal, GoalProgress>>, onGoals: () -> Unit) {
     Panel(look, "Goals") {
         if (goals.isEmpty()) Body(look, "Set a goal for the week, month or year, a series to finish, or a daily habit.")
         goals.take(3).forEach { (goal, progress) -> GoalRow(look, goal, progress) }
@@ -188,7 +189,7 @@ private fun GoalsPanel(look: BarLook, goals: List<Pair<Goal, GoalProgress>>, onG
 }
 
 @Composable
-private fun AchievementsPanel(look: BarLook, statuses: List<AchievementStatus>, onAchievements: () -> Unit) {
+internal fun AchievementsPanel(look: BarLook, statuses: List<AchievementStatus>, onAchievements: () -> Unit) {
     val unlocked = statuses.filter { it.tier >= 0 }
     Panel(look, "Achievements") {
         Body(look, "${unlocked.size} of ${statuses.size} unlocked")
@@ -252,7 +253,7 @@ internal fun Muted(look: BarLook, text: String, modifier: Modifier = Modifier, m
 }
 
 @Composable
-private fun Summary(look: BarLook, stats: Stats) {
+internal fun Summary(look: BarLook, stats: Stats) {
     val tiles = listOf(
         "Today" to formatMinutes(stats.todayMinutes),
         "This week" to formatMinutes(stats.weekMinutes),
@@ -288,7 +289,7 @@ private fun Summary(look: BarLook, stats: Stats) {
 
 /** Days shaded by minutes read, a column per week, ending this week. */
 @Composable
-private fun Calendar(look: BarLook, stats: Stats) {
+internal fun Calendar(look: BarLook, stats: Stats) {
     val accent = Color(look.iconColor)
     Panel(look, "Reading Days") {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -373,7 +374,7 @@ private fun ByType(look: BarLook, stats: Stats) {
 }
 
 @Composable
-private fun FinishedByMonth(look: BarLook, stats: Stats) {
+internal fun FinishedByMonth(look: BarLook, stats: Stats) {
     val accent = Color(look.iconColor)
     val most = stats.finishedByMonth.maxOf { it.second }.coerceAtLeast(1)
     Panel(look, "Finished") {
@@ -393,6 +394,53 @@ private fun FinishedByMonth(look: BarLook, stats: Stats) {
                             .background(if (count > 0) accent else accent.copy(alpha = 0.15f), RoundedCornerShape(4.dp)),
                     )
                     Muted(look, month.month.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
+                }
+            }
+        }
+    }
+}
+
+/** Books finished by type, as bars. */
+@Composable
+internal fun FinishedByType(look: BarLook, stats: Stats) {
+    val types = stats.byType.filter { it.finished > 0 }
+    val most = types.maxOfOrNull { it.finished }?.coerceAtLeast(1) ?: 1
+    Panel(look, "Finished by Type") {
+        if (types.isEmpty()) Body(look, "Finish a book and it shows up here.")
+        types.forEach { type ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Body(look, type.type.folderName, Modifier.widthIn(min = 80.dp))
+                Bar(look, type.finished.toFloat() / most, Modifier.weight(1f))
+                Muted(look, "${type.finished}", Modifier.widthIn(min = 28.dp))
+            }
+        }
+    }
+}
+
+/** Books finished on each day of the week, Monday or Sunday first as the reader chose. */
+@Composable
+internal fun FinishedByWeekday(look: BarLook, stats: Stats, startsSunday: Boolean) {
+    val accent = Color(look.iconColor)
+    val first = if (startsSunday) java.time.DayOfWeek.SUNDAY else java.time.DayOfWeek.MONDAY
+    val days = (0L until 7L).map { first.plus(it) }
+    val most = days.maxOf { stats.finishedByWeekday[it] ?: 0 }.coerceAtLeast(1)
+    Panel(look, "Finished by Weekday") {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            days.forEach { day ->
+                val count = stats.finishedByWeekday[day] ?: 0
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+                    Muted(look, if (count > 0) "$count" else " ")
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(BAR_HEIGHT * maxOf(count.toFloat() / most, 0.04f))
+                            .background(if (count > 0) accent else accent.copy(alpha = 0.15f), RoundedCornerShape(4.dp)),
+                    )
+                    Muted(look, day.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
                 }
             }
         }

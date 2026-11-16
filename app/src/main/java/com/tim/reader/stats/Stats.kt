@@ -37,6 +37,8 @@ data class Stats(
     val byType: List<TypeStats>,
     val finishedByMonth: List<Pair<YearMonth, Int>>,
     val finishedThisYear: Int,
+    /** Dated finishes by the day of the week they happened on. */
+    val finishedByWeekday: Map<java.time.DayOfWeek, Int> = emptyMap(),
     val finishedTotal: Int,
     val timeOfDay: List<Pair<String, Long>>,
     val pages: Int,
@@ -168,6 +170,7 @@ fun computeStats(history: ReadingHistory, books: List<Book>, now: Long = System.
         byType = byType,
         finishedByMonth = finishedByMonth,
         finishedThisYear = dated.count { !dateOf(it.at).isBefore(yearStart) },
+        finishedByWeekday = dated.groupingBy { dateOf(it.at).dayOfWeek }.eachCount(),
         finishedTotal = history.finished.size,
         timeOfDay = listOf("Morning", "Afternoon", "Evening", "Night").zip(buckets.map { it / MINUTE_MS }),
         pages = pagesByType.values.sum(),

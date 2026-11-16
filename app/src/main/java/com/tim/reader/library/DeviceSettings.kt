@@ -41,6 +41,10 @@ object DeviceSettings {
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_EREADER_ADDRESS = "ereader_address"
     const val DEFAULT_EREADER_ADDRESS = "http://quartzink.local/"
+    private const val KEY_LIBRARY_SORT = "library_sort"
+    private const val KEY_LIBRARY_GROUP = "library_group"
+    private const val KEY_HOME_SECTIONS = "home_sections"
+    private const val KEY_CHART_SUNDAY = "chart_week_sunday"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
     private const val PREFIX_CAMERA_GAP = "camera_gap:"
     private const val PREFIX_CAMERA_EDGE = "camera_edge:"
@@ -62,6 +66,20 @@ object DeviceSettings {
 
     /** Keeps the time left in a corner while reading, not just with the controls. */
     var showTimeLeft by mutableStateOf(false)
+        private set
+
+    /** How the Library page sorts, by a SortOrder name, and whether it groups series. */
+    var librarySort by mutableStateOf("FileName")
+        private set
+    var libraryGroup by mutableStateOf(false)
+        private set
+
+    /** Home's sections in order, by key. Null until the reader changes them, so the default can follow goals. */
+    var homeSections by mutableStateOf<List<String>?>(null)
+        private set
+
+    /** The finished-by-weekday chart starts on Sunday instead of Monday. */
+    var chartStartsSunday by mutableStateOf(false)
         private set
 
     /** Shows goal rings on Home. */
@@ -164,6 +182,13 @@ object DeviceSettings {
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)
         showTimeLeft = saved.getBoolean(KEY_SHOW_TIME_LEFT, false)
         homeGoals = saved.getBoolean(KEY_HOME_GOALS, false)
+        librarySort = saved.getString(KEY_LIBRARY_SORT, null) ?: "FileName"
+        libraryGroup = saved.getBoolean(KEY_LIBRARY_GROUP, false)
+        homeSections = saved.getString(KEY_HOME_SECTIONS, null)?.split(',')?.filter { it.isNotBlank() }
+        chartStartsSunday = saved.getBoolean(
+            KEY_CHART_SUNDAY,
+            java.time.temporal.WeekFields.of(java.util.Locale.getDefault()).firstDayOfWeek == java.time.DayOfWeek.SUNDAY,
+        )
         reminderOn = saved.getBoolean(KEY_REMINDER_ON, false)
         syncFolder = saved.getBoolean(KEY_SYNC_FOLDER, true)
         autoAdd = saved.getBoolean(KEY_AUTO_ADD, true)
@@ -231,6 +256,25 @@ object DeviceSettings {
     fun updateKeepScreenOn(enabled: Boolean) {
         keepScreenOn = enabled
         preferences?.edit { putBoolean(KEY_KEEP_SCREEN_ON, enabled) }
+    }
+
+    fun updateLibrarySort(sort: String, group: Boolean) {
+        librarySort = sort
+        libraryGroup = group
+        preferences?.edit {
+            putString(KEY_LIBRARY_SORT, sort)
+            putBoolean(KEY_LIBRARY_GROUP, group)
+        }
+    }
+
+    fun updateHomeSections(sections: List<String>) {
+        homeSections = sections
+        preferences?.edit { putString(KEY_HOME_SECTIONS, sections.joinToString(",")) }
+    }
+
+    fun updateChartStartsSunday(sunday: Boolean) {
+        chartStartsSunday = sunday
+        preferences?.edit { putBoolean(KEY_CHART_SUNDAY, sunday) }
     }
 
     fun updateSplitView(enabled: Boolean) {

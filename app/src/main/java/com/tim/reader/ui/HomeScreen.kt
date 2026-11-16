@@ -1,6 +1,10 @@
 package com.tim.reader.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,11 +27,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
@@ -43,6 +53,7 @@ import com.tim.reader.data.LibraryState
 import com.tim.reader.data.Shelf
 import com.tim.reader.data.ShelfItem
 import com.tim.reader.data.ViewMode
+import com.tim.reader.data.shelfItems
 import com.tim.reader.library.DeviceSettings
 import com.tim.reader.theme.ButtonLook
 import com.tim.reader.theme.ShelfTheme
@@ -69,6 +80,7 @@ fun HomeScreen(
     onShelf: (String) -> Unit,
     onStats: () -> Unit = {},
     onGoals: () -> Unit = {},
+    onAchievements: () -> Unit = {},
 ) {
     val theme = state.homeTheme ?: return
     val chosenColumns = DeviceSettings.booksPerRow(booksPerRowKey("home", ViewMode.Shelf))
@@ -88,7 +100,7 @@ fun HomeScreen(
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
                         CompositionLocalProvider(LocalCoverSelection provides selection) {
-                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf, onStats, onGoals)
+                            HomeList(state, theme, chosenColumns ?: columnsFor(paneWidth), header, actions, onRecentlyRead, onReadList, onShelf, onStats, onGoals, onAchievements)
                         }
                     }
                     Box(Modifier.weight(1f)) {
@@ -96,16 +108,16 @@ fun HomeScreen(
                     }
                 }
             } else {
-                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf, onStats, onGoals)
+                HomeList(state, theme, chosenColumns ?: columnsFor(maxWidth.value), header, actions, onRecentlyRead, onReadList, onShelf, onStats, onGoals, onAchievements)
             }
         }
     }
 }
 
 @Composable
-private fun SectionTitle(text: String, theme: ShelfTheme, end: @Composable () -> Unit) {
+private fun SectionTitle(text: String, theme: ShelfTheme, modifier: Modifier = Modifier, end: @Composable () -> Unit) {
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .padding(start = 24.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -139,62 +151,118 @@ private fun HomeList(
     onShelf: (String) -> Unit,
     onStats: () -> Unit,
     onGoals: () -> Unit,
+    onAchievements: () -> Unit,
 ) {
-    val recent = state.recentlyRead.take(columns).map { ShelfItem.Single(it) }
-    val readList = state.readList.take(columns).map { ShelfItem.Single(it) }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = editing) { editing = false }
+    val sections = homeSections(state)
+    val card = theme.cardLook
+    val homeStats = rememberHomeStats(state, sections.any { HomeSection.of(it)?.isStats == true })
     val controls = Color(theme.controls.color)
 
-    LazyColumn(Modifier.fillMaxSize()) {
+    // Holding a section's title, or any empty part of Home, opens edit mode. Books and buttons
+    // take their own presses first, and a scroll cancels the hold, so neither opens it.
+    val holdToEdit = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
+            if (down.isConsumed) return@awaitEachGesture
+            val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                waitForUpOrCancellation(PointerEventPass.Final)
+                true
+            }
+            if (ended == null) editing = true
+        }
+    }
+
+    LazyColumn(Modifier.fillMaxSize().then(holdToEdit), horizontalAlignment = Alignment.CenterHorizontally) {
         item { LibraryHeader(theme.header, header) }
-        if (DeviceSettings.homeGoals) item { HomeGoalsStrip(state, theme.header, onGoals) }
-        item {
-            SectionTitle("Recently Read", theme) {
-                GlyphButton(Glyph.Grid, controls, "Open Recently Read", iconSize = 26.dp, outline = theme.controls.stroke, onClick = onRecentlyRead)
-            }
-        }
-        item {
-            if (recent.isEmpty()) {
-                val hint = if (state.books.isEmpty()) "Tap + to add your first book" else "Books you open appear here"
-                EmptyRow(hint, theme, columns, actions)
-            } else {
-                ShelfRow(recent, columns, theme, actions)
-            }
-        }
-        item {
-            SectionTitle("Read List", theme) { PillButton("View All", theme.controls, onReadList) }
-        }
-        item {
-            if (readList.isEmpty()) {
-                EmptyRow("Hold a book to add it here", theme, columns, actions)
-            } else {
-                ShelfRow(readList, columns, theme, actions)
-            }
-        }
-        items(state.shelves.chunked(2), key = { row -> row.first().id }) { row ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                // Each button keeps its shelf's look, but takes Home's corners so they all match the header.
-                row.forEach { shelf ->
-                    val look = shelf.theme.button.copy(cornerDp = theme.header.cornerDp)
-                    ShelfButton(shelf.name, look, Modifier.weight(1f)) { onShelf(shelf.id) }
+        if (editing) {
+            item { HomeEditor(state, card) { editing = false } }
+        } else {
+            sections.forEach { key ->
+                val shelfId = key.removePrefix(SHELF_SECTION).takeIf { key.startsWith(SHELF_SECTION) }
+                when {
+                    shelfId != null -> state.shelf(shelfId)?.let { shelf ->
+                        val books = shelfItems(state.booksOn(shelf.id), shelf.sort, shelf.groupSeries, state).take(columns)
+                        item(key = key + ":title") {
+                            SectionTitle(shelf.name, theme) {
+                                GlyphButton(Glyph.Grid, controls, "Open ${shelf.name}", iconSize = 26.dp, outline = theme.controls.stroke) {
+                                    onShelf(shelf.id)
+                                }
+                            }
+                        }
+                        item(key = key) {
+                            if (books.isEmpty()) EmptyRow("No books on this shelf yet", theme, columns, actions) else ShelfRow(books, columns, theme, actions)
+                        }
+                    }
+                    else -> when (HomeSection.of(key)) {
+                        HomeSection.Goals -> item(key = key) { HomeGoalsStrip(state, card, onGoals) }
+                        HomeSection.RecentlyRead -> {
+                            val recent = state.recentlyRead.take(columns).map { ShelfItem.Single(it) }
+                            item(key = key + ":title") {
+                                SectionTitle("Recently Read", theme) {
+                                    GlyphButton(Glyph.Grid, controls, "Open Recently Read", iconSize = 26.dp, outline = theme.controls.stroke, onClick = onRecentlyRead)
+                                }
+                            }
+                            item(key = key) {
+                                if (recent.isEmpty()) {
+                                    val hint = if (state.books.isEmpty()) "Tap the import button to add your first book" else "Books you open appear here"
+                                    EmptyRow(hint, theme, columns, actions)
+                                } else {
+                                    ShelfRow(recent, columns, theme, actions)
+                                }
+                            }
+                        }
+                        HomeSection.ReadList -> {
+                            val readList = state.readList.take(columns).map { ShelfItem.Single(it) }
+                            item(key = key + ":title") {
+                                SectionTitle("Read List", theme) { PillButton("View All", theme.controls, onReadList) }
+                            }
+                            item(key = key) {
+                                if (readList.isEmpty()) EmptyRow("Hold a book to add it here", theme, columns, actions) else ShelfRow(readList, columns, theme, actions)
+                            }
+                        }
+                        HomeSection.ShelfButtons -> items(state.shelves.chunked(2), key = { row -> "button:" + row.first().id }) { row ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                // Each button keeps its shelf's look, but takes Home's corners so they all match the header.
+                                row.forEach { shelf ->
+                                    val look = shelf.theme.button.copy(cornerDp = theme.header.cornerDp)
+                                    ShelfButton(shelf.name, look, Modifier.weight(1f)) { onShelf(shelf.id) }
+                                }
+                                if (row.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                        HomeSection.ReadingTime -> homeStats?.let { loaded -> item(key = key) { Summary(card, loaded.stats) } }
+                        HomeSection.Achievements -> homeStats?.let { loaded ->
+                            item(key = key) { AchievementsPanel(card, loaded.achievements, onAchievements) }
+                        }
+                        HomeSection.ReadingDays -> homeStats?.let { loaded -> item(key = key) { Calendar(card, loaded.stats) } }
+                        HomeSection.FinishedByType -> homeStats?.let { loaded -> item(key = key) { FinishedByType(card, loaded.stats) } }
+                        HomeSection.FinishedByWeekday -> homeStats?.let { loaded ->
+                            item(key = key) { FinishedByWeekday(card, loaded.stats, DeviceSettings.chartStartsSunday) }
+                        }
+                        HomeSection.FinishedThisYear -> homeStats?.let { loaded -> item(key = key) { FinishedByMonth(card, loaded.stats) } }
+                        null -> Unit
+                    }
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+            if (sections.isEmpty()) {
+                item {
+                    Text(
+                        "Home is empty. Hold here to add sections.",
+                        color = Color(theme.title.color).copy(alpha = 0.7f),
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
             }
         }
-        item {
-            ShelfButton(
-                "Stats",
-                theme.button.copy(cornerDp = theme.header.cornerDp),
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 24.dp),
-                onClick = onStats,
-            )
-        }
+        item { Spacer(Modifier.height(12.dp)) }
+        item { BottomBarSpacer() }
     }
 }
 

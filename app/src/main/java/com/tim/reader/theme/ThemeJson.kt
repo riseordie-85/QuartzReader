@@ -15,6 +15,7 @@ object ThemeJson {
             put("text", theme.header.textColor)
             put("icon", theme.header.iconColor)
         })
+        theme.card?.let { card -> put("card", bar(card)) }
         put("title", text(theme.title))
         put("ledge", JSONObject().apply {
             put("fill", fill(theme.ledge.fill))
@@ -59,6 +60,7 @@ object ThemeJson {
     fun parse(json: String): ShelfTheme {
         val root = JSONObject(json)
         val header = root.getJSONObject("header")
+        val card = root.optJSONObject("card")
         val ledge = root.getJSONObject("ledge")
         val book = root.getJSONObject("book")
         val controls = root.getJSONObject("controls")
@@ -112,7 +114,26 @@ object ThemeJson {
                 shadow = shadow(button.optJSONObject("shadow")),
                 textStroke = stroke(button.optJSONObject("textStroke")),
             ),
+            card = card?.let { look ->
+                BarLook(
+                    fill = fill(look.getJSONObject("fill")),
+                    cornerDp = look.getDouble("corner").toFloat(),
+                    stroke = stroke(look.optJSONObject("stroke")),
+                    shadow = shadow(look.optJSONObject("shadow")),
+                    textColor = look.getLong("text"),
+                    iconColor = look.getLong("icon"),
+                )
+            },
         )
+    }
+
+    private fun bar(look: BarLook) = JSONObject().apply {
+        put("fill", fill(look.fill))
+        put("corner", look.cornerDp.toDouble())
+        putOpt("stroke", stroke(look.stroke))
+        putOpt("shadow", shadow(look.shadow))
+        put("text", look.textColor)
+        put("icon", look.iconColor)
     }
 
     /** A theme that can't be read falls back to Silver Gloss rather than breaking the shelf. */

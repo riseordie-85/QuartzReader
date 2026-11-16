@@ -104,4 +104,8 @@ data class ShelfTheme(
     val controls: ControlsLook,
     val bottom: BottomLook,
     val button: ButtonLook,
-)
+    /** Home's stats and goals cards, and the stats page. Without one they match the header. */
+    val card: BarLook? = null,
+) {
+    val cardLook: BarLook get() = card ?: header
+}

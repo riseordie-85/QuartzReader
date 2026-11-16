@@ -175,6 +175,36 @@ fun ListPage(
     }
 }
 
+/** Everything in the library, sorted the reader's way. */
+@Composable
+fun LibraryPage(state: LibraryState, theme: ShelfTheme, header: HeaderActions, actions: BookActions) {
+    var viewMode by remember { mutableStateOf(ViewMode.Grid) }
+    val sort = SortOrder.entries.firstOrNull { it.name == DeviceSettings.librarySort } ?: SortOrder.FileName
+    val group = DeviceSettings.libraryGroup
+    val items = remember(state.books, state.series, sort, group) { shelfItems(state.books, sort, group, state) }
+    CoverSplit(items, theme, actions, "Library") { pageModifier ->
+        ShelfContent(
+            place = "library",
+            title = "Library",
+            theme = theme,
+            items = items,
+            viewMode = viewMode,
+            sort = sort,
+            groupSeries = group,
+            neighbors = null,
+            header = header,
+            actions = actions,
+            onViewMode = { viewMode = it },
+            onSort = { DeviceSettings.updateLibrarySort(it.name, group) },
+            onGroupSeries = { DeviceSettings.updateLibrarySort(sort.name, it) },
+            onEditStyle = null,
+            onPageSettings = null,
+            onChooseBooks = null,
+            modifier = pageModifier,
+        )
+    }
+}
+
 @Composable
 private fun ShelfContent(
     place: String,
@@ -198,7 +228,7 @@ private fun ShelfContent(
     val controls = Color(theme.controls.color)
     val rowKey = booksPerRowKey(place, viewMode)
     var automatic by remember { mutableStateOf(1) }
-    val bottomSpace = if (neighbors != null) theme.bottom.heightDp.dp else 24.dp
+    val bottomSpace = if (neighbors != null) theme.bottom.heightDp.dp else 24.dp + LocalBottomBarSpace.current
 
     ThemedBackground(theme.background, modifier) {
         Column(
