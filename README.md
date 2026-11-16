@@ -29,7 +29,8 @@ keyPassword=...
 
 To make a release, raise `versionCode` and `versionName` in `app/build.gradle.kts`, add the version to
 `CHANGELOG.md`, build the release APK, and attach it to a GitHub release tagged with the version, such
-as `v1.0.0`. The Quartz site picks up the newest release.
+as `v1.0.0`. The Quartz site shows the newest release after its next build, which runs daily or from
+**Run workflow** on the site's Actions tab.
 
 Book files never go in this repo.
 

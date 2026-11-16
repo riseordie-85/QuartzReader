@@ -16,7 +16,7 @@ The first release of Quartz Reader: one library for ebooks, comics, manga and ma
 ### Home
 - Build Home from sections: Recently Read, Read List, shelf buttons, shelf rows, goals and reading stats.
 - Hold a section's title, or any empty part of Home, to move, add or remove sections.
-- One tap on a cover shows the book's details, and a second tap opens it. This can be turned off.
+- One tap on a cover shows the book's details, with Open and Details buttons. This can be turned off.
 - On tablets and unfolded phones, the split view shows the shelf beside large covers and their details.
 
 ### Reading
@@ -38,7 +38,7 @@ The first release of Quartz Reader: one library for ebooks, comics, manga and ma
 - Highlights and notes sync with CrossPoint devices.
 
 ### Styles
-- Black & White is the new default style. The earlier look is still there as Books.
+- Black and White is the default style, and Books is there for a warmer look.
 - A style editor for the header, title, shelves, books, buttons, stats cards and background, with a live preview.
 - Export and import styles, and add your own fonts.
 

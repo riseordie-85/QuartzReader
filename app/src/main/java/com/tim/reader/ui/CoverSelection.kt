@@ -27,8 +27,9 @@ fun ShelfItem.activate(actions: BookActions) {
 }
 
 /**
- * The first tap shows a title's details, and a second tap opens it. In the split view the details
- * are on the right; otherwise a book's show over the page, unless that's turned off in Settings.
+ * The first tap shows a title's details. In the split view they're on the right, and a second tap
+ * on the title opens it. Otherwise a book's show in a popup with an Open button, unless that's turned
+ * off in Settings.
  * A series opens its page straight away, since that page is its details.
  */
 fun tapItem(item: ShelfItem, selection: CoverSelection?, peek: BookPeek?, actions: BookActions) {

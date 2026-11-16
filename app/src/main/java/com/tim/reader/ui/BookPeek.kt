@@ -204,6 +204,8 @@ fun BookPeekDialog(book: Book, state: LibraryState, theme: ShelfTheme, actions: 
                 .themedShadow(look.shadow, shape)
                 .themedFill(look.fill, shape)
                 .themedStroke(look.stroke, shape)
+                // Scrolls as a whole on a short screen, so the buttons are never out of reach.
+                .verticalScroll(rememberScrollState())
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {

@@ -216,7 +216,7 @@ private fun ReadingTab(onStats: () -> Unit, onGoals: () -> Unit) {
     SettingsCard("Opening books") {
         SettingsSwitch(
             "Show details first",
-            "One tap on a cover shows the book's details, and a second tap opens it. Off opens books straight away. Split view always shows them beside the shelf.",
+            "One tap on a cover shows the book's details. Tap Open or the cover there to read it. Off opens books straight away. Split view always shows details beside the shelf.",
             DeviceSettings.bookPopup,
         ) { DeviceSettings.updateBookPopup(it) }
         SettingsDivider()
@@ -443,7 +443,7 @@ private fun PrivacyTab() {
     }
     SettingsCard("Quartz Reader doesn't track you") {
         Bullet("No ads, no analytics and no accounts of ours.")
-        Bullet("Your books, notes, highlights and reading history stay on this device and in the library folder you chose.")
+        Bullet("Your books, notes, highlights and reading history stay on this device and in the library folder you chose, unless you turn on sync below.")
         Bullet("There's no crash reporting. If something breaks, nothing is sent anywhere.")
         Bullet("The internet is only used for the things below, and only when you start them or set them up.")
     }
@@ -457,8 +457,9 @@ private fun PrivacyTab() {
         PrivacyRow(
             "CrossPoint and KOReader sync",
             "Only if you sign in. Your place in a book goes to the server you chose, with your username, a code made from " +
-                "the book's file (never the file itself) and this device's model name. Book titles are sent only if Send " +
-                "book titles is on, and highlighted words and notes only if Sync highlights and notes is on.",
+                "the book's file (never the file itself), this device's model name and a random ID for this device. Book " +
+                "titles, authors and file names are sent only if Send book titles is on. Highlighted words, their notes, " +
+                "where they are and the chapter they're in are sent only if Sync highlights and notes is on.",
         )
         SettingsDivider()
         PrivacyRow(
@@ -477,11 +478,14 @@ private fun PrivacyTab() {
     SettingsCard("Permissions") {
         PrivacyRow("Internet", "Only for the things above.", status = "Allowed")
         SettingsDivider()
-        PrivacyRow("Notifications", "Only for reading reminders, if you turn them on.", status = if (notificationsOn) "On" else "Off")
+        PrivacyRow("Notifications", "Only for reading reminders, if you turn them on.", status = if (notificationsOn) "Allowed" else "Not allowed")
         SettingsDivider()
         PrivacyRow("Run at startup", "Puts reading reminders back after the device restarts. Nothing else runs.")
         SettingsDivider()
-        PrivacyRow("Library folder", "Quartz Reader can only see the one folder you picked for your books, not the rest of your storage.")
+        PrivacyRow(
+            "Library folder",
+            "Quartz Reader can only see the folder you picked for your books, plus any file you choose to import or open, not the rest of your storage.",
+        )
     }
 }
 
@@ -531,7 +535,7 @@ private fun AboutTab(onTestTools: () -> Unit) {
         SettingsDivider()
         ThanksRow("ebook-fonts", "The reading fonts, adjusted for screens by Nico Verbruggen (SIL Open Font License and others)")
         SettingsDivider()
-        ThanksRow("libarchive", "Opens CBR and CB7 comics (BSD 2-Clause), through android-libarchive by Hai Zhang (Apache 2.0)")
+        ThanksRow("libarchive", "Opens CBZ, CBR, CB7 and ZIP comics (BSD 2-Clause), through android-libarchive by Hai Zhang (Apache 2.0)")
         SettingsDivider()
         ThanksRow("OpenJPEG", "Shows JPEG 2000 pages (BSD 2-Clause)")
         SettingsDivider()

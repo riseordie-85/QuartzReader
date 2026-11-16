@@ -93,6 +93,7 @@ fun HomeScreen(
             if (maxWidth >= TWO_PANE_WIDTH && DeviceSettings.splitView) {
                 val paneWidth = maxWidth.value / 2
                 val selection = remember { CoverSelection() }
+                ClosePeekInSplitView()
                 // Every title Home can show is on the right, so any tile can bring up its cover.
                 val covers = (state.recentlyRead + state.readList + state.books.sortedByDescending { it.addedAt })
                     .distinctBy { it.id }
@@ -356,7 +357,8 @@ fun CoverPager(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions, 
                     .fillMaxWidth(),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                ShelfItemTile(item, theme.book, actions, Modifier.fillMaxHeight(), inCoverPane = true)
+                // No fill, so the cover takes the largest size that fits and sits right on the details.
+                ShelfItemTile(item, theme.book, actions, inCoverPane = true)
             }
             CoverInfoCard(
                 item,
@@ -386,6 +388,7 @@ fun CoverSplit(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         if (maxWidth >= TWO_PANE_WIDTH && DeviceSettings.splitView) {
             val selection = remember(paneKey) { CoverSelection() }
+            ClosePeekInSplitView()
             Row(Modifier.fillMaxSize()) {
                 CompositionLocalProvider(LocalCoverSelection provides selection) {
                     page(
@@ -415,4 +418,11 @@ fun CoverSplit(
             page(Modifier.fillMaxSize())
         }
     }
+}
+
+/** Unfolding into the split view shows details beside the shelf, so a popup from before closes. */
+@Composable
+private fun ClosePeekInSplitView() {
+    val peek = LocalBookPeek.current ?: return
+    LaunchedEffect(peek) { peek.bookId = null }
 }

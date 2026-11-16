@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -465,9 +466,11 @@ private fun Library(
     }
 
     val peeking = peek.bookId?.let { state.book(it) }
-    val peekTheme = state.homeTheme
-    if (peeking != null && peekTheme != null) {
-        BookPeekDialog(peeking, state, peekTheme, actions) { peek.bookId = null }
+    if (peeking != null) {
+        BookPeekDialog(peeking, state, state.homeTheme ?: Presets.default, actions) { peek.bookId = null }
+    } else if (peek.bookId != null) {
+        // The book went away while its details were up, so they don't come back on their own.
+        SideEffect { peek.bookId = null }
     }
 
     if (chooser) {
