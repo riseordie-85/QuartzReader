@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -178,7 +179,7 @@ fun ListPage(
 /** Everything in the library, sorted the reader's way. */
 @Composable
 fun LibraryPage(state: LibraryState, theme: ShelfTheme, header: HeaderActions, actions: BookActions) {
-    var viewMode by remember { mutableStateOf(ViewMode.Grid) }
+    var viewMode by rememberSaveable { mutableStateOf(ViewMode.Grid) }
     val sort = SortOrder.entries.firstOrNull { it.name == DeviceSettings.librarySort } ?: SortOrder.FileName
     val group = DeviceSettings.libraryGroup
     val items = remember(state.books, state.series, sort, group) { shelfItems(state.books, sort, group, state) }

@@ -306,7 +306,11 @@ val volumeOrder: Comparator<Book> =
 fun sortBooks(books: List<Book>, sort: SortOrder, state: LibraryState): List<Book> {
     fun seriesTitle(book: Book) = state.seriesFor(book.seriesId)?.title ?: book.title
     return when (sort) {
-        SortOrder.FileName -> books.sortedWith(compareBy(NaturalOrder) { it.fileName })
+        SortOrder.FileName -> {
+            // Worked out once per book, not on every comparison.
+            val names = books.associate { it.id to it.fileName }
+            books.sortedWith(compareBy(NaturalOrder) { names.getValue(it.id) })
+        }
         SortOrder.Title -> books.sortedWith(compareBy(NaturalOrder) { it.title })
         SortOrder.Author -> books.sortedWith(compareBy({ it.author.lowercase() }, { it.title.lowercase() }))
         SortOrder.Series -> books.sortedWith(compareBy<Book> { seriesTitle(it).lowercase() }.then(volumeOrder))

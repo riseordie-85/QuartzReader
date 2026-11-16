@@ -177,16 +177,18 @@ private fun Library(
     val stack = remember { mutableStateListOf<Route>(Route.Home) }
     var chooser by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
+    val filesPath = remember { mutableStateListOf<FolderPlace>() }
     var pending by remember { mutableStateOf<PendingImport?>(null) }
     var restore by remember { mutableStateOf<PendingImport?>(null) }
 
-    fun scan(files: List<Uri>, folders: List<Uri>) {
+    /** Reads files to bring in. Ones already in the library folder are added where they are, not copied. */
+    fun scan(files: List<Uri>, folders: List<Uri>, inPlace: Boolean = false) {
         if (files.isEmpty() && folders.isEmpty()) return
         scanning = true
         scope.launch {
             try {
                 val (items, skipped) = Importer(context).scan(files, folders)
-                pending = PendingImport(items, skipped)
+                pending = PendingImport(if (inPlace) items.map { it.copy(inPlace = true) } else items, skipped)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -261,7 +263,7 @@ private fun Library(
             } else {
                 Toast.makeText(
                     context,
-                    "Checked for new books. Turn on library data sync in Settings to keep progress in step across devices.",
+                    "Looking for new books. Turn on library data sync in Settings to keep progress in step across devices.",
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -332,7 +334,7 @@ private fun Library(
         Route.RecentlyRead -> SystemList("Recently Read", state.recentlyRead, state, header, actions, keepOrder = true)
         Route.ReadList -> SystemList("Read List", state.readList, state, header, actions, keepOrder = true)
         Route.AllBooks -> state.homeTheme?.let { theme -> LibraryPage(state, theme, header, actions) }
-        Route.Files -> FilesScreen(state, header, actions) { uri -> scan(listOf(uri), emptyList()) }
+        Route.Files -> FilesScreen(state, header, actions, filesPath) { uri -> scan(listOf(uri), emptyList(), inPlace = true) }
         Route.Shelves -> ShelvesListScreen(
             state = state,
             onAllBooks = { push(Route.AllBooks) },

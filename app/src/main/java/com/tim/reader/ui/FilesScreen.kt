@@ -25,7 +25,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -53,7 +54,8 @@ import kotlinx.coroutines.withContext
 /** Folders the app keeps for itself, which aren't books. */
 private val HIDDEN_FOLDERS = setOf("Library Data", "Theme Files")
 
-private class FolderPlace(val name: String, val documentId: String)
+/** A folder on the way down from the library folder. */
+class FolderPlace(val name: String, val documentId: String)
 
 /**
  * The library folder as it is on disk: Books, Comics, Manga, Manhwa and Import, then series
@@ -65,14 +67,23 @@ fun FilesScreen(
     state: LibraryState,
     header: HeaderActions,
     actions: BookActions,
+    /** Kept by the caller, so coming back from a book returns to the same folder. */
+    path: SnapshotStateList<FolderPlace>,
     onImport: (Uri) -> Unit,
 ) {
     val theme = state.homeTheme ?: return
     val context = LocalContext.current
     val folder = remember { LibraryFolder.get(context) }
     val tree = folder.treeUri ?: return
-    val root = remember(tree) { FolderPlace("Library", DocumentsContract.getTreeDocumentId(tree)) }
-    val path = remember(tree) { mutableStateListOf(root) }
+    val rootId = remember(tree) { DocumentsContract.getTreeDocumentId(tree) }
+    if (path.firstOrNull()?.documentId != rootId) {
+        // A different library folder, or the first visit: start at the top.
+        SideEffect {
+            path.clear()
+            path.add(FolderPlace("Library", rootId))
+        }
+        return
+    }
     val here = path.last()
     val books = remember(state.books) {
         state.books.mapNotNull { book ->

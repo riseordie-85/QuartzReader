@@ -57,7 +57,8 @@ import kotlinx.coroutines.withContext
 
 /** The parts Home can show, in any order. A shelf of the reader's own is "shelf:" and its ID. */
 enum class HomeSection(val key: String, val label: String, val isStats: Boolean = false) {
-    Goals("goals", "Goals", isStats = true),
+    // Goals load their own history, so they don't need the stats worked out.
+    Goals("goals", "Goals"),
     RecentlyRead("recent", "Recently Read"),
     ReadList("readList", "Read List"),
     ShelfButtons("shelves", "Shelf buttons"),
@@ -86,7 +87,7 @@ fun homeSections(state: LibraryState): List<String> {
         HomeSection.ShelfButtons,
     ).filter { it != HomeSection.Goals || DeviceSettings.homeGoals }.map { it.key }
     // A shelf that's been removed drops out without changing the saved list.
-    return chosen.filter { key ->
+    return chosen.distinct().filter { key ->
         HomeSection.of(key) != null || (key.startsWith(SHELF_SECTION) && state.shelf(key.removePrefix(SHELF_SECTION)) != null)
     }
 }
@@ -134,10 +135,12 @@ fun HomeEditor(state: LibraryState, look: BarLook, onDone: () -> Unit) {
     val text = Color(look.textColor)
     val muted = text.copy(alpha = 0.7f)
     val shape = cornerShape(look.cornerDp.coerceAtMost(24f))
-    val current by rememberUpdatedState(sections)
+    // Read fresh each time, since a drag swaps places faster than the screen redraws.
+    val latestState by rememberUpdatedState(state)
+    fun current() = homeSections(latestState)
 
     fun move(from: Int, to: Int) {
-        val list = current.toMutableList()
+        val list = current().toMutableList()
         if (from !in list.indices || to !in list.indices) return
         list.add(to, list.removeAt(from))
         DeviceSettings.updateHomeSections(list)
@@ -217,8 +220,8 @@ fun HomeEditor(state: LibraryState, look: BarLook, onDone: () -> Unit) {
                                 offset += amount.y
                                 // Rows are all one height plus the gap, so passing half of one swaps places.
                                 val step = rowHeight + 8.dp.toPx()
-                                val at = current.indexOf(section)
-                                if (step > 0f && offset > step / 2 && at < current.lastIndex) {
+                                val at = current().indexOf(section)
+                                if (step > 0f && offset > step / 2 && at < current().lastIndex) {
                                     move(at, at + 1)
                                     offset -= step
                                 } else if (step > 0f && offset < -step / 2 && at > 0) {
@@ -240,7 +243,7 @@ fun HomeEditor(state: LibraryState, look: BarLook, onDone: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 GlyphButton(Glyph.Close, muted, "Remove ${sectionLabel(section, state)}", iconSize = 16.dp) {
-                    DeviceSettings.updateHomeSections(current - section)
+                    DeviceSettings.updateHomeSections(current() - section)
                 }
             }
             }
@@ -252,7 +255,7 @@ fun HomeEditor(state: LibraryState, look: BarLook, onDone: () -> Unit) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable(onClickLabel = "Add ${sectionLabel(key, state)}") { DeviceSettings.updateHomeSections(current + key) }
+                        .clickable(onClickLabel = "Add ${sectionLabel(key, state)}") { DeviceSettings.updateHomeSections(current() + key) }
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

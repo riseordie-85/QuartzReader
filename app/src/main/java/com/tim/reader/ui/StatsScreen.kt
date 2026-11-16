@@ -425,6 +425,7 @@ internal fun FinishedByWeekday(look: BarLook, stats: Stats, startsSunday: Boolea
     val days = (0L until 7L).map { first.plus(it) }
     val most = days.maxOf { stats.finishedByWeekday[it] ?: 0 }.coerceAtLeast(1)
     Panel(look, "Finished by Weekday") {
+        if (stats.finishedByWeekday.isEmpty()) Body(look, "Finish a book and the day shows up here.")
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

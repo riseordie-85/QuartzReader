@@ -87,11 +87,16 @@ fun ShelvesListScreen(
     }
     fun finishDrag() {
         offset = 0f
+        val dropped = dragging
         val ids = order.toList()
+        if (ids == state.shelves.map { it.id }) {
+            dragging = null
+            return
+        }
         // The dragged order stays until it's saved, so the list doesn't jump back for a moment.
         scope.launch {
             repository.setShelfOrder(ids)
-            dragging = null
+            if (dragging == dropped) dragging = null
         }
     }
 

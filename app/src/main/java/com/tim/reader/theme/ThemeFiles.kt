@@ -110,6 +110,7 @@ object ThemeFiles {
             theme.controls.fill,
             theme.bottom.labelFill,
             theme.button.fill,
+            theme.card?.fill,
         )
         val images = fills.mapNotNull { (it as? ImageFill)?.name }.map { IMAGES to it }
         val fonts = listOf(theme.title.font, theme.button.font).map { FONTS to it }
