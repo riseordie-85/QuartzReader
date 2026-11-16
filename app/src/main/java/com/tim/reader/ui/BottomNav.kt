@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -67,7 +66,6 @@ fun BottomNav(look: BarLook, current: NavTab?, onTab: (NavTab) -> Unit, modifier
     ) {
         Row(
             Modifier
-                .widthIn(max = 560.dp)
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 10.dp)
                 .themedShadow(look.shadow, shape)

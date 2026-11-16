@@ -80,7 +80,11 @@ import java.util.Locale
 private const val MAX_WEEKS = 53
 private val CELL = 13.dp
 private val CELL_GAP = 3.dp
-internal val MAX_WIDTH = 760.dp
+/**
+ * No cap on cards' width, so on a tablet or an unfolded phone they line up with the header,
+ * shelves and buttons, which all run edge to edge.
+ */
+internal val MAX_WIDTH = Dp.Infinity
 private val BAR_HEIGHT = 70.dp
 
 /** Reading stats, drawn in the Home style. */
