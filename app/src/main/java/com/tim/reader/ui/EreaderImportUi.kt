@@ -82,9 +82,7 @@ fun EreaderImportButton() {
         }
     }
 
-    OutlinedButton({ asking = true }, Modifier.fillMaxWidth(), enabled = !working) {
-        Text(if (working) "Reading the stats…" else "Import from e-reader")
-    }
+    SettingsButton(if (working) "Reading the stats…" else "Import from e-reader", enabled = !working) { asking = true }
 
     if (asking) {
         AlertDialog(

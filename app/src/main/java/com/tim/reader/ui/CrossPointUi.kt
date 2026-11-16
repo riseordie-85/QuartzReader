@@ -35,15 +35,8 @@ import com.tim.reader.sync.normalizeServer
 import kotlinx.coroutines.launch
 
 @Composable
-private fun SettingSwitch(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title)
-            Text(detail, style = MaterialTheme.typography.bodySmall)
-        }
-        Switch(checked, onChange)
-    }
-}
+private fun SettingSwitch(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) =
+    SettingsSwitch(title, detail, checked, onChange)
 
 /** Settings for progress sync with CrossPoint and KOReader devices. */
 @Composable
@@ -96,7 +89,7 @@ fun CrossPointSetting() {
                 "Signed in as ${CrossPointSettings.username} on ${CrossPointSettings.baseUrl.substringAfter("://")}",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            OutlinedButton({ CrossPointSettings.signOut() }) { Text("Sign out") }
+            SettingsButton("Sign out") { CrossPointSettings.signOut() }
         } else {
             OutlinedTextField(
                 server,
@@ -138,8 +131,10 @@ fun CrossPointSetting() {
             )
             val ready = username.isNotBlank() && password.isNotEmpty() && !working
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton({ account(create = false) }, enabled = ready) { Text(if (working) "Checking" else "Sign in") }
-                OutlinedButton({ account(create = true) }, enabled = ready) { Text("Make an account") }
+                SettingsButton(if (working) "Checking" else "Sign in", Modifier.weight(1f), primary = true, enabled = ready) {
+                    account(create = false)
+                }
+                SettingsButton("Make an account", Modifier.weight(1f), enabled = ready) { account(create = true) }
             }
             Text(
                 "Use the same username and password as on your CrossPoint or KOReader devices. " +

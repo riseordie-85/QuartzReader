@@ -27,19 +27,14 @@ fun SyncSetting() {
     val context = LocalContext.current
     val status by LibrarySync.status.collectAsState()
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Keep library data in the library folder")
-                Text(
-                    "Saves progress, history, ratings, goals, shelves and styles in a Library Data folder beside your books. " +
-                        "Choosing this folder after a reinstall brings it all back, and any app that syncs the folder keeps your devices in step.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Switch(DeviceSettings.syncFolder, { on ->
-                DeviceSettings.updateSyncFolder(on)
-                if (on) LibrarySync.save(context)
-            })
+        SettingsSwitch(
+            "Keep library data in the library folder",
+            "Saves progress, history, ratings, goals, shelves and styles in a Library Data folder beside your books. " +
+                "Choosing this folder after a reinstall brings it all back, and any app that syncs the folder keeps your devices in step.",
+            DeviceSettings.syncFolder,
+        ) { on ->
+            DeviceSettings.updateSyncFolder(on)
+            if (on) LibrarySync.save(context)
         }
         if (DeviceSettings.syncFolder) {
             Text("Last saved ${ago(status.lastSaved)} · checked ${ago(status.lastChecked)}", style = MaterialTheme.typography.bodySmall)
@@ -48,23 +43,16 @@ fun SyncSetting() {
             }
             status.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton({ LibrarySync.save(context) }) { Text("Save now") }
-                OutlinedButton({ LibrarySync.check(context, force = true) }) { Text("Check other devices") }
+                SettingsButton("Save now", Modifier.weight(1f)) { LibrarySync.save(context) }
+                SettingsButton("Check other devices", Modifier.weight(1f)) { LibrarySync.check(context, force = true) }
             }
         }
     }
 }
 
 @Composable
-private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title)
-            Text(detail, style = MaterialTheme.typography.bodySmall)
-        }
-        Switch(checked, onChange)
-    }
-}
+private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) =
+    SettingsSwitch(title, detail, checked, onChange)
 
 /** Whether new files in the library folder are added on their own, and whether this device sorts the Import folder. */
 @Composable

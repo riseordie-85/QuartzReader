@@ -60,11 +60,9 @@ fun GoodreadsImportButton() {
         }
     }
 
-    OutlinedButton(
-        { pick.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/csv", "application/vnd.ms-excel", "application/octet-stream")) },
-        Modifier.fillMaxWidth(),
-        enabled = !working,
-    ) { Text(if (working) "Reading the export…" else "Import from Goodreads") }
+    SettingsButton(if (working) "Reading the export…" else "Import from Goodreads", enabled = !working) {
+        pick.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/csv", "application/vnd.ms-excel", "application/octet-stream"))
+    }
 
     plan?.let { found ->
         AlertDialog(
