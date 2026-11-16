@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -188,32 +190,101 @@ private fun StylePicker(
 
 /** A small working copy of a shelf, drawn with the real shelf parts. */
 @Composable
-private fun ThemePreview(theme: ShelfTheme, name: String, state: LibraryState, showButton: Boolean, modifier: Modifier) {
+private fun ThemePreview(
+    theme: ShelfTheme,
+    name: String,
+    state: LibraryState,
+    part: ThemePart,
+    isHome: Boolean,
+    modifier: Modifier,
+) {
     val books = remember(state.books) { state.books.take(4).map { ShelfItem.Single(it) } }
     val noHeader = remember { HeaderActions({}, {}, {}, {}) }
     val noBooks = remember { BookActions({}, {}, {}, {}) }
     val neighbors = remember(name) { ShelfNeighbors("Previous", "Next", {}, {}) }
     ThemedBackground(theme.background, modifier) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             LibraryHeader(theme.header, noHeader)
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ThemedText(name, theme.title, Modifier.weight(1f))
-                GlyphButton(Glyph.Grid, Color(theme.controls.color), "View", iconSize = 26.dp, outline = theme.controls.stroke) {}
-                PillButton("Sort by", theme.controls) {}
+            if (part == ThemePart.Cards) {
+                // Sample cards, so their look can be judged without any reading history.
+                CardsPreview(theme)
+            } else {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ThemedText(if (isHome) "Recently Read" else name, theme.title, Modifier.weight(1f))
+                    GlyphButton(Glyph.Grid, Color(theme.controls.color), "View", iconSize = 26.dp, outline = theme.controls.stroke) {}
+                    if (!isHome) PillButton("Sort by", theme.controls) {}
+                }
+                ShelfRow(books, 4, theme, noBooks)
+                if (isHome) CardsPreview(theme, short = true)
+                if (part == ThemePart.Button) {
+                    val homeCorner = state.homeTheme?.header?.cornerDp ?: theme.button.cornerDp
+                    ShelfButton(name, theme.button.copy(cornerDp = homeCorner), Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()) {}
+                }
             }
-            ShelfRow(books, 4, theme, noBooks)
-            if (showButton) {
-                val homeCorner = state.homeTheme?.header?.cornerDp ?: theme.button.cornerDp
-                ShelfButton(name, theme.button.copy(cornerDp = homeCorner), Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()) {}
+            BottomBarSpacer(extra = 80.dp)
+        }
+        // Home has the bottom bar; a shelf has its neighbours.
+        if (isHome) {
+            BottomNav(theme.header, NavTab.Stats, {}, Modifier.align(Alignment.BottomCenter))
+        } else {
+            BottomBar(neighbors, theme, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+}
+
+/** Made-up stats in the cards' look: a goal, the time tiles and a stretch of reading days. */
+@Composable
+private fun CardsPreview(theme: ShelfTheme, short: Boolean = false) {
+    val look = theme.cardLook
+    val accent = Color(look.iconColor)
+    Panel(look, null) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GoalRing(0.4f, accent, 36.dp)
+            Column {
+                Muted(look, "12 books this year")
+                Muted(look, "5 of 12 books")
             }
         }
-        BottomBar(neighbors, theme, Modifier.align(Alignment.BottomCenter))
+    }
+    if (short) return
+    Row(Modifier.padding(horizontal = 6.dp)) {
+        listOf("Today" to "25 m", "Streak" to "6 days").forEach { (label, value) ->
+            Box(Modifier.weight(1f)) {
+                Panel(look, null, outer = 6.dp) {
+                    Muted(look, label)
+                    Text(value, color = Color(look.textColor), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+    Panel(look, "Reading Days") {
+        val shades = listOf(0.12f, 0.35f, 0.55f, 0.78f, 1f)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(4) { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    repeat(14) { column ->
+                        // A pattern that reads as a few busy weeks, without being random each frame.
+                        val shade = shades[(row * 3 + column * 7 + column / 3) % shades.size]
+                        Box(Modifier.size(14.dp).background(accent.copy(alpha = shade), RoundedCornerShape(3.dp)))
+                    }
+                }
+            }
+        }
+        Muted(look, "Best streak 6 days")
+    }
+    Panel(look, "Finished by Type") {
+        listOf("Books" to 0.9f, "Manga" to 0.6f, "Comics" to 0.3f).forEach { (type, amount) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Body(look, type, Modifier.width(72.dp))
+                Bar(look, amount, Modifier.weight(1f))
+            }
+        }
     }
 }
 
@@ -367,12 +438,12 @@ fun ThemeEditorScreen(
 
         if (sideBySide) {
             Row(Modifier.fillMaxSize()) {
-                ThemePreview(theme, name, state, part == ThemePart.Button, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(0.dp)))
+                ThemePreview(theme, name, state, part, isHome, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(0.dp)))
                 controls(Modifier.weight(1f).fillMaxHeight())
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                ThemePreview(theme, name, state, part == ThemePart.Button, Modifier.fillMaxWidth().weight(0.72f).clip(RoundedCornerShape(0.dp)))
+                ThemePreview(theme, name, state, part, isHome, Modifier.fillMaxWidth().weight(0.72f).clip(RoundedCornerShape(0.dp)))
                 controls(Modifier.fillMaxWidth().weight(1f))
             }
         }
