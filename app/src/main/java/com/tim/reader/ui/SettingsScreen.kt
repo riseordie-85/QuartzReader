@@ -218,7 +218,8 @@ private fun ThemesTab(state: LibraryState, onHomeStyle: () -> Unit) {
     val scope = rememberCoroutineScope()
     var choosingRow by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<String?>(null) }
-    var exporting by remember { mutableStateOf<ShelfTheme?>(null) }
+    // By name, so a style being exported survives the screen being rebuilt while the file picker is open.
+    var exporting by rememberSaveable { mutableStateOf<String?>(null) }
 
     val homeRowKey = booksPerRowKey("home", ViewMode.Shelf)
     val screenWidth = LocalConfiguration.current.screenWidthDp.toFloat()
@@ -226,7 +227,7 @@ private fun ThemesTab(state: LibraryState, onHomeStyle: () -> Unit) {
     if (choosingRow) BooksPerRowDialog(homeRowKey, columnsFor(homeWidth)) { choosingRow = false }
 
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-        val theme = exporting
+        val theme = state.userPresets.firstOrNull { it.first == exporting }?.second
         exporting = null
         if (uri != null && theme != null) {
             scope.launch {
@@ -271,7 +272,7 @@ private fun ThemesTab(state: LibraryState, onHomeStyle: () -> Unit) {
         styles.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { (name, theme) ->
-                    StyleTile(name, theme, selected = theme == current, Modifier.weight(1f)) {
+                    HomeStyleTile(name, theme, selected = theme == current, Modifier.weight(1f)) {
                         scope.launch { repository.setHomeTheme(theme) }
                     }
                 }
@@ -287,7 +288,7 @@ private fun ThemesTab(state: LibraryState, onHomeStyle: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(name, Modifier.weight(1f), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 SettingsButton("Export", Modifier) {
-                    exporting = theme
+                    exporting = name
                     export.launch("$name.zip")
                 }
                 SettingsButton("Remove", Modifier) { removing = name }
@@ -314,7 +315,7 @@ private fun ThemesTab(state: LibraryState, onHomeStyle: () -> Unit) {
 
 /** A style shown as its header bar, with its name in the header's text color. */
 @Composable
-private fun StyleTile(name: String, theme: ShelfTheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun HomeStyleTile(name: String, theme: ShelfTheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Box(
         modifier
