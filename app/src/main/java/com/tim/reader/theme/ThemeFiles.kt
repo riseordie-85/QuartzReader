@@ -92,6 +92,14 @@ object ThemeFiles {
         return nameOf(file)
     }
 
+    /** Removes an imported font here and in the library folder. Styles using it fall back to the plain font. */
+    fun deleteFont(name: String) {
+        val fileName = name.removePrefix(FILE_PREFIX)
+        File(folder(FONTS) ?: return, fileName).delete()
+        runCatching { library?.deleteThemeFile(fileName) }
+        synchronized(fontFamilies) { fontFamilies.remove(name) }
+    }
+
     /** Every imported image and font a theme uses, as (folder, theme name). */
     private fun filesIn(theme: ShelfTheme): Set<Pair<String, String>> {
         val fills = listOfNotNull(

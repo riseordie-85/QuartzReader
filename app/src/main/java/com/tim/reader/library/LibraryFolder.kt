@@ -87,6 +87,13 @@ class LibraryFolder private constructor(context: Context) {
         }
     }
 
+    /** Removes a theme file's copy from the library folder, so it isn't brought back. */
+    fun deleteThemeFile(name: String) {
+        val tree = treeUri ?: return
+        val found = children(tree, themeFolder(tree)).firstOrNull { it.name == name } ?: return
+        DocumentsContract.deleteDocument(resolver, DocumentsContract.buildDocumentUriUsingTree(tree, found.documentId))
+    }
+
     /** Brings a theme file back from the library folder. Returns false if it isn't there. */
     fun restoreThemeFile(target: File): Boolean {
         val tree = treeUri ?: return false

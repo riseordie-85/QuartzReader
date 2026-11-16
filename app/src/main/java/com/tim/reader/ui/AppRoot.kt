@@ -319,6 +319,7 @@ private fun Library(
             onTestTools = { push(Route.Tools) },
             onFindExisting = { lookForExisting(sayIfNone = true) },
             onStats = { push(Route.Stats) },
+            onGoals = { push(Route.Goals) },
         )
         is Route.ThemeEditor -> {
             val shelf = route.shelfId?.let { state.shelf(it) }
