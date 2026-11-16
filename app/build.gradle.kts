@@ -18,7 +18,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.tim.reader"
+        applicationId = "com.timcordova.quartzreader"
         minSdk = 33
         targetSdk = 35
         // Raise the code with every release. The name matches the newest entry in CHANGELOG.md.
