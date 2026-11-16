@@ -28,6 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -206,13 +210,29 @@ fun ShelfButton(name: String, look: ButtonLook, modifier: Modifier, onClick: () 
             .clickable(onClickLabel = name, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = name,
-            color = Color(look.textColor),
+        val style = TextStyle(
             fontFamily = fontFamily(look.font),
             fontSize = 26.sp,
             fontWeight = if (look.bold) FontWeight.Bold else FontWeight.Normal,
             fontStyle = if (look.italic) FontStyle.Italic else FontStyle.Normal,
+        )
+        val outline = look.textStroke
+        if (outline != null) {
+            // The outline is the same words drawn as a stroke underneath, twice as wide since half falls inside.
+            val width = with(LocalDensity.current) { outline.widthDp.dp.toPx() * 2 }
+            Text(
+                text = name,
+                color = Color(outline.color),
+                style = style.copy(drawStyle = Stroke(width = width, join = StrokeJoin.Round)),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+        }
+        Text(
+            text = name,
+            color = Color(look.textColor),
+            style = style,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 12.dp),

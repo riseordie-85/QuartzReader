@@ -139,8 +139,8 @@ fun ColorRow(label: String, color: Long, onChange: (Long) -> Unit) {
 }
 
 @Composable
-fun StrokeEditor(stroke: StrokeLook?, onChange: (StrokeLook?) -> Unit) {
-    EditorSwitchCard("Outline", stroke != null, { on -> onChange(if (on) StrokeLook(0xFF000000, 2f) else null) }) {
+fun StrokeEditor(stroke: StrokeLook?, title: String = "Outline", onChange: (StrokeLook?) -> Unit) {
+    EditorSwitchCard(title, stroke != null, { on -> onChange(if (on) StrokeLook(0xFF000000, 2f) else null) }) {
         if (stroke != null) {
             ColorRow("Color", stroke.color) { onChange(stroke.copy(color = it)) }
             EditorDivider()

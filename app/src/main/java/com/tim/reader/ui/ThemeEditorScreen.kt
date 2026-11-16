@@ -575,6 +575,7 @@ private fun PartEditor(part: ThemePart, theme: ShelfTheme, onChange: (ShelfTheme
                 EditorDivider()
                 Text("Corners match the Home header, so every button lines up.", color = EditorColors.Muted, fontSize = 13.sp)
             }
+            StrokeEditor(look.textStroke, title = "Text outline") { onChange(theme.copy(button = look.copy(textStroke = it))) }
             StrokeEditor(look.stroke) { onChange(theme.copy(button = look.copy(stroke = it))) }
             ShadowEditor(look.shadow, showDirection = false) { onChange(theme.copy(button = look.copy(shadow = it))) }
         }

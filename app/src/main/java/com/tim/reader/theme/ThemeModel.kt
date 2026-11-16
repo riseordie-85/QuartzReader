@@ -91,6 +91,8 @@ data class ButtonLook(
     val textColor: Long,
     val stroke: StrokeLook? = null,
     val shadow: ShadowLook? = null,
+    /** An outline around the button's words, so they read over busy artwork. */
+    val textStroke: StrokeLook? = null,
 )
 
 data class ShelfTheme(

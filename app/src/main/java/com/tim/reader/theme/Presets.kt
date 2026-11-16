@@ -135,10 +135,27 @@ object Presets {
         """{"background":{"type":"image","name":"romantasy","mode":"Crop","scale":1},"header":{"fill":{"type":"gradient","colors":[4279501876,4282780427],"direction":"Vertical"},"corner":32,"stroke":{"color":4294179770,"width":0.68},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":1},"text":4294179770,"icon":4294179770},"title":{"font":"pack:Great Vibes","size":41.69,"bold":false,"italic":false,"color":4294179770,"stroke":{"color":4278190080,"width":2},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":0.5}},"ledge":{"fill":{"type":"gradient","colors":[4279501876,4282780427],"direction":"Vertical"},"corner":32,"height":26,"width":1,"align":"Center","stroke":{"color":4294179770,"width":0.68},"shadow":{"color":4278190080,"angle":45,"distance":6,"blur":8,"opacity":1}},"book":{"shadow":{"color":4294179770,"angle":106.42,"distance":2.8,"blur":13.58,"opacity":1},"highlight":true,"spacing":20.8},"controls":{"color":4281605642,"stroke":{"color":4294179770,"width":0.83},"textColor":4294179770},"bottom":{"fade":4278190080,"height":95.57,"label":4294179770},"button":{"fill":{"type":"image","name":"romantasy","mode":"Crop","scale":0.28},"corner":0,"font":"pack:Great Vibes","bold":false,"italic":false,"text":4294179770,"stroke":{"color":4294179770,"width":0.5},"shadow":{"color":4294179770,"angle":45,"distance":4.51,"blur":8,"opacity":0.93}}}""",
     )
 
+    /** The plain look new installs start with: black bars and white pages, so the covers carry the color. */
+    val blackAndWhite = ShelfTheme(
+        background = SolidFill(0xFFFFFFFF),
+        header = BarLook(
+            fill = SolidFill(0xFF000000),
+            cornerDp = 32f,
+            textColor = 0xFFFFFFFF,
+            iconColor = 0xFFFFFFFF,
+        ),
+        title = TextLook(font = "pack:Libron", sizeSp = 34f, bold = true, color = 0xFF000000),
+        ledge = LedgeLook(fill = SolidFill(0xFF3A3A3A), cornerDp = 12f, heightDp = 22f),
+        controls = ControlsLook(color = 0xFF000000, fill = SolidFill(0xFF000000), textColor = 0xFFFFFFFF),
+        bottom = BottomLook(fadeColor = 0xFFFFFFFF, labelColor = 0xFF000000),
+        button = ButtonLook(fill = SolidFill(0xFF000000), cornerDp = 32f, font = "pack:Libron", bold = true, textColor = 0xFFFFFFFF),
+    )
+
     /** What Home and new shelves start with. */
-    val default: ShelfTheme get() = books
+    val default: ShelfTheme get() = blackAndWhite
 
     val all = listOf(
+        "Black and White" to blackAndWhite,
         "Books" to books,
         "Comics" to comics,
         "Manga" to manga,

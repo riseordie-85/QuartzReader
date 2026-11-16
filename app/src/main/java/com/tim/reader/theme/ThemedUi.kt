@@ -1,5 +1,6 @@
 package com.tim.reader.theme
 
+import android.graphics.BlurMaskFilter
 import android.graphics.Matrix
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -14,10 +15,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
@@ -106,13 +113,43 @@ fun Modifier.themedFill(fill: Fill, shape: Shape): Modifier {
 fun Modifier.themedStroke(stroke: StrokeLook?, shape: Shape): Modifier =
     if (stroke == null) this else border(BorderStroke(stroke.widthDp.dp, Color(stroke.color)), shape)
 
-fun Modifier.themedShadow(look: ShadowLook?, shape: Shape): Modifier =
-    if (look == null) {
-        this
-    } else {
-        val color = Color(look.color).copy(alpha = look.opacity)
-        this.shadow(look.distanceDp.dp, shape, clip = false, ambientColor = color, spotColor = color)
+/**
+ * A soft drop shadow under a bar, ledge or button, cast outside its shape.
+ *
+ * It looks like Android's elevation shadow, which these parts used before: a soft glow all
+ * round and a darker part below, both growing with [ShadowLook.distanceDp]. But Android's own
+ * shadow shows a flat band inside the shape when the fill is see-through or light, so this one
+ * is drawn here and kept out of the shape, so only the part outside ever shows.
+ */
+fun Modifier.themedShadow(look: ShadowLook?, shape: Shape): Modifier {
+    if (look == null || look.opacity <= 0f || look.distanceDp <= 0f) return this
+    return drawWithCache {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val path = Path().apply { addOutline(outline) }.asAndroidPath()
+        val elevation = look.distanceDp.dp.toPx()
+        val strength = look.opacity.coerceIn(0f, 1f)
+        val base = Color(look.color)
+        fun layer(alpha: Float, blur: Float) = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = base.copy(alpha = (base.alpha * alpha * strength).coerceIn(0f, 1f)).toArgb()
+            if (blur > 0f) maskFilter = BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)
+        }
+        // The glow all round, and the shadow cast down, as a light above the screen would.
+        val ambient = layer(0.12f, elevation * 0.6f)
+        val key = layer(0.28f, elevation)
+        val drop = elevation * 0.5f
+        onDrawBehind {
+            drawIntoCanvas { canvas ->
+                val native = canvas.nativeCanvas
+                native.save()
+                native.clipOutPath(path)
+                native.drawPath(path, ambient)
+                native.translate(0f, drop)
+                native.drawPath(path, key)
+                native.restore()
+            }
+        }
     }
+}
 
 fun cornerShape(cornerDp: Float) = RoundedCornerShape(cornerDp.dp)
 

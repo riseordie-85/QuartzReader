@@ -51,6 +51,7 @@ object ThemeJson {
             put("text", theme.button.textColor)
             putOpt("stroke", stroke(theme.button.stroke))
             putOpt("shadow", shadow(theme.button.shadow))
+            putOpt("textStroke", stroke(theme.button.textStroke))
         })
     }.toString()
 
@@ -109,6 +110,7 @@ object ThemeJson {
                 textColor = button.getLong("text"),
                 stroke = stroke(button.optJSONObject("stroke")),
                 shadow = shadow(button.optJSONObject("shadow")),
+                textStroke = stroke(button.optJSONObject("textStroke")),
             ),
         )
     }
