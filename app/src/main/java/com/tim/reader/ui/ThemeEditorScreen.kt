@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -220,7 +221,10 @@ private fun ThemePreview(
                     GlyphButton(Glyph.Grid, Color(theme.controls.color), "View", iconSize = 26.dp, outline = theme.controls.stroke) {}
                     if (!isHome) PillButton("Sort by", theme.controls) {}
                 }
-                ShelfRow(books, 4, theme, noBooks)
+                // Sample covers do nothing when tapped, so they don't bring up a book's details either.
+                CompositionLocalProvider(LocalBookPeek provides null, LocalCoverSelection provides null) {
+                    ShelfRow(books, 4, theme, noBooks)
+                }
                 if (isHome) CardsPreview(theme, short = true)
                 if (part == ThemePart.Button) {
                     val homeCorner = state.homeTheme?.header?.cornerDp ?: theme.button.cornerDp

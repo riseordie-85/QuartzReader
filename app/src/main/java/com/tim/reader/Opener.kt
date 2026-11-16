@@ -103,7 +103,7 @@ suspend fun openFile(context: Context, uri: Uri): Opened = withContext(Dispatche
             Kind.MOBI -> {
                 val detail = context.contentResolver.openInputStream(uri)!!.use { describeMobi(it.readBytes()) }
                 ResultsLog.add(detail)
-                Opened.Message("$detail\n\nConversion to EPUB arrives in Phase 7. This test only reads the header.")
+                Opened.Message("$detail\n\nConversion to EPUB is coming in a later version. This test only reads the header.")
             }
             Kind.UNKNOWN -> {
                 ResultsLog.add("Unknown format")

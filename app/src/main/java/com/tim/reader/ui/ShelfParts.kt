@@ -249,8 +249,9 @@ fun ShelfItemTile(
 ) {
     // The large cover opens on one tap. Shelf tiles select first while the split view shows.
     val selection = if (inCoverPane) null else LocalCoverSelection.current
+    val peek = if (inCoverPane) null else LocalBookPeek.current
     val selected by remember(selection, item.key) { derivedStateOf { selection?.key == item.key } }
-    val onTap = { tapItem(item, selection, actions) }
+    val onTap = { tapItem(item, selection, peek, actions) }
     when (item) {
         is ShelfItem.Single -> BookTile(
             coverPath = item.book.displayCover,

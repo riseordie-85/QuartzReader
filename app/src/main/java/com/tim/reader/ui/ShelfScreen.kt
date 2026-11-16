@@ -393,6 +393,7 @@ private fun GridView(items: List<ShelfItem>, columns: Int, theme: ShelfTheme, ac
 private fun ListView(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions, bottom: Dp) {
     val text = Color(theme.title.color)
     val selection = LocalCoverSelection.current
+    val peek = LocalBookPeek.current
     val list = rememberLazyListState()
     FollowSelection(
         items,
@@ -414,7 +415,7 @@ private fun ListView(items: List<ShelfItem>, theme: ShelfTheme, actions: BookAct
                 Modifier
                     .fillMaxWidth()
                     .background(if (selection?.key == item.key) Color(0x664C8DFF) else Color.Transparent)
-                    .clickable { tapItem(item, selection, actions) }
+                    .clickable { tapItem(item, selection, peek, actions) }
                     .padding(vertical = 10.dp),
             ) {
                 Text(item.displayTitle(), color = text, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

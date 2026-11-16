@@ -1,6 +1,8 @@
 package com.tim.reader.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.tim.reader.appScope
 import com.tim.reader.data.LibraryRepository
 import com.tim.reader.data.LibraryState
@@ -73,6 +76,7 @@ private enum class SettingsTab(val label: String) {
     Reading("Reading"),
     Themes("Themes"),
     Fonts("Fonts"),
+    Privacy("Privacy"),
     About("About"),
 }
 
@@ -116,6 +120,7 @@ fun SettingsScreen(
                     SettingsTab.Reading -> ReadingTab(onStats, onGoals)
                     SettingsTab.Themes -> ThemesTab(state, onHomeStyle)
                     SettingsTab.Fonts -> FontsTab()
+                    SettingsTab.Privacy -> PrivacyTab()
                     SettingsTab.About -> AboutTab(onTestTools)
                 }
                 Spacer(Modifier.height(24.dp))
@@ -208,10 +213,16 @@ private fun ReadingTab(onStats: () -> Unit, onGoals: () -> Unit) {
             DeviceSettings.updateKeepScreenOn(it)
         }
     }
-    SettingsCard("Large screens") {
+    SettingsCard("Opening books") {
+        SettingsSwitch(
+            "Show details first",
+            "One tap on a cover shows the book's details, and a second tap opens it. Off opens books straight away. Split view always shows them beside the shelf.",
+            DeviceSettings.bookPopup,
+        ) { DeviceSettings.updateBookPopup(it) }
+        SettingsDivider()
         SettingsSwitch(
             "Split view",
-            "On a tablet or an unfolded phone, shows the shelf on one side and the book's details on the other.",
+            "On a tablet or an unfolded phone, shows the shelf on one side and the book's cover and details on the other.",
             DeviceSettings.splitView,
         ) { DeviceSettings.updateSplitView(it) }
     }
@@ -425,9 +436,78 @@ private fun FontsTab() {
 }
 
 @Composable
+private fun PrivacyTab() {
+    val context = LocalContext.current
+    val notificationsOn = remember {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    }
+    SettingsCard("Quartz Reader doesn't track you") {
+        Bullet("No ads, no analytics and no accounts of ours.")
+        Bullet("Your books, notes, highlights and reading history stay on this device and in the library folder you chose.")
+        Bullet("There's no crash reporting. If something breaks, nothing is sent anywhere.")
+        Bullet("The internet is only used for the things below, and only when you start them or set them up.")
+    }
+    SettingsCard("What goes online, and when") {
+        PrivacyRow(
+            "Looking up a book",
+            "When you tap Find info online, the title and author you search for go to the source you pick: Open Library, " +
+                "Google Books, AniList or Comic Vine, with your own key for those that use one. Results and their covers come from there.",
+        )
+        SettingsDivider()
+        PrivacyRow(
+            "CrossPoint and KOReader sync",
+            "Only if you sign in. Your place in a book goes to the server you chose, with your username, a code made from " +
+                "the book's file (never the file itself) and this device's model name. Book titles are sent only if Send " +
+                "book titles is on, and highlighted words and notes only if Sync highlights and notes is on.",
+        )
+        SettingsDivider()
+        PrivacyRow(
+            "Importing from an e-reader",
+            "When you use it, Quartz Reader asks the e-reader at the address you give, on your own network, for its reading history.",
+        )
+        SettingsDivider()
+        PrivacyRow(
+            "Backup and sync",
+            "Reading data is saved as a file in your library folder. Quartz Reader never uploads it. Whatever you use to sync " +
+                "that folder, if anything, is up to you.",
+        )
+        SettingsDivider()
+        PrivacyRow("Goodreads import", "Reads the export file you pick, on this device. Nothing is sent to Goodreads.")
+    }
+    SettingsCard("Permissions") {
+        PrivacyRow("Internet", "Only for the things above.", status = "Allowed")
+        SettingsDivider()
+        PrivacyRow("Notifications", "Only for reading reminders, if you turn them on.", status = if (notificationsOn) "On" else "Off")
+        SettingsDivider()
+        PrivacyRow("Run at startup", "Puts reading reminders back after the device restarts. Nothing else runs.")
+        SettingsDivider()
+        PrivacyRow("Library folder", "Quartz Reader can only see the one folder you picked for your books, not the rest of your storage.")
+    }
+}
+
+@Composable
+private fun Bullet(text: String) {
+    Row {
+        Text("•", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(end = 10.dp))
+        Text(text, fontSize = 16.sp)
+    }
+}
+
+@Composable
+private fun PrivacyRow(title: String, detail: String, status: String? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            SettingsHint(detail)
+        }
+        if (status != null) Text(status, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(start = 12.dp))
+    }
+}
+
+@Composable
 private fun AboutTab(onTestTools: () -> Unit) {
     val context = LocalContext.current
-    var showLicenses by remember { mutableStateOf(false) }
+    var showing by remember { mutableStateOf<Pair<String, String>?>(null) }
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
     }
@@ -435,33 +515,56 @@ private fun AboutTab(onTestTools: () -> Unit) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             .onFailure { Toast.makeText(context, "No browser to open that", Toast.LENGTH_SHORT).show() }
     }
-    SettingsCard("Quartz Reader", "A reader for books, comics, manga and manhwa.") {
+    SettingsCard(
+        "Quartz Reader",
+        "A reader for books, comics, manga and manhwa. Part of the Quartz family, alongside Quartz Launcher, Gallery, Notes and Editor.",
+    ) {
         if (version.isNotBlank()) Text("Version $version", fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SettingsButton("Quartz site", Modifier.weight(1f)) { open("https://quartz.timcordova.com") }
+            SettingsButton("Quartz site", Modifier.weight(1f)) { open("https://quartz.timcordova.com/reader/") }
             SettingsButton("GitHub", Modifier.weight(1f)) { open("https://github.com/riseordie-85/QuartzReader") }
         }
+        SettingsButton("What's new") { open("https://github.com/riseordie-85/QuartzReader/blob/main/CHANGELOG.md") }
     }
-    SettingsCard(
-        "Privacy",
-        "No ads, no tracking and no accounts of ours. Quartz Reader only goes online when you look up a book's details, " +
-            "or to sync with a folder or server you set up.",
-    ) {}
+    SettingsCard("Thanks to") {
+        ThanksRow("Readium", "Opens and lays out EPUBs (BSD 3-Clause)")
+        SettingsDivider()
+        ThanksRow("ebook-fonts", "The reading fonts, adjusted for screens by Nico Verbruggen (SIL Open Font License and others)")
+        SettingsDivider()
+        ThanksRow("libarchive", "Opens CBR and CB7 comics (BSD 2-Clause), through android-libarchive by Hai Zhang (Apache 2.0)")
+        SettingsDivider()
+        ThanksRow("OpenJPEG", "Shows JPEG 2000 pages (BSD 2-Clause)")
+        SettingsDivider()
+        ThanksRow("CrossPoint", "The sync server and clippings format Quartz Reader talks to (MIT)")
+        SettingsDivider()
+        ThanksRow("Open Library, Google Books, AniList and Comic Vine", "Book details, when you look a book up")
+    }
     SettingsCard("Licenses") {
-        SettingsButton("Font licenses") { showLicenses = true }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsButton("Open source", Modifier.weight(1f)) { showing = "Open source licenses" to "open-source-licenses.txt" }
+            SettingsButton("Fonts", Modifier.weight(1f)) { showing = "Font licenses" to "font-licenses.txt" }
+        }
     }
     SettingsCard("Testing", "Tools for checking the app on a new device.") {
         SettingsButton("Test tools", onClick = onTestTools)
     }
-    if (showLicenses) {
-        val text = remember {
-            runCatching { context.assets.open("font-licenses.txt").use { it.readBytes().decodeToString() } }.getOrDefault("")
+    showing?.let { (title, file) ->
+        val text = remember(file) {
+            runCatching { context.assets.open(file).use { it.readBytes().decodeToString() } }.getOrDefault("")
         }
         AlertDialog(
-            onDismissRequest = { showLicenses = false },
-            title = { Text("Font licenses") },
+            onDismissRequest = { showing = null },
+            title = { Text(title) },
             text = { Text(text, fontSize = 12.sp, modifier = Modifier.verticalScroll(rememberScrollState())) },
-            confirmButton = { TextButton({ showLicenses = false }) { Text("Close") } },
+            confirmButton = { TextButton({ showing = null }) { Text("Close") } },
         )
+    }
+}
+
+@Composable
+private fun ThanksRow(name: String, detail: String) {
+    Column {
+        Text(name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        SettingsHint(detail)
     }
 }

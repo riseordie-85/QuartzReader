@@ -273,7 +273,7 @@ fun HomeEditor(state: LibraryState, look: BarLook, onDone: () -> Unit) {
 }
 
 /** Black or white, whichever reads better on [color]. */
-private fun contrastOn(color: Color): Color {
+internal fun contrastOn(color: Color): Color {
     val light = 0.299f * color.red + 0.587f * color.green + 0.114f * color.blue
     return if (light > 0.55f) Color.Black else Color.White
 }

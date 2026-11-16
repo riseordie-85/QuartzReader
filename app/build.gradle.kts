@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// The release key's details live in keystore.properties beside this project, which never goes in
+// the repo. Without that file, release builds are signed with this computer's debug key instead.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.tim.reader"
@@ -11,21 +21,32 @@ android {
         applicationId = "com.tim.reader"
         minSdk = 33
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.0-phase1"
+        // Raise the code with every release. The name matches the newest entry in CHANGELOG.md.
+        versionCode = 100
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         getByName("release") {
             // Compose is much slower in debug builds, so shelf results only count from this variant.
-            // Signed with the debug key for testing, same as the other Quartz apps.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 

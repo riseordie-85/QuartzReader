@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import com.tim.reader.data.ShelfItem
+import com.tim.reader.library.DeviceSettings
 
 /** Which title the split view is showing. Shelf tiles and the large cover both follow it. */
 class CoverSelection {
@@ -25,12 +26,16 @@ fun ShelfItem.activate(actions: BookActions) {
     }
 }
 
-/** The first tap shows a title on the right, and a second tap on it opens it. */
-fun tapItem(item: ShelfItem, selection: CoverSelection?, actions: BookActions) {
-    if (selection == null || selection.key == item.key) {
-        item.activate(actions)
-    } else {
-        selection.key = item.key
+/**
+ * The first tap shows a title's details, and a second tap opens it. In the split view the details
+ * are on the right; otherwise a book's show over the page, unless that's turned off in Settings.
+ * A series opens its page straight away, since that page is its details.
+ */
+fun tapItem(item: ShelfItem, selection: CoverSelection?, peek: BookPeek?, actions: BookActions) {
+    when {
+        selection != null && selection.key != item.key -> selection.key = item.key
+        selection == null && peek != null && item is ShelfItem.Single && DeviceSettings.bookPopup -> peek.bookId = item.book.id
+        else -> item.activate(actions)
     }
 }
 

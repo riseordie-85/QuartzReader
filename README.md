@@ -1,28 +1,44 @@
 # Quartz Reader
 
-One Android app for ebooks, comics, manga, and manhwa. Phase 1 is the real library: one library folder,
-import, series, shelves, and themes. The readers are still bare until Phases 2 and 3.
+One Android app for ebooks, comics, manga and manhwa, on themed shelves. Part of the Quartz family.
+
+- **Library:** one folder sorted into Books, Comics, Manga and Manhwa, with series, shelves and search.
+- **Reading:** EPUB, CBZ, CBR, CB7, ZIP, PDF and folders of images, with highlights, notes and bookmarks.
+- **Stats:** reading time, streaks, goals, achievements, recaps and reminders.
+- **Sync:** CrossPoint and KOReader progress sync, highlight sync with CrossPoint, and a backup file in
+  the library folder.
+- **Privacy:** no ads, no analytics and no accounts.
+
+Downloads and more are on the [Quartz site](https://quartz.timcordova.com/reader/). See
+[CHANGELOG.md](CHANGELOG.md) for what's in each version. Needs Android 13 or newer.
 
 ## Build
 
-Open the project in Android Studio. Set the build variant to **release**, because Compose is much
-slower in debug. Install on each test device.
+Open the project in Android Studio and build the **release** variant, since Compose is much slower in
+debug builds.
+
+Release builds are signed with the key described in `keystore.properties` in the project folder. That
+file and the key never go in the repo. Without it, release builds use this computer's debug key.
+
+```
+storeFile=/path/to/quartz-release.jks
+storePassword=...
+keyAlias=quartz
+keyPassword=...
+```
+
+To make a release, raise `versionCode` and `versionName` in `app/build.gradle.kts`, add the version to
+`CHANGELOG.md`, build the release APK, and attach it to a GitHub release tagged with the version, such
+as `v1.0.0`. The Quartz site picks up the newest release.
 
 Book files never go in this repo.
 
 ## Test tools
 
-The Phase 0 tests are under **Settings > Test tools**.
-
-1. **Open a test file:** pick a CBZ, CBR, CB7, ZIP, PDF, EPUB, or MOBI. In the image reader, try every
-   mode, then tap **Speed test**.
-2. **Open a folder of images:** pick an unzipped manhwa folder, then tap **Speed test**.
-3. **Shelf test:** swipe and scroll by hand, then tap **Run test**.
-4. **Library folder speed test:** pick the folder you'd use as a library. It creates a test folder
-   inside it and deletes that folder when it finishes.
-5. **Results:** tap **Copy** and paste the results into the chat.
+**Settings > About > Test tools** opens files with timing, runs the shelf scrolling test, and checks how
+fast the library folder is. **Copy** puts the results on the clipboard.
 
 ## Art
 
-`art/backgrounds` holds Tim's original SVG backgrounds for the Phase 5 theme builder. Their backgrounds
-are transparent, so they work over any color. Book files never go in this repo, but this art does.
+`art/backgrounds` holds Tim's original SVG backgrounds for the style editor. Their backgrounds are
+transparent, so they work over any color.

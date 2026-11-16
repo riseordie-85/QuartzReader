@@ -45,6 +45,7 @@ object DeviceSettings {
     private const val KEY_LIBRARY_GROUP = "library_group"
     private const val KEY_HOME_SECTIONS = "home_sections"
     private const val KEY_CHART_SUNDAY = "chart_week_sunday"
+    private const val KEY_BOOK_POPUP = "book_popup"
     private const val PREFIX_BOOKS_PER_ROW = "books_per_row:"
     private const val PREFIX_CAMERA_GAP = "camera_gap:"
     private const val PREFIX_CAMERA_EDGE = "camera_edge:"
@@ -56,6 +57,10 @@ object DeviceSettings {
         private set
 
     var splitView by mutableStateOf(true)
+        private set
+
+    /** One tap on a cover shows the book's details first, and a second opens it. */
+    var bookPopup by mutableStateOf(true)
         private set
 
     var twoPage by mutableStateOf(TwoPageMode.Auto)
@@ -178,6 +183,7 @@ object DeviceSettings {
         deviceId = saved.getString(KEY_DEVICE_ID, null)
             ?: UUID.randomUUID().toString().also { id -> saved.edit { putString(KEY_DEVICE_ID, id) } }
         splitView = saved.getBoolean(KEY_SPLIT_VIEW, true)
+        bookPopup = saved.getBoolean(KEY_BOOK_POPUP, true)
         twoPage = TwoPageMode.entries.firstOrNull { it.name == saved.getString(KEY_TWO_PAGE, null) } ?: TwoPageMode.Auto
         keepScreenOn = saved.getBoolean(KEY_KEEP_SCREEN_ON, true)
         showTimeLeft = saved.getBoolean(KEY_SHOW_TIME_LEFT, false)
@@ -275,6 +281,11 @@ object DeviceSettings {
     fun updateChartStartsSunday(sunday: Boolean) {
         chartStartsSunday = sunday
         preferences?.edit { putBoolean(KEY_CHART_SUNDAY, sunday) }
+    }
+
+    fun updateBookPopup(enabled: Boolean) {
+        bookPopup = enabled
+        preferences?.edit { putBoolean(KEY_BOOK_POPUP, enabled) }
     }
 
     fun updateSplitView(enabled: Boolean) {

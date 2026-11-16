@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,7 +46,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -339,34 +339,33 @@ fun CoverPager(items: List<ShelfItem>, theme: ShelfTheme, actions: BookActions, 
         }
     }
 
+    // The bottom bar runs under this pane too, so the details stop above it.
+    val bottom = LocalBottomBarSpace.current
     HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
         val item = items[page]
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 20.dp + bottom),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            ShelfItemTile(
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                ShelfItemTile(item, theme.book, actions, Modifier.fillMaxHeight(), inCoverPane = true)
+            }
+            CoverInfoCard(
                 item,
-                theme.book,
+                theme.cardLook,
                 actions,
                 Modifier
-                    .weight(1f, fill = false)
-                    .fillMaxHeight(0.86f),
-                inCoverPane = true,
-            )
-            Text(
-                text = item.displayTitle(),
-                color = Color(theme.title.color),
-                fontSize = 18.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 20.dp),
+                    .padding(top = 20.dp)
+                    .widthIn(max = 460.dp)
+                    .fillMaxWidth(),
             )
         }
     }

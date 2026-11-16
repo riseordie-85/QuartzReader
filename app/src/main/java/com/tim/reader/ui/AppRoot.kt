@@ -148,7 +148,7 @@ private fun Welcome(onChoose: () -> Unit) {
 private suspend fun openBook(context: Context, book: Book, push: (Route) -> Unit) {
     when {
         book.format == Kind.MOBI.name ->
-            Toast.makeText(context, "MOBI conversion arrives in Phase 7", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "MOBI books can't be opened yet. Converting them to EPUB is coming in a later version.", Toast.LENGTH_LONG).show()
         book.format == Kind.EPUB.name -> {
             try {
                 val publication = withContext(Dispatchers.IO) { openEpub(context, Uri.parse(book.documentUri)) }
@@ -303,8 +303,15 @@ private fun Library(
 
     val top = stack.last()
     val showNav = top == Route.Home || tabOf(top) != null
+    val peek = remember { BookPeek() }
+    // A book's details close when the page under them changes.
+    LaunchedEffect(top) { peek.bookId = null }
     Box(Modifier.fillMaxSize()) {
-    CompositionLocalProvider(LocalBottomBarSpace provides if (showNav) BOTTOM_BAR_SPACE else 0.dp) {
+    CompositionLocalProvider(
+        LocalBottomBarSpace provides if (showNav) BOTTOM_BAR_SPACE else 0.dp,
+        LocalBookPeek provides peek,
+        LocalLibraryState provides state,
+    ) {
     when (val route = top) {
         Route.Home -> HomeScreen(
             state = state,
@@ -455,6 +462,12 @@ private fun Library(
     if (showNav && homeTheme != null) {
         BottomNav(homeTheme.header, tabOf(top), ::openTab, Modifier.align(Alignment.BottomCenter))
     }
+    }
+
+    val peeking = peek.bookId?.let { state.book(it) }
+    val peekTheme = state.homeTheme
+    if (peeking != null && peekTheme != null) {
+        BookPeekDialog(peeking, state, peekTheme, actions) { peek.bookId = null }
     }
 
     if (chooser) {

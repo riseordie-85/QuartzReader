@@ -17,3 +17,7 @@
 *.azw
 *.azw3
 *.pdf
+# The release key and its passwords never go in the repo.
+keystore.properties
+*.jks
+*.keystore

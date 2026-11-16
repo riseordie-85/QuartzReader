@@ -256,7 +256,7 @@ private fun BookInfoCard(book: Book) {
     }
 }
 
-private fun formatNumber(value: Double) =
+internal fun formatNumber(value: Double) =
     if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
 
 @Composable
